@@ -1,4 +1,4 @@
-"""Checks for the personal projects page (`projects-page/` in the framework repo).
+"""Checks for the personal projects page (`extras/projects-page/` in the framework repo).
 
 Two checks, both run by `opsci projects-page check DIR`:
 

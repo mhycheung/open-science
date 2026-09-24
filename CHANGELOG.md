@@ -1,13 +1,28 @@
 # Changelog
 
 One section per release, newest first. The plugins share the release number (the `version`
-in each `plugins/*/.claude-plugin/plugin.json`); a release is tagged `v<version>`.
+in each plugin's `.claude-plugin/plugin.json`, under `plugins/` and `extras/`); a release is tagged `v<version>`.
 
 A release that changes the project layout raises `LAYOUT_VERSION` (`tools/opsci/layout.py`)
 and has a **Project migration** section: exact steps that bring an existing project to the
 new layout. The `open-science-project:update-from-template` skill runs every migration
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
+
+## Unreleased
+
+- The framework is described as three components, in this order: 1. project management
+  (the project template and `open-science-project`; formerly "project structure"),
+  2. context management (`open-science-context`), 3. publishing (`open-science-publish`).
+  Plugin and skill names are unchanged.
+- The projects page and SLURM resurrection are optional extras and moved to `extras/`:
+  `projects-page/` is now `extras/projects-page/`, and the `slurm-resurrect` plugin moved
+  from `plugins/slurm-resurrect/` to `extras/slurm-resurrect/` (the marketplace entry
+  follows it; installed copies need `claude plugin marketplace update open-science`).
+  Onboarding asks about the extras in a separate question.
+- README, documentation and user guide lead with doing research in the open; agents are
+  optional. README and Get started describe how to use `opsci` without Claude Code.
+- No project layout change.
 
 ## 0.3.0 - 2026-09-24
 

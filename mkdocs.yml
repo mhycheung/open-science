@@ -41,14 +41,17 @@ validation:
     unrecognized_links: warn
 nav:
   - Get started: index.md
-  - Project template and layout: project-template.md
-  - Project skills: project-skills.md
-  - Context management and session jumps: context-management.md
-  - Publishing and the filter: publishing.md
-  - Zenodo releases: zenodo.md
+  - 1. Project management:
+      - Project template and layout: project-template.md
+      - Project skills: project-skills.md
+  - 2. Context management: context-management.md
+  - 3. Publishing:
+      - Publishing and the filter: publishing.md
+      - Zenodo releases: zenodo.md
   - Notifications: notify.md
-  - Personal projects page: projects-page.md
-  - SLURM resurrection: slurm-resurrect.md
   - The opsci command: cli.md
   - Updating a project: updating.md
   - Troubleshooting: faq.md
+  - Optional extras:
+      - Personal projects page: projects-page.md
+      - SLURM resurrection: slurm-resurrect.md

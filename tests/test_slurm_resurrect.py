@@ -17,7 +17,7 @@ import pytest
 from conftest import REPO
 from opsci.nodes import list_files
 
-PLUGIN = REPO / "plugins" / "slurm-resurrect"
+PLUGIN = REPO / "extras" / "slurm-resurrect"
 SHELL_TESTS = REPO / "tests" / "slurm_resurrect"
 NEEDS = [t for t in ("bash", "tmux", "jq", "flock", "setsid") if shutil.which(t) is None]
 

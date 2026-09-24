@@ -128,11 +128,11 @@ FORCE=0; [ "${1:-}" = --force ] && FORCE=1
 [ -f "$CTX" ] || die "context file not found: $CTX"
 CTX=$(cd "$(dirname "$CTX")" && printf '%s/%s' "$PWD" "$(basename "$CTX")")
 case "$CTX" in *[[:space:]]*) die "context file path contains whitespace: $CTX" ;; esac
-# The context plugin needs the project structure (plugin open-science-project): the
+# The context plugin needs the project management component (plugin open-science-project): the
 # context file must sit in a project with AGENTS.md and config/framework.yaml.
 d=$(dirname "$CTX")
 while [ ! -f "$d/AGENTS.md" ] || [ ! -f "$d/config/framework.yaml" ]; do
-  [ "$d" = / ] && die "$CTX is not inside a project made from the open-science template (no AGENTS.md and config/framework.yaml above it). Session jumps need the project structure: create the project with open-science-project:new-project or migrate it with open-science-project:migrate-project."
+  [ "$d" = / ] && die "$CTX is not inside a project made from the open-science template (no AGENTS.md and config/framework.yaml above it). Session jumps need the project management component: create the project with open-science-project:new-project or migrate it with open-science-project:migrate-project."
   d=$(dirname "$d")
 done
 for f in "$OS_STATE/inhibit_jump" "$OS_STATE/inhibit_jump_$KEY"; do

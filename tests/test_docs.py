@@ -104,9 +104,10 @@ def unknown_names(page: Path) -> list[str]:
     text = page.read_text(encoding="utf-8")
     probs = [f"opsci {g} {c}".rstrip() for g, c in sorted(set(guidecheck.OPSCI_RE.findall(code_text(text))))
              if not guidecheck._opsci_ok(g, c or None)]
-    plugins = {p.name for p in (REPO / "plugins").iterdir() if p.is_dir()}
+    plugins = {p.name: p for d in ("plugins", "extras") for p in (REPO / d).iterdir()
+               if (p / ".claude-plugin" / "plugin.json").is_file()}
     probs += [f"{p}:{s}" for p, s in sorted(set(guidecheck.SKILL_RE.findall(text)))
-              if p in plugins and not (REPO / "plugins" / p / "skills" / s / "SKILL.md").is_file()]
+              if p in plugins and not (plugins[p] / "skills" / s / "SKILL.md").is_file()]
     return probs
 
 

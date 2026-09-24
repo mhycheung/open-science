@@ -66,22 +66,29 @@ To install the plugins by hand instead, see "With Claude Code, by hand" in the r
 
 ## Components
 
-The framework has five components. Use any combination; each works without the others,
-except context management, which needs the project structure. Publishing, the project
-structure and the projects list are used through `opsci` and plain files; their Claude Code
-plugins are optional. Context management and SLURM resurrection exist for Claude Code
-sessions. One more plugin, `open-science`, holds the onboarding skill.
+The framework has three components. Use any combination; each works without the others,
+except context management, which needs project management. Project management and
+publishing are used through `opsci` and plain files; their Claude Code plugins are optional.
+Context management exists for Claude Code sessions. One more plugin, `open-science`, holds
+the onboarding skill.
 
-| component | what it does | page |
+| # | component | what it does | pages |
+|---|---|---|---|
+| 1 | project management: the project template and the `open-science-project` plugin | the layout every project is copied from (description, tasks, map, rules, citations, context files, publish settings), and skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project template and layout](project-template.md), [Project skills](project-skills.md) |
+| 2 | context management: the `open-science-context` plugin, for agents | Claude Code agents clear their own conversation and resume from the context files ("session jumps"); needs tmux | [Context management and session jumps](context-management.md) |
+| 3 | publishing: `opsci publish` and the `open-science-publish` plugin | the checked, owner-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
+
+Also part of the framework:
+
+| part | what it does | page |
 |---|---|---|
-| project template | the layout every project is copied from: description, tasks, map, rules, citations, context files, publish settings | [Project template and layout](project-template.md) |
-| `open-science-project` plugin (project structure) | skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project skills](project-skills.md) |
-| `open-science-context` plugin (context management, for agents) | Claude Code agents clear their own conversation and resume from the context files ("session jumps"); needs tmux | [Context management and session jumps](context-management.md) |
-| `open-science-publish` plugin (publishing) | the checked, owner-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
-| personal projects page (projects list) | one page on your personal GitHub Pages site that lists your projects | [Personal projects page](projects-page.md) |
-| `slurm-resurrect` plugin (optional) | when a SLURM job reaches its time limit, rebuilds the tmux session in a new job and resumes its Claude sessions | [SLURM resurrection](slurm-resurrect.md) |
-| `open-science` plugin | the onboarding skill `open-science:onboard` | this page |
 | `opsci` command | the command-line tool behind every step, run by you or by the skills: map build, tasks, context caps, publish, site, Zenodo, notifications | [The opsci command](cli.md), [Notifications](notify.md) |
+| `open-science` plugin | the onboarding skill `open-science:onboard` | this page |
+
+Two optional extras live in `extras/` of the repository; nothing in the three components
+depends on them: a [personal projects page](projects-page.md) that lists your projects on
+your GitHub Pages site, and [SLURM resurrection](slurm-resurrect.md), which resumes Claude
+Code sessions in a new SLURM job when the current one reaches its time limit.
 
 ## How a project is laid out and published
 
@@ -130,7 +137,7 @@ flowchart LR
     P1["public GitHub repository<br/>opsci publish push --export-id"]
     P2["project website on GitHub Pages<br/>workflow runs opsci site build"]
     P3["Zenodo record with a DOI<br/>opsci zenodo release"]
-    P4["personal projects page<br/>USERNAME.github.io/projects/"]
+    P4["optional extra: personal projects page<br/>USERNAME.github.io/projects/"]
   end
 
   INC --> F1

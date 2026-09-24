@@ -14,7 +14,7 @@
 set -u
 
 T_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN="$(cd "$T_HERE/../../plugins/slurm-resurrect" && pwd)"
+PLUGIN="$(cd "$T_HERE/../../extras/slurm-resurrect" && pwd)"
 SCRIPTS="$PLUGIN/scripts"
 
 pass=0; fail=0

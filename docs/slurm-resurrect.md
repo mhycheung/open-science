@@ -1,6 +1,7 @@
 # SLURM resurrection (`slurm-resurrect`)
 
-An optional plugin for work on a cluster. When a SLURM batch job reaches its time limit, it
+An optional extra (plugin `slurm-resurrect`, in `extras/slurm-resurrect/`) for work on a
+cluster. When a SLURM batch job reaches its time limit, it
 rebuilds your tmux session in a new job and resumes every Claude Code session that was
 running in it, with `--resume`. Windows, panes, layout and working directories are restored.
 Nothing in the other open-science plugins depends on it.
@@ -9,8 +10,8 @@ Nothing in the other open-science plugins depends on it.
 claude plugin install slurm-resurrect@open-science
 ```
 
-The full reference is `plugins/slurm-resurrect/README.md`; how it works is in
-`plugins/slurm-resurrect/reference/mechanism.md`.
+The full reference is `extras/slurm-resurrect/README.md`; how it works is in
+`extras/slurm-resurrect/reference/mechanism.md`.
 
 ## Requirements
 
@@ -103,7 +104,7 @@ message until the hop, session jumps are inhibited in the registered panes. Afte
 jump that the time limit interrupted is finished, and a pane that was waiting after a wait
 jump is woken with `/open-science-context:continue-context`. Without `open-science-context`,
 the plugin works the same way and skips these steps. Details:
-`plugins/slurm-resurrect/reference/jump-hook.md`.
+`extras/slurm-resurrect/reference/jump-hook.md`.
 
 ## Turn it off
 

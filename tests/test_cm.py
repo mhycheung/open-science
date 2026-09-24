@@ -304,7 +304,7 @@ def test_jump_refusals(env, session, tmp_path, case):
         d.mkdir()
         (d / "context.md").write_text("x\n")
         args[1] = d / "context.md"
-    elif case == "not_a_project":           # the context plugin needs the project structure
+    elif case == "not_a_project":           # the context plugin needs project management
         (tmp_path / "AGENTS.md").unlink()
     r = jump(env, *args, fake_claude=fake)
     assert r.returncode != 0, r.stdout

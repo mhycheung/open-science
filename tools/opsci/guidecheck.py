@@ -7,7 +7,7 @@ Checks a markdown file (default `USER_GUIDE.md` of the framework repo):
   segment is checked (`tasks/`), since a template has no instances; paths under `~` or
   `$VAR` name the reader's own machine and are skipped;
 - every `opsci <group> [<command>]` it names is a real command;
-- every `<plugin>:<skill>` it names, for a plugin under `plugins/`, is a real skill.
+- every `<plugin>:<skill>` it names, for a plugin under `plugins/` or `extras/`, is a real skill.
 """
 
 from __future__ import annotations
@@ -70,8 +70,9 @@ def check(guide: Path, repo: Path, max_words: int = 600) -> list[str]:
     for g, c in sorted(set(OPSCI_RE.findall(text))):
         if not _opsci_ok(g, c or None):
             problems.append(f"names an unknown command: opsci {g} {c}".rstrip())
-    plugins = {p.name for p in (repo / "plugins").iterdir() if p.is_dir()}
+    plugins = {p.name: p for d in ("plugins", "extras") if (repo / d).is_dir()
+               for p in (repo / d).iterdir() if (p / ".claude-plugin" / "plugin.json").is_file()}
     for plugin, skill in sorted(set(SKILL_RE.findall(text))):
-        if plugin in plugins and not (repo / "plugins" / plugin / "skills" / skill / "SKILL.md").is_file():
+        if plugin in plugins and not (plugins[plugin] / "skills" / skill / "SKILL.md").is_file():
             problems.append(f"names an unknown skill: {plugin}:{skill}")
     return problems

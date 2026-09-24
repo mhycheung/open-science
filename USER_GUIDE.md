@@ -10,11 +10,10 @@ guide covers the optional Claude Code plugins.
 ## One-time setup
 
 1. **Install and onboard.** Install the `open-science` plugin (see the README), then type
-   `/open-science:onboard`. It explains the five components (publishing, project structure,
-   context management, a projects list, SLURM resurrection), asks which you want, and sets
-   them up, asking before any change to your settings.
-2. **tmux.** Context management and SLURM resurrection need Claude Code running inside
-   tmux. Put `set -g mouse on` in `~/.tmux.conf` so you can click, resize and scroll panes.
+   `/open-science:onboard`. It explains the three components (project management, context
+   management, publishing), asks which you want, and sets them up, asking before any change
+   to your settings.
+2. **tmux.** Context management needs Claude Code running inside tmux. Put `set -g mouse on` in `~/.tmux.conf` so you can click, resize and scroll panes.
 3. **Notifications.** With no setup, messages for you are written as files in the project's
    `messages/` directory. For Slack instead, create your own Slack app with only the
    `chat:write` and `files:write` scopes; onboarding stores its token in
@@ -31,10 +30,6 @@ guide covers the optional Claude Code plugins.
 - **Agents clear their own conversation and type a prompt into their own pane.** This is
   called a jump. It keeps the context small; they resume from the context files and the
   log. Anything meant for you is sent before the jump.
-- **SLURM resurrection** (optional plugin) is something you turn on, from any Claude pane in
-  the tmux session: `/slurm-resurrect:resurrect register`. Agents cannot do it. The first
-  run only shows a warning about Remote Control and the permission mode the resumed
-  sessions will use; run it again to register.
 
 ## What to read, and what you may edit
 

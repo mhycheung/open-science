@@ -61,6 +61,6 @@ def test_plugin_manifests():
         manifest = json.loads((REPO / p["source"] / ".claude-plugin" / "plugin.json").read_text())
         assert manifest["name"] == p["name"]
         deps[p["name"]] = manifest.get("dependencies", [])
-    # context management needs the project structure; nothing else depends on another plugin
+    # context management needs project management; nothing else depends on another plugin
     assert deps == {n: (["open-science-project"] if n == "open-science-context" else [])
                     for n in names}

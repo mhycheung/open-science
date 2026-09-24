@@ -1,9 +1,9 @@
 # Personal projects page
 
-A single web page, on your personal GitHub Pages site, that lists your projects with a short
-description, tags and links, and lets visitors filter and sort them. It is two files in
-`projects-page/` of the framework repository. It has no plugin and works on its own; `opsci`
-is needed only to check the files.
+An optional extra: a single web page, on your personal GitHub Pages site, that lists your
+projects with a short description, tags and links, and lets visitors filter and sort them.
+It is two files in `extras/projects-page/` of the framework repository. It has no plugin and
+works on its own; `opsci` is needed only to check the files.
 
 | file | what |
 |---|---|
@@ -65,7 +65,7 @@ repository, the project website, and the Zenodo DOI (see
 The `description` of each project and the page's `intro` ship empty. You write them, in your
 own words. An agent may add or edit titles, tags, status, dates and links, and may point out
 that a description is missing, but must not write, draft or rewrite a description or the
-intro (`projects-page/AGENTS.md`).
+intro (`extras/projects-page/AGENTS.md`).
 
 ## `opsci projects-page check`
 

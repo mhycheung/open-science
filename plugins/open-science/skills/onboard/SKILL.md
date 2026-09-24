@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: Set up the open-science framework for a user - check what this machine already has, ask which of the five components they want (publishing, project structure, projects list, context management, SLURM resurrection), install those plugins, and set up GitHub access, Zenodo and Slack tokens safely. Use when the user asks to onboard, install, set up or configure open-science, or to add a component later.
+description: Set up the open-science framework for a user - check what this machine already has, ask which of the three components they want (project management, context management, publishing) and whether they want the optional extras (projects list, SLURM resurrection), install those plugins, and set up GitHub access, Zenodo and Slack tokens safely. Use when the user asks to onboard, install, set up or configure open-science, or to add a component later.
 ---
 
 # Onboard
@@ -32,52 +32,53 @@ question also put the longer text in its `preview`. Do not shorten the texts int
    are empty, or the user picks "different", ask for name and email in plain text, then
    `git config --global user.name "<name>"` and `git config --global user.email "<email>"`.
 
-4. **Q1, components** (multi-select, the four options in `explanations.md`). If the check
-   found `slurm=present`, ask **Q1b** in the same widget call. Context management without
-   project structure: ask the follow-up in `explanations.md`. Nothing chosen: stop here.
+4. **Q1, components, and Q2, optional extras** (both multi-select, in one widget call; the
+   options and their order are in `explanations.md`). Offer the SLURM extra in Q2 only if
+   the check found `slurm=present`. Context management without project management: ask the
+   follow-up in `explanations.md`. Nothing chosen in either: stop here.
 
 5. **Install the chosen plugins.** Tell the user the commands, then run them:
 
    | component | plugin |
    |---|---|
-   | publishing | `open-science-publish` |
-   | project structure | `open-science-project` |
+   | project management | `open-science-project` |
    | context management | `open-science-context` (installs `open-science-project` with it) |
-   | SLURM resurrection | `slurm-resurrect` |
+   | publishing | `open-science-publish` |
+   | SLURM resurrection (extra) | `slurm-resurrect` |
 
    `claude plugin install <plugin>@open-science`, skipping any the check reports
-   `installed`. The projects list has no plugin: it is two files (step 7, branch 2).
+   `installed`. The projects list has no plugin: it is two files (step 7, branch 3).
    New plugins load only in a new Claude Code session; say so in the summary.
 
-6. **The `opsci` command**, needed by publishing, project structure and context management
+6. **The `opsci` command**, needed by project management, context management and publishing
    (the projects list works without it). If the check says `opsci=missing`, it needs Python
    3.11 or later (`python311`) or pixi. Ask where to install, then run
    `pip install "git+<repository URL>#subdirectory=tools"`, with the URL of this plugin's
    marketplace (`claude plugin marketplace list`). Verify with `opsci --help`.
 
 7. **One branch per chosen component**, in this order, with the texts in `explanations.md`:
-   - **Branch 1, publishing.** 1a GitHub username: take it from `github_ssh=ok:<name>` if
-     present, else ask. 1b only if `github_ssh` is not `ok`: SSH key (help make one with
+   - **Branch 1, context management.** 1a only if `in_tmux=no`; offer `set -g mouse on` in
+     `~/.tmux.conf` only if `tmux_mouse` is `off`. `tmux=missing`: tell the user to ask
+     their system administrator, or to install it with their package manager; the component
+     does not work without it. 1b only if `same_name_skills` is not `none`: move the named
+     directories to `<config>/skills-archive/` after a yes. Rename the archive folder if one
+     is already there; never delete anything.
+   - **Branch 2, publishing.** 2a GitHub username: take it from `github_ssh=ok:<name>` if
+     present, else ask. 2b only if `github_ssh` is not `ok`: SSH key (help make one with
      `ssh-keygen -t ed25519`, then the user adds `~/.ssh/id_ed25519.pub` on github.com →
      Settings → SSH keys; `fail:host-key-unknown` means the user must connect once by hand
      and compare GitHub's published fingerprint) or HTTPS token (git's credential store;
-     the user enters it at git's own prompt, never here). 1c, 1d as in the texts. 1e: say
-     it, no question. 1f Zenodo: tokens via step 9; ORCID and affiliation go in each
+     the user enters it at git's own prompt, never here). 2c, 2d as in the texts. 2e: say
+     it, no question. 2f Zenodo: tokens via step 9; ORCID and affiliation go in each
      project's `CITATION.cff`, so only tell the user where.
-   - **Branch 2, projects list.** 2a. If the user has the site: ask for its folder, copy
-     `projects-page/index.html` and `projects-page/projects.yaml` from the framework repo
+   - **Branch 3, projects list (extra).** 3a. If the user has the site: ask for its folder, copy
+     `extras/projects-page/index.html` and `extras/projects-page/projects.yaml` from the framework repo
      into `<site>/projects/` after a yes, then help write `projects.yaml` (their intro and
      descriptions, not yours); check with `opsci projects-page check <site>/projects/` if
      `opsci` is installed. Commit in the site repo only after a yes; never push. If they have
-     no site, give the steps from the text and stop the branch there. If branch 1 was not
-     chosen, run its 1b too: the site is pushed with git.
-   - **Branch 3, context management.** 3a only if `in_tmux=no`; offer `set -g mouse on` in
-     `~/.tmux.conf` only if `tmux_mouse` is `off`. `tmux=missing`: tell the user to ask
-     their system administrator, or to install it with their package manager; the component
-     does not work without it. 3b only if `same_name_skills` is not `none`: move the named
-     directories to `<config>/skills-archive/` after a yes. Rename the archive folder if one
-     is already there; never delete anything.
-   - **Branch 4, SLURM resurrection.** Check `batch_tools=ok` (else say which are missing),
+     no site, give the steps from the text and stop the branch there. If branch 2 was not
+     chosen, run its 2b too: the site is pushed with git.
+   - **Branch 4, SLURM resurrection (extra).** Check `batch_tools=ok` (else say which are missing),
      and that `rr_state_dir` is shared by the compute nodes: `rr_state_fs` `nfs`, `lustre`
      or `gpfs` is; `tmpfs` or a path under `/tmp` is not (explain `RR_STATE_DIR`); for
      anything else ask the user. 4a: Claude must run in tmux inside a batch job; if `batch_job=no`, offer
@@ -89,7 +90,7 @@ question also put the longer text in its `preview`. Do not shorten the texts int
      and tell them it shows a warning the first time and registers the second time.
      With 4e early: `/slurm-resurrect:resurrect set queue_mode early`.
 
-8. **Notifications** (if any of publishing, project structure, context management or SLURM
+8. **Notifications** (if any of project management, context management, publishing or SLURM
    resurrection was chosen): Files or Slack. Files needs nothing. Slack: walk the user
    through `docs/notify.md` in the framework repo (their own app, `chat:write` and
    `files:write`, invite it to the channel), then step 9 with `slack`, then write

@@ -81,7 +81,8 @@ def test_changelog_versions_match_the_plugins():
     text = (REPO / "CHANGELOG.md").read_text()
     releases = re.findall(r"^## (\d+\.\d+\.\d+) - \d{4}-\d{2}-\d{2}$", text, re.M)
     assert releases, "no '## <version> - <date>' section"
-    for pj in sorted(REPO.glob("plugins/*/.claude-plugin/plugin.json")):
+    for pj in sorted([*REPO.glob("plugins/*/.claude-plugin/plugin.json"),
+                      *REPO.glob("extras/*/.claude-plugin/plugin.json")]):
         assert json.loads(pj.read_text())["version"] == releases[0], pj
 
 

@@ -20,16 +20,16 @@ three minutes of reading.
 
 ## Install
 
-The framework has five components. Use any combination; each works without the others,
-except context management, which needs the project structure.
+The framework has three components. Use any combination; each works without the others,
+except context management, which needs project management.
 
-| component | plugin | what | needs |
-|---|---|---|---|
-| publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
-| project structure | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`) | git, `opsci` |
-| context management (for agents) | `open-science-context` | Claude Code agents clear their own conversation and resume from the context files (`context-management`, `continue-context`, `advise-with-context`) | the project structure (installed with it), tmux, `opsci` |
-| projects list | none: `projects-page/` | one page on your personal GitHub site listing your projects | a GitHub Pages site; `opsci` only to check the file |
-| SLURM resurrection | `slurm-resurrect` | when a SLURM job reaches its time limit, rebuild the tmux session in a new job and resume its Claude sessions; see `plugins/slurm-resurrect/README.md` | tmux inside a SLURM batch job; `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel` |
+| # | component | plugin | what | needs |
+|---|---|---|---|---|
+| 1 | project management | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`) | git, `opsci` |
+| 2 | context management (for agents) | `open-science-context` | Claude Code agents clear their own conversation and resume from the context files (`context-management`, `continue-context`, `advise-with-context`) | project management (installed with it), tmux, `opsci` |
+| 3 | publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
+
+There are also two [optional extras](#optional-extras).
 
 `opsci` is the command-line tool in `tools/`; it needs Python 3.11 or later.
 
@@ -86,14 +86,23 @@ of `opsci` (as in step 3 above). Then, in each project, run
 changelog's "Project migration" steps. `opsci` warns when a project's layout is older than
 the framework's.
 
+## Optional extras
+
+Both are in `extras/`, and nothing in the three components depends on them.
+
+| extra | where | what | needs |
+|---|---|---|---|
+| projects list | `extras/projects-page/` (no plugin) | one page on your personal GitHub site listing your projects | a GitHub Pages site; `opsci` only to check the file |
+| SLURM resurrection | plugin `slurm-resurrect`, in `extras/slurm-resurrect/` | when a SLURM job reaches its time limit, rebuild the tmux session in a new job and resume its Claude sessions; see `extras/slurm-resurrect/README.md` | tmux inside a SLURM batch job; `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel` |
+
 ## What is in this repository
 
 | path | what |
 |---|---|
 | `template/` | the project skeleton that a new project is copied from |
 | `plugins/` | optional Claude Code plugins: `open-science` (onboarding) and one per component |
+| `extras/` | the optional extras: the projects page and the `slurm-resurrect` plugin |
 | `tools/` | the `opsci` Python package and command line (map build, publish, sync, Zenodo, notify, site) |
-| `projects-page/` | a personal projects page for a GitHub Pages site |
 | `tests/` | `tests/run_all` runs every automated test |
 | `docs/` | the documentation website (`mkdocs.yml`), one page per component |
 | `docs/design/` | the design report, the original request, the build plan, and the verification results |

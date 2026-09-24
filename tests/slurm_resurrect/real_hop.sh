@@ -27,7 +27,7 @@
 # and only those, and prints sacct lines for every job it submitted.
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN="$(cd "$HERE/../../plugins/slurm-resurrect" && pwd)"
+PLUGIN="$(cd "$HERE/../../extras/slurm-resurrect" && pwd)"
 WD="${1:?usage: real_hop.sh <workdir> [afterany|early|both]}"; MODES="${2:-both}"
 [[ "$MODES" == both ]] && MODES="afterany early"
 command -v sbatch >/dev/null || { echo "sbatch not found: not a SLURM host"; exit 2; }

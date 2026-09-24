@@ -1,7 +1,7 @@
 {
   "name": "open-science-project",
   "version": "0.3.0",
-  "description": "Project structure: the project template, tasks with a node header, the task map, context files with line caps, citations and logs.",
+  "description": "Project management: the project template, tasks with a node header, the task map, context files with line caps, citations and logs.",
   "license": "MIT",
   "author": {
     "name": "open-science contributors"

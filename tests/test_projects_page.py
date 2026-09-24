@@ -1,4 +1,4 @@
-"""Tests for the personal projects page (projects-page/).
+"""Tests for the personal projects page (extras/projects-page/).
 
 The filter, sort, YAML reader and rendering are the JavaScript functions in the
 `projects-page-logic` block of index.html; these tests extract that block and run it under
@@ -18,7 +18,7 @@ import yaml
 from conftest import REPO, run_opsci
 from opsci import projects_page as pp
 
-PAGE_DIR = REPO / "projects-page"
+PAGE_DIR = REPO / "extras" / "projects-page"
 PAGE_HTML = (PAGE_DIR / "index.html").read_text(encoding="utf-8")
 SAMPLE = (PAGE_DIR / "projects.yaml").read_text(encoding="utf-8")
 FIX = Path(__file__).parent / "fixtures" / "projects_page"
