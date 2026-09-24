@@ -94,7 +94,7 @@ SC
 job() { echo "$2 ${3:-1:00:00} ${4:-2:00:00} testacct testpart 1" > "$STUB/jobs/$1"; }
 
 # Start the private tmux server with one session. Its panes are "user terminals":
-# the server daemonizes, so no test-runner (or Claude) process is their ancestor.
+# the server daemonizes, so no pytest (or Claude) process is their ancestor.
 start_tmux() {  # <session>
   env -u CLAUDECODE tmux -S "$SOCK" -f /dev/null new-session -d -s "$1" -x 200 -y 50
   tmux -S "$SOCK" set-option -g remain-on-exit off >/dev/null

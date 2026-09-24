@@ -1,5 +1,6 @@
 # opsci: planted-leaks (this file plants leaks and secrets as refusal cases)
 """The leak scan and the secrets scan (publish filter row)."""
+import os
 import struct
 import subprocess
 import zlib
@@ -190,7 +191,12 @@ def _framework_files():
 def test_framework_repo_passes_its_own_scans():
     """The leak and secrets scans over the framework's own tracked files (plan, Generality)."""
     files = _framework_files()
-    leaks = leakscan.scan_tree(REPO, leakscan.patterns_for(None), files, honour_planted_marker=True)
+    patterns = leakscan.patterns_for(None)
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        # On GitHub's machines the user name is "runner", an ordinary word, and the user and
+        # host name belong to the CI machine, not to anyone who could leak them into this repo.
+        patterns = [p for p in patterns if not p.name.startswith("site-identifier")]
+    leaks = leakscan.scan_tree(REPO, patterns, files, honour_planted_marker=True)
     assert leaks == [], leakscan.format_hits(leaks)
     secrets, _ = secretscan.scan(REPO, files, honour_planted_marker=True)
     assert [h for h in secrets if not h.pattern.startswith("gitleaks")] == []
