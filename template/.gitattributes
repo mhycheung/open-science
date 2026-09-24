@@ -1,0 +1,5 @@
+# Append-only logs: keep both sides' lines when branches merge.
+log/*.md merge=union
+tasks/*/log.md merge=union
+brainstorm/log/*.md merge=union
+brainstorm/tasks/*/log.md merge=union

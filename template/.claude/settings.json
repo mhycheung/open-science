@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git:*)"
+    ],
+    "deny": [
+      "Bash(git push public:*)",
+      "Bash(git push --mirror:*)"
+    ]
+  }
+}

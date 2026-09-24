@@ -1,0 +1,5 @@
+# expect: missing 'title'
+projects:
+  - description: ""
+    tags: [a]
+    status: active

@@ -1,0 +1,12 @@
+{
+  "name": "open-science-context",
+  "version": "0.3.0",
+  "description": "Context management: clear the session and resume from the context files (session jumps), pane registration, and subagent checkpoints. Needs tmux and a project made with open-science-project.",
+  "dependencies": [
+    "open-science-project"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "open-science contributors"
+  }
+}

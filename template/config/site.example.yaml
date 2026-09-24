@@ -1,0 +1,17 @@
+# Site settings: copy this file to config/site.local.yaml (git-ignored) and fill it in.
+# Scripts read these values; nothing site-specific is written into tracked files.
+scratch: <path to your scratch or bulk-storage directory>
+batch:
+  scheduler: slurm            # slurm | none
+  account: <allocation account>
+  partition: <partition>
+  modules: []                 # module loads needed before a job runs
+notify:
+  backend: file               # file | slack. Default: file (one document per message in messages/)
+  # file:
+  #   dir: messages           # where messages go; relative to the main checkout, or ~/...
+  # slack:
+  #   credentials_file: ~/.config/opsci/slack.env   # mode 600: SLACK_TOKEN=... [SLACK_CHANNEL=...]
+  #   channel: <channel ID>   # overrides SLACK_CHANNEL in the credentials file
+  #   ca_file: <CA bundle>    # only if the default certificate store cannot verify slack.com
+  # Never put a token in this file: opsci notify refuses a config holding one.

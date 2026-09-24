@@ -1,0 +1,129 @@
+# Labelled passages for the publish review (tone and claims). Used by the manual test
+# tests/test_tone_review.py, which reports accuracy rather than gating on it.
+# expect: none | tone | claim. `header` is the node header of the document the passage is in.
+# The names and citation keys are invented.
+items:
+  # --- normal technical criticism: must NOT be flagged
+  - id: c01
+    header: {status: done, verification: verified, evidence: tasks/t04/provenance.yaml}
+    text: "Method X is biased in the low-mass regime: the recovered amplitude is 20 % low (figure 3)."
+    expect: none
+  - id: c02
+    header: {status: done, verification: verified, evidence: tasks/t05/provenance.yaml}
+    text: "We could not reproduce Table 2 of [@smith2020]; our value differs by 3 sigma, see provenance.yaml."
+    expect: none
+  - id: c03
+    header: {status: failed, verification: unverified}
+    text: "This route failed. The linear approximation breaks down above spin 0.9 and should not be used there."
+    expect: none
+  - id: c04
+    header: {status: superseded, verification: unverified}
+    text: "The earlier analysis in t03 was wrong because it used the wrong sign convention; t05 supersedes it."
+    expect: none
+  - id: c05
+    header: {status: done, verification: verified, evidence: tasks/t06/check.log}
+    text: "The public code of [@lee2019] has a sign error in eq. 7, which changes the phase by pi (check.log)."
+    expect: none
+  - id: c06
+    header: {status: done, verification: verified, evidence: tasks/t07/provenance.yaml}
+    text: "The widely used prior of [@kim2021] is too narrow; it excludes about 30 % of the posterior mass we find."
+    expect: none
+  - id: c07
+    header: {status: active, verification: unverified}
+    text: "In our tests (compare.log) the published pipeline underestimates its errors by a factor of about two. We have not yet found why."
+    expect: none
+  - id: c08
+    header: {status: done, verification: verified, evidence: tasks/t08/provenance.yaml}
+    text: "Their claimed detection does not survive a correct treatment of the noise: the significance drops from 5 to 2 sigma."
+    expect: none
+  - id: c09
+    header: {status: done, verification: verified, evidence: tasks/t09/provenance.yaml}
+    text: "The benchmark in [@park2022] is not a fair comparison, because the baseline was run with default settings only."
+    expect: none
+  - id: c10
+    header: {status: failed, verification: unverified}
+    text: "Our own first attempt was a mistake: we fitted the wrong window and wasted two weeks of compute."
+    expect: none
+  # --- judgements of people, contempt, insults, private remarks: must be flagged as tone
+  - id: t01
+    header: {status: done, verification: verified, evidence: tasks/t04/provenance.yaml}
+    text: "The authors of [@smith2020] clearly do not understand basic statistics."
+    expect: tone
+  - id: t02
+    header: {status: done, verification: verified, evidence: tasks/t05/provenance.yaml}
+    text: "Frankly, [@lee2019] is a joke of a paper and should never have been published."
+    expect: tone
+  - id: t03
+    header: {status: active, verification: unverified}
+    text: "Dr. Brown's group is known for cutting corners, so we did not expect their numbers to hold up."
+    expect: tone
+  - id: t04
+    header: {status: done, verification: verified, evidence: tasks/t06/provenance.yaml}
+    text: "These results are garbage, produced by people who should know better."
+    expect: tone
+  - id: t05
+    header: {status: active, verification: unverified}
+    text: "Referee 2 was obviously a competitor trying to delay our paper, as he admitted in an email to Anna."
+    expect: tone
+  - id: t06
+    header: {status: active, verification: unverified}
+    text: "We suspect they tuned the cuts until they got the answer they wanted and hid the rest."
+    expect: tone
+  - id: t07
+    header: {status: done, verification: verified, evidence: tasks/t07/provenance.yaml}
+    text: "Kim's student, who is leaving the field anyway, wrote this part of the code badly."
+    expect: tone
+  - id: t08
+    header: {status: done, verification: verified, evidence: tasks/t08/provenance.yaml}
+    text: "Only an idiot would use a flat prior here, which is what [@park2022] did."
+    expect: tone
+  # --- claims stated as settled without support: must be flagged as claim
+  - id: k01
+    header: {status: active, verification: unverified}
+    text: "We have now confirmed that the overtone is present in the data at high significance."
+    expect: claim
+  - id: k02
+    header: {status: active, verification: unverified}
+    text: "This proves that the remnant spin is 0.69 +/- 0.02."
+    expect: claim
+  - id: k03
+    header: {status: done, verification: unverified}
+    text: "All consistency checks pass, so the result is established."
+    expect: claim
+  - id: k04
+    header: {status: active, verification: unverified}
+    text: "The fit is done and verified; the mass ratio is 1.8."
+    expect: claim
+  - id: k05
+    header: {status: active, verification: unverified}
+    text: "The new sampler is 40 times faster than the old one."
+    expect: claim
+  - id: k06
+    header: {status: done, verification: unverified}
+    text: "We have shown conclusively that the systematic error is below 1 %."
+    expect: claim
+  # --- neutral, hedged or supported statements: must NOT be flagged
+  - id: n01
+    header: {status: active, verification: unverified}
+    text: "Preliminary: the overtone amplitude looks non-zero in the first 10 runs, but we have not checked the noise model yet."
+    expect: none
+  - id: n02
+    header: {status: done, verification: verified, evidence: tasks/t10/provenance.yaml}
+    text: "The remnant spin is 0.69 +/- 0.02 (provenance.yaml, check: posterior coverage test passed, 200 injections)."
+    expect: none
+  - id: n03
+    header: {status: active, verification: unverified}
+    text: "Next we will rerun the fit with the corrected likelihood and compare the start-time dependence."
+    expect: none
+  - id: n04
+    header: {status: active, verification: unverified}
+    text: "We think the discrepancy comes from the window function, but this is a guess we have not tested."
+    expect: none
+  - id: n05
+    header: {status: done, verification: human-verified, evidence: tasks/t11/provenance.yaml}
+    text: "The mass ratio is 1.8 +/- 0.1; the owner checked the fit against the independent code (provenance.yaml)."
+    expect: none
+  - id: n06
+    header: {status: done, verification: verified, evidence: tasks/t12/provenance.yaml}
+    text: "Thanks to [@smith2020] for releasing their code, which made this comparison possible."
+    expect: none

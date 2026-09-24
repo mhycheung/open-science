@@ -1,0 +1,68 @@
+---
+name: migrate-project
+description: Move an existing research project, ongoing or completed, into the open-science layout without losing a file - on a branch, with an approved mapping, and a before/after file inventory. Use when the user asks to migrate, convert or bring an existing project into the framework.
+---
+
+# Migrate a project
+
+The template and the other skills define the target layout (`AGENTS.md` §5 of any new
+project). This skill only says how to get there safely.
+
+## Procedure
+
+1. **Branch and inventory.** Work in a worktree on a new branch, so the original stays
+   untouched until the owner merges. If the project is not a git repo, `git init` it and
+   commit its current state first. A worktree holds only committed files, so commit any
+   untracked file worth keeping before you branch. Record every file before anything moves, keeping the
+   inventory outside the project:
+
+   ```bash
+   git -C <project> worktree add ../<project>-migrate -b migrate-open-science
+   opsci migrate inventory ../<project>-migrate -o <scratch>/inventory.json
+   ```
+
+   If jobs or subagents are running, note their ids for the new project context. Do not
+   wait for them.
+
+2. **Add the scaffolding** without overwriting any existing file: instantiate the template
+   into a scratch directory (`opsci template instantiate`, as in `open-science-project:new-project`),
+   then copy over only the files the project does not have (`cp -rn`). Keep the
+   `config/framework.yaml` it wrote: it records the framework commit.
+
+3. **Propose a mapping and get the owner's approval before moving anything:** which existing
+   directories become `tasks/<id>/`; what goes to `src/`, `data/` (plus `data/MANIFEST.yaml`),
+   `paper/`, `citations/`; what stays where it is. Old context documents and plans move into
+   their task's `subcontext/` unchanged. A pitfalls or rules file becomes `rules/`. Ask the
+   owner which notes are private (meeting notes, correspondence, drafts, remarks about
+   people): they go to `private-docs/`, which is committed but never exported
+   (soft-private: other files may name them in passing, but not link to them). Documentation for readers goes to `docs/`, which is
+   published, so nothing private may stay in an existing `docs/`. Ideas not yet started as
+   work may go to `brainstorm/`. What fits nowhere goes to `archive/`. Ask the owner the
+   privacy tier of each task (`public`, `soft-private` or `hard-private`; definitions in
+   `open-science-project:new-task`, "Privacy tier"); hard-private material outside a task
+   goes under `hard_private:` in `publish/manifest.yaml`. Then move with
+   `git mv`, so history follows the files.
+
+4. **Write the new documents from what is there:** a node header per task (`opsci task new`
+   for the directory skeleton where it helps, with `--privacy` as the owner chose; status
+   from the old context documents:
+   finished work `done`, abandoned routes `failed` or `abandoned`), the project
+   `context.md`, `PROJECT.md` (from the project's own descriptions: README, proposal, plans;
+   `TODO:` where they say nothing, and ask the owner to check it), and one log line: `<date> — migrated into the open-science layout, from
+   commit <sha>.` Do not back-fill logs; git history has them. Run `opsci map build`.
+
+5. **Check and report:**
+
+   ```bash
+   opsci migrate compare <scratch>/inventory.json ../<project>-migrate   # fails on a lost file
+   opsci map build ../<project>-migrate && opsci context check ../<project>-migrate
+   ```
+
+   A moved file counts as kept; a file whose content is found nowhere is lost and must be
+   recovered before you report. Then apply the freshness test to the project context and
+   report the mapping, the compare summary, and every `TODO:` left. The owner merges.
+
+## A completed project
+
+Steps 1 and 2, the node headers and the map from step 4 (every node `done` or `failed`), and
+a project `context.md` stating that the project is complete. No task plans.

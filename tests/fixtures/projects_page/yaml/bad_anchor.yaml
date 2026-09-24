@@ -1,0 +1,7 @@
+# expect: unsupported YAML feature starting with '&'
+# js: refuse
+projects:
+  - title: A
+    description: ""
+    tags: &common [a]
+    status: active

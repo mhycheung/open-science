@@ -1,0 +1,11 @@
+# Agent working files for building this repo; never published.
+/docs/context/
+/work/
+# Handover report to the user; names this site and account, so never tracked.
+/HANDOVER.md
+# Local environments and build products
+.pixi/
+__pycache__/
+*.egg-info/
+# Framework documentation site: the output of `mkdocs build`
+/site/

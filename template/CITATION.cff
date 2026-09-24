@@ -1,0 +1,10 @@
+# How to cite this project. GitHub shows it; Zenodo reads it when it archives a release.
+# Do not add a .zenodo.json: Zenodo ignores CITATION.cff when one is present.
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+title: "{{PROJECT_TITLE}}"
+authors:
+  - name: "{{AUTHOR}}"
+date-released: "{{DATE}}"
+license: MIT
+type: software

@@ -1,0 +1,2 @@
+/* Near miss that must pass: a small corner radius. */
+.tag { border-radius: 6px; } .clear { border-radius: 0.25rem; }

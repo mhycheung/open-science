@@ -1,0 +1,45 @@
+# The publish allowlist. Only paths listed under `include` can leave this repo; everything
+# else stays private. Task directories are exported only if their node header says
+# `privacy: public`. Entries with a `type` are results, papers, pages or datasets: each must be
+# covered by a node of that type (checked by `opsci map build`).
+#
+# Owner decisions (fill in before the first publish):
+policy:
+  default_privacy: public     # tier of a node with no `privacy` field: public | soft-private | hard-private
+  collaborators_agreed: false # co-authors have agreed that shared work may be public
+include:
+  - path: README.md
+  - path: AGENTS.md
+  - path: PROJECT.md
+  - path: CITATION.cff
+  - path: LICENSE
+  - path: LICENSE-docs
+  - path: context.md
+  - path: map
+  - path: log
+  - path: citations
+  - path: rules
+  - path: tasks
+  - path: docs
+# - path: paper
+#   type: paper
+# - path: brainstorm   # private by default; add this line to publish the brainstorm
+#                      # directory. It is soft-private: it may be named, not linked.
+never:
+  - publish/PRIVATE_POLICY.md
+  - lit_cache
+  - data
+  - config/site.local.yaml
+  - private-docs              # private notes: left out even if an include entry matches
+# hard_private:               # hard-private material outside a hard-private task: never
+#   - <path or glob>          # exported, and the export may not name it or copy its text
+#
+# Optional keys:
+# public_repo: <URL or path>  # where `opsci publish push` pushes; or pass --public-repo
+# status_exempt:              # Markdown files that need no `status` header. If set, it
+#   - README.md               # replaces the default list: README.md, **/README.md,
+#                             # AGENTS.md, CLAUDE.md, PROJECT.md, context.md, log/**,
+#                             # map/**, citations/**, rules/**, tasks/*/log.md,
+#                             # tasks/*/subcontext/**, docs/**, brainstorm/context.md,
+#                             # brainstorm/log/**, brainstorm/map/**,
+#                             # brainstorm/tasks/*/log.md, brainstorm/tasks/*/subcontext/**

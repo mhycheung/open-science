@@ -1,0 +1,8 @@
+# expect: unsupported YAML feature starting with '{'
+# js: refuse
+projects:
+  - title: A
+    description: ""
+    tags: [a]
+    status: active
+    links: {repo: https://example.org/a}

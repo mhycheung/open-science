@@ -1,0 +1,65 @@
+# The data for the projects page (index.html reads this file in the browser).
+# The projects below are made-up examples; replace them with your own.
+# Check the file before publishing:  opsci projects-page check <this directory>
+#
+# Fields of each project:
+#   title        required
+#   description  required key; written by you, not by an agent (see AGENTS.md). May stay
+#                empty: the page then shows no description for that project.
+#   tags         required list, may be empty: [tag-one, tag-two] or one "- tag" per line
+#   status       required: active, paused, finished or archived
+#   updated      optional date: YYYY, YYYY-MM or YYYY-MM-DD (used by "recently updated")
+#   links        optional: repo, site (http or https URLs) and doi (e.g. 10.5281/zenodo.123)
+#
+# For text over several lines use "|" and indent the lines below it:
+#   description: |
+#     First paragraph.
+#
+#     Second paragraph.
+# Put a value in quotes if it contains ": " or starts with a quote, [, {, &, *, !, | or >.
+
+title: Projects
+
+# A short introduction shown under the title. Write it yourself, in your own words.
+# While it is empty, the page shows no introduction.
+intro: ""
+
+projects:
+  - title: Tide pool census (example)
+    # Write this description yourself.
+    description: ""
+    tags: [ecology, field-work, data]
+    status: active
+    updated: 2026-08
+    links:
+      repo: https://example.org/tide-pool-census
+      site: https://example.org/tide-pool-census/site
+      doi: 10.5281/zenodo.0000001
+
+  - title: Lichen growth-rate archive (example)
+    # Write this description yourself.
+    description: ""
+    tags: [ecology, data, archive]
+    status: finished
+    updated: 2025-11
+    links:
+      doi: 10.5281/zenodo.0000002
+
+  - title: A toy climate model in one file (example)
+    # Write this description yourself.
+    description: ""
+    tags: [simulation, teaching]
+    status: paused
+    updated: 2024-03
+    links:
+      repo: https://example.org/toy-climate-model
+
+  - title: Harmonica reed tuning study (example)
+    # Write this description yourself.
+    description: ""
+    tags:
+      - acoustics
+      - data
+      - field-work
+    status: archived
+    updated: 2022

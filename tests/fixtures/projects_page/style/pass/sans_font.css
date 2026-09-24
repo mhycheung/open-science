@@ -1,0 +1,2 @@
+/* Near miss that must pass: a sans-serif font stack. */
+body { font-family: Inter, "Helvetica Neue", sans-serif; }

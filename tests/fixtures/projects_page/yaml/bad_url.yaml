@@ -1,0 +1,8 @@
+# expect: link 'repo' must be an http
+projects:
+  - title: A
+    description: ""
+    tags: [a]
+    status: active
+    links:
+      repo: example.org/a

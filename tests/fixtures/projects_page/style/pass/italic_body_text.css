@@ -1,0 +1,2 @@
+/* Near miss that must pass: italics outside headlines. */
+.description em { font-style: italic; }

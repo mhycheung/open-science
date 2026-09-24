@@ -1,0 +1,3 @@
+/* expect: cream/off-white background */
+:root { --paper: rgb(250, 246, 238); }
+.project { background: var(--paper); }

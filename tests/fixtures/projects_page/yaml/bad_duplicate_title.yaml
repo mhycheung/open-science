@@ -1,0 +1,10 @@
+# expect: same title as project 1
+projects:
+  - title: A
+    description: ""
+    tags: [a]
+    status: active
+  - title: a
+    description: ""
+    tags: [b]
+    status: active

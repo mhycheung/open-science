@@ -1,0 +1,36 @@
+{
+  "name": "open-science",
+  "owner": {
+    "name": "open-science contributors"
+  },
+  "metadata": {
+    "description": "Run a research project in the open: context files, task graph, publishing and data releases."
+  },
+  "plugins": [
+    {
+      "name": "open-science",
+      "source": "./plugins/open-science",
+      "description": "Install first: the onboard skill, which asks which components you want and sets them up."
+    },
+    {
+      "name": "open-science-publish",
+      "source": "./plugins/open-science-publish",
+      "description": "Component 1, publishing: publish, zenodo-release."
+    },
+    {
+      "name": "open-science-project",
+      "source": "./plugins/open-science-project",
+      "description": "Component 2, project structure: new-project, new-task, context-files, migrate-project, update-from-template."
+    },
+    {
+      "name": "open-science-context",
+      "source": "./plugins/open-science-context",
+      "description": "Component 3, context management (needs open-science-project and tmux): context-management, continue-context, advise-with-context."
+    },
+    {
+      "name": "slurm-resurrect",
+      "source": "./plugins/slurm-resurrect",
+      "description": "Optional: resume Claude Code sessions in a fresh SLURM job when the current job reaches its time limit."
+    }
+  ]
+}

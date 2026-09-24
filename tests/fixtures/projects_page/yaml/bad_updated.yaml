@@ -1,0 +1,7 @@
+# expect: 'updated' is '2025-13'
+projects:
+  - title: A
+    description: ""
+    tags: [a]
+    status: active
+    updated: 2025-13

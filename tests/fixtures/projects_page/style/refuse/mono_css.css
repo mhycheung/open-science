@@ -1,0 +1,2 @@
+/* expect: monospace */
+.control-name { font-family: "JetBrains Mono", monospace; }

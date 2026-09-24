@@ -1,0 +1,19 @@
+# Where this project's scaffolding came from. The open-science-project:update-from-template skill
+# reads it to see what changed in the framework since, and records each update here.
+framework_repo: "{{FRAMEWORK_REPO}}"
+copied_at_commit: "{{FRAMEWORK_COMMIT}}"
+copied_on: "{{DATE}}"
+# The project layout this project follows. CHANGELOG.md in the framework repo says how to
+# migrate from one layout to the next (open-science-project:update-from-template does it).
+layout_version: 2
+# Uses the context-management component (plugin open-science-context): session jumps.
+context_management: {{CONTEXT_MANAGEMENT}}
+# Files this project changed on purpose; an update must keep these changes.
+local_divergence: []
+#  - file: AGENTS.md
+#    change: "section 1 written for this project"
+updates: []
+#  - date: YYYY-MM-DD
+#    to_commit: <sha>
+#    taken: "..."
+#    skipped: "..."

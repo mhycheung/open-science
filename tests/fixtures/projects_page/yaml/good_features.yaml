@@ -1,0 +1,32 @@
+# Valid file using every YAML form the page's reader supports. Must pass the validator and
+# read the same in index.html as in PyYAML.
+title: "My projects: a list"   # quoted because of ": "
+intro: |
+  First paragraph of the introduction.
+
+  Second paragraph, with a # that is not a comment.
+
+projects:
+  - title: 'It''s a survey'
+    description: |-
+      One line.
+      Another line.
+    tags:
+      - field-work
+      - "tag with # hash"
+    status: active
+    updated: 2025-06-14
+    links:
+      site: https://example.org/survey#top
+      doi: https://doi.org/10.5281/zenodo.1234567
+
+  - title: Empty description
+    description:
+    tags: []
+    status: paused
+
+  -   title: Extra spaces after the dash
+      description: "Escapes: \"quoted\" and a\ttab"
+      tags: [a, 'b', "c:d"]
+      status: finished
+      updated: 2021

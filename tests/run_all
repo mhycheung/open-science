@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Run every automated test of the framework. Tests that need a real service, a scheduler or
+# a live Claude session are marked `manual` and are skipped unless --run-manual is given.
+#   tests/run_all                 # all automated tests
+#   tests/run_all --run-manual    # also the manual ones (run by hand before a release)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if [ -z "${PIXI_ENVIRONMENT_NAME:-}" ] && command -v pixi >/dev/null 2>&1; then
+    exec pixi run --frozen bash tests/run_all "$@"
+fi
+python -m pytest tests -q -p no:cacheprovider "$@"

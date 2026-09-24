@@ -1,0 +1,6 @@
+# expect: tag 'a' listed twice
+projects:
+  - title: A
+    description: ""
+    tags: [a, b, a]
+    status: active

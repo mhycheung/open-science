@@ -1,0 +1,2 @@
+/* expect: pill-shaped button */
+.tag { border-radius: 999px; }

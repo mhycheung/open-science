@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://open-science.invalid/schemas/node_header.schema.json",
+  "title": "open-science node header",
+  "description": "The YAML header of a node in a project graph: a task, a result, a paper, a site page or a dataset. It sits as front matter at the top of a markdown file, or as a node.yaml beside a non-markdown artifact.",
+  "type": "object",
+  "required": ["id", "title", "type", "status", "summary"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "description": "Unique within the project. Lower case, digits and hyphens. A task's id equals its directory name under tasks/.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "title": {"type": "string", "minLength": 1},
+    "type": {"enum": ["task", "result", "paper", "page", "dataset"]},
+    "status": {"enum": ["active", "done", "failed", "superseded", "abandoned", "paused"]},
+    "depends_on": {"$ref": "#/$defs/idlist"},
+    "supersedes": {"$ref": "#/$defs/idlist"},
+    "related": {"$ref": "#/$defs/idlist"},
+    "privacy": {
+      "description": "public: may be released. soft-private: not released and not in the public map, but may be named elsewhere. hard-private: must not appear anywhere in the release, not even by name. Absent: the manifest's policy.default_privacy.",
+      "enum": ["public", "soft-private", "hard-private"]
+    },
+    "summary": {
+      "description": "One sentence on what this node established, or why it failed.",
+      "type": "string",
+      "minLength": 1
+    },
+    "verification": {
+      "description": "verified: an agent or human ran a stated check against a provenance record. human-verified: set only by a human.",
+      "enum": ["unverified", "verified", "human-verified"]
+    },
+    "evidence": {
+      "description": "Path, relative to the project root, to the provenance record and the check that was run. Required unless verification is unverified.",
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {"type": "array", "items": {"type": "string"}},
+    "autonomy": {"type": "string"},
+    "hold_at": {"type": "array", "items": {"type": "string"}}
+  },
+  "if": {
+    "properties": {"verification": {"enum": ["verified", "human-verified"]}},
+    "required": ["verification"]
+  },
+  "then": {"required": ["evidence"]},
+  "$defs": {
+    "idlist": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+      "uniqueItems": true
+    }
+  }
+}

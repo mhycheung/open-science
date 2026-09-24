@@ -1,0 +1,6 @@
+# expect: 'status' is 'done'
+projects:
+  - title: A
+    description: ""
+    tags: [a]
+    status: done

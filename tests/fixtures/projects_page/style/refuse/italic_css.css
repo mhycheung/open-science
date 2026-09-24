@@ -1,0 +1,2 @@
+/* expect: italic headline */
+h1 span { font-style: italic; }

@@ -1,0 +1,2 @@
+/* expect: numbered section label */
+h2::before { counter-increment: section; content: counter(section, decimal-leading-zero) " / "; }

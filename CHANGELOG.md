@@ -1,0 +1,114 @@
+# Changelog
+
+One section per release, newest first. The plugins share the release number (the `version`
+in each `plugins/*/.claude-plugin/plugin.json`); a release is tagged `v<version>`.
+
+A release that changes the project layout raises `LAYOUT_VERSION` (`tools/opsci/layout.py`)
+and has a **Project migration** section: exact steps that bring an existing project to the
+new layout. The `open-science-project:update-from-template` skill runs every migration
+section between the project's `layout_version` (in `config/framework.yaml`; no key means
+layout 1) and the framework's, in order, before it applies the other template changes.
+
+## 0.3.0 - 2026-09-24
+
+- Three new project directories. `brainstorm/`: ideas before they become project work, with
+  its own `context.md`, `tasks/`, `map/` and `log/` (`opsci task new <id> --root
+  brainstorm`, `opsci map build brainstorm`); not published unless the owner adds it to the
+  manifest. `docs/`: documentation, published. `private-docs/`: private notes, committed but
+  never exported. Both are soft-private: nothing outside them may link to them.
+- `opsci map build` and `opsci task new` ignore `brainstorm/` and `private-docs/` in the
+  project graph; `opsci context check` also caps the brainstorm context files.
+- `layout_version` in `config/framework.yaml`. `opsci task new`, `opsci map build`,
+  `opsci context check` and `opsci publish check` warn when a project's layout is older than the framework's.
+- Publishing: the exported map is built from the published nodes only, and two new checks,
+  `references` and `private-content`, refuse an export that links to material that is not
+  published or names or copies hard-private material (see the privacy tiers below). The
+  review also compares the export with the excluded files. `docs/` and the brainstorm skeleton files need no `status:` header. When
+  the owner publishes `brainstorm/`, its task headers decide what is exported, as in `tasks/`.
+- **Three privacy tiers.** The node header field `privacy: public | soft-private |
+  hard-private` replaces `publish: yes | no | embargo`; `embargo` is gone, and a header that
+  still has `publish:` fails `opsci map build` with a message naming `privacy`. `public`: may
+  be released. `soft-private`: not released and not in the public map, but may be mentioned
+  by name. `hard-private`: must not appear anywhere in the release, not even by name.
+  `opsci task new --privacy <tier>` (default `public`, also with `--root brainstorm`). In
+  `publish/manifest.yaml`, `policy.default_privacy` replaces `policy.embargo_default`, and
+  the optional list `hard_private:` names hard-private paths outside a hard-private task.
+  `references` refuses a header edge to a hard-private node and a link to any file that is
+  not exported; `private-content` refuses ids, titles, paths and 12-word runs of
+  hard-private material only, and lists soft-private mentions in the report's notes. A
+  redaction marker in a private file, `<!-- redact: <reason> -->text<!-- /redact -->`, is
+  replaced by `[redacted (<reason>)]` in the export; the new check `redaction` refuses an
+  unclosed marker or an empty reason. `open-science-publish:publish` lists every
+  hard-private mention to the owner, who decides for each whether to change, remove or
+  redact it. `open-science-project:new-task` asks for the tier, with both private tiers
+  defined in the question, when a task obviously looks private.
+- `open-science-project:update-from-template` works from an installed plugin (it clones the
+  framework when the plugin has no `template/`), and runs the migrations below.
+- This changelog.
+
+### Project migration (layout 1 -> 2)
+
+Run from the project root, on a branch, with `FW` a framework checkout at this release.
+
+1. If the project already has a `brainstorm/` or `private-docs/` directory, stop and ask the
+   owner how to proceed: their files would drop out of the project graph and, for
+   `private-docs/`, out of every publish.
+2. Make the three directories from the template, without overwriting anything:
+   ```bash
+   opsci template instantiate <scratch>/fresh --name <slug> --title "<title>" --author "<owner>" \
+       --template "$FW/template"
+   for d in brainstorm docs private-docs; do mkdir -p "$d" && cp -rn "<scratch>/fresh/$d/." "$d/"; done
+   ```
+   Add `--no-context-management` if `config/framework.yaml` has `context_management: false`.
+3. Append to `.gitattributes`:
+   ```
+   brainstorm/log/*.md merge=union
+   brainstorm/tasks/*/log.md merge=union
+   ```
+4. In `publish/manifest.yaml`: add `  - path: docs` under `include`, `  - private-docs` under
+   `never`, and after the `include` entries the two comment lines
+   `# - path: brainstorm   # private by default; add this line to publish the brainstorm` and
+   `#                      # directory. It is soft-private: it may be named, not linked.`
+   If `docs/` existed before step 2, ask the owner whether everything in it may be public
+   before you add the `include` entry.
+5. Ask the owner which existing notes are private (meeting notes, correspondence, drafts,
+   remarks about people). Move each one with `git mv <file> private-docs/`. Then search the
+   rest of the project for the old paths (`git grep -n '<old path>'`) and remove each
+   reference or restate its content in public form.
+6. Privacy tiers. In every node header (every `context.md`, `plan.md` and other file with a
+   node header, and every `node.yaml`, under `tasks/`, `brainstorm/` and elsewhere; find
+   them with `git grep -n '^publish:'`), replace `publish: yes` with `privacy: public`. For
+   each node with `publish: no` or `publish: embargo`, ask the owner whether it is
+   `soft-private` (not released, not in the public map, may be mentioned by name) or
+   `hard-private` (must not appear anywhere in the release, not even by name), and write
+   `privacy: <tier>`; with no answer, write `hard-private`. In `publish/manifest.yaml`,
+   replace `embargo_default: "<v>"` with `default_privacy: <tier>`: `yes` becomes `public`;
+   for `no` or `embargo` ask the owner as above (`hard-private` with no answer).
+7. In `config/framework.yaml`, after `copied_on`, add:
+   ```yaml
+   # The project layout this project follows. CHANGELOG.md in the framework repo says how to
+   # migrate from one layout to the next (open-science-project:update-from-template does it).
+   layout_version: 2
+   ```
+8. Run `opsci map build`, `opsci map build brainstorm` and `opsci context check`; all must
+   pass with no layout warning.
+9. Commit: `git add -A && git commit -m "Migrate to project layout 2: brainstorm/, docs/, private-docs/, privacy tiers"`.
+
+## 0.2.0 - 2026-09-24
+
+- The framework is split into five components, each usable alone: `open-science-publish`,
+  `open-science-project`, `open-science-context` (needs `open-science-project`), the projects
+  page (files, no plugin) and `slurm-resurrect`. The `open-science` plugin now holds only
+  onboarding: `/open-science:onboard`.
+- **Plugin and skill names changed.** Skills that were `open-science:<skill>` are now
+  `open-science-project:<skill>` (`new-project`, `new-task`, `migrate-project`,
+  `update-from-template`, and the new `context-files`), `open-science-context:<skill>`
+  (`context-management`, `continue-context`, `advise-with-context`) or
+  `open-science-publish:<skill>` (`publish`, `zenodo-release`). Install the component
+  plugins you use (`claude plugin install <plugin>@open-science`).
+- `context_management:` in `config/framework.yaml` records whether the project uses session
+  jumps; `opsci template instantiate --no-context-management` leaves them out.
+- No layout migration. `open-science-project:update-from-template` brings the new skill
+  names into `AGENTS.md`, `CLAUDE.md`, `context.md`, `contracts/` and the agent definitions
+  (`.claude/agents/`), and adds the `context_management:` key (`true` if the project uses
+  session jumps).

@@ -1,0 +1,54 @@
+# Documentation site of the open-science framework (MkDocs with the Material theme).
+#   pixi run mkdocs build --strict     # build into site/ (git-ignored)
+#   pixi run mkdocs serve              # preview at http://127.0.0.1:8000/
+# .github/workflows/docs.yml builds it and deploys it to GitHub Pages on a push to main.
+site_name: open-science
+site_description: Run a research project with Claude Code so that it can be published openly.
+site_url: https://mhycheung.github.io/open-science/
+repo_url: https://github.com/mhycheung/open-science
+docs_dir: docs
+# The build's design records (report, build plan, verification) are not user documentation;
+# context/ holds agent working files that git ignores, when a checkout has them.
+exclude_docs: |
+  design/
+  context/
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - content.code.copy
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+# With --strict these warnings fail the build: a page missing from the nav, a nav entry or a
+# link that points nowhere.
+validation:
+  nav:
+    omitted_files: warn
+    not_found: warn
+  links:
+    not_found: warn
+    anchors: warn
+    unrecognized_links: warn
+nav:
+  - Get started: index.md
+  - Project template and layout: project-template.md
+  - Project skills: project-skills.md
+  - Context management and session jumps: context-management.md
+  - Publishing and the filter: publishing.md
+  - Zenodo releases: zenodo.md
+  - Notifications: notify.md
+  - Personal projects page: projects-page.md
+  - SLURM resurrection: slurm-resurrect.md
+  - The opsci command: cli.md
+  - Updating a project: updating.md
+  - Troubleshooting: faq.md

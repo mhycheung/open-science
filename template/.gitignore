@@ -1,0 +1,32 @@
+# Data live outside git (they may be symlinks to scratch); only the manifest is tracked.
+/data/*
+!/data/MANIFEST.yaml
+# Messages to the user (opsci notify, file back end); only the README is tracked.
+/messages/*
+!/messages/README.md
+# The publish tool's checkout of the public repo
+/.opsci/
+# Site settings and secrets
+/config/site.local.yaml
+.env
+*.env
+# Environments and build products
+.pixi/
+.venv/
+__pycache__/
+*.pyc
+site/
+_site/
+# LaTeX build products
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+*.synctex.gz
+*.toc
+# Editor and OS files
+.DS_Store
+*.swp

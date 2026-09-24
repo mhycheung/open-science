@@ -1,0 +1,6 @@
+# expect: 'tags' must be a list
+projects:
+  - title: A
+    description: ""
+    tags: ecology
+    status: active

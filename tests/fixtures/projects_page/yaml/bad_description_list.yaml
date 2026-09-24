@@ -1,0 +1,6 @@
+# expect: 'description' must be text
+projects:
+  - title: A
+    description: [not, text]
+    tags: [a]
+    status: active

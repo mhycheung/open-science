@@ -1,0 +1,7 @@
+# expect: unquoted text contains ': '
+# js: refuse
+projects:
+  - title: Survey: part two
+    description: ""
+    tags: [a]
+    status: active

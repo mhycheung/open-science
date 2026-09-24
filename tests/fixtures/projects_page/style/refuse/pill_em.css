@@ -1,0 +1,2 @@
+/* expect: pill-shaped button */
+.clear { border-top-left-radius: 1em; }

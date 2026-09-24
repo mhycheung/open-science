@@ -1,0 +1,8 @@
+# expect: folded text (>) is not supported
+# js: refuse
+projects:
+  - title: A
+    description: >
+      folded text
+    tags: [a]
+    status: active

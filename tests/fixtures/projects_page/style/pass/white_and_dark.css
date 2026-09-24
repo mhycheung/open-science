@@ -1,0 +1,2 @@
+/* Near misses that must pass: pure white, dark and mid-grey backgrounds. */
+.a { background: #fff; } .b { background-color: white; } .c { background: #1f2328; } .d { background: rgb(200, 200, 200); }

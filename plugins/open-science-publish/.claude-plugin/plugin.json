@@ -1,0 +1,9 @@
+{
+  "name": "open-science-publish",
+  "version": "0.3.0",
+  "description": "Publishing: export the public part of a private repo through a manifest, check it, push it after your approval, build the project site, and release data on Zenodo.",
+  "license": "MIT",
+  "author": {
+    "name": "open-science contributors"
+  }
+}

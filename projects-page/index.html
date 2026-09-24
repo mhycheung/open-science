@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Projects</title>
+<!--
+  Personal projects page. The content comes from projects.yaml in the same directory;
+  edit that file, not this one. Style rules for anyone changing this page: see AGENTS.md.
+-->
+<style>
+  :root { color-scheme: light; }
+  html { background: #ffffff; }
+  body {
+    margin: 0;
+    background: #ffffff;
+    color: #1f2328;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.55;
+  }
+  main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size: 2rem; font-weight: 700; line-height: 1.2; margin: 0 0 0.75rem; }
+  .intro { color: #3d444d; margin: 0 0 2rem; }
+  .intro p { margin: 0 0 0.75rem; }
+  .controls { border-top: 1px solid #d1d9e0; border-bottom: 1px solid #d1d9e0; padding: 1rem 0; margin: 0 0 0.5rem; }
+  .controls-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.5rem; margin: 0 0 0.75rem; }
+  .controls-row:last-child { margin-bottom: 0; }
+  .control-name { font-size: 0.875rem; font-weight: 600; margin-right: 0.5rem; }
+  select, button { font: inherit; font-size: 0.875rem; color: #1f2328; }
+  select { background: #ffffff; border: 1px solid #afb8c1; border-radius: 3px; padding: 0.15rem 0.3rem; }
+  .tag-list { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  .tag {
+    background: #ffffff;
+    border: 1px solid #afb8c1;
+    border-radius: 3px;
+    padding: 0.1rem 0.5rem;
+    cursor: pointer;
+  }
+  .tag:hover { border-color: #1f2328; }
+  .tag[aria-pressed="true"] { background: #1f2328; border-color: #1f2328; color: #ffffff; }
+  .tag:focus-visible, select:focus-visible, .clear:focus-visible, a:focus-visible { outline: 2px solid #0969da; outline-offset: 1px; }
+  .tag-count { color: inherit; opacity: 0.7; margin-left: 0.25rem; }
+  .clear { background: #ffffff; border: 0; padding: 0; color: #0969da; text-decoration: underline; cursor: pointer; }
+  .count { color: #59636e; font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .project { border-bottom: 1px solid #d1d9e0; padding: 1.25rem 0; }
+  .project h2 { font-size: 1.25rem; font-weight: 650; line-height: 1.3; margin: 0 0 0.25rem; }
+  .meta { color: #59636e; font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .description p { margin: 0 0 0.5rem; }
+  .project .tag-list { margin: 0.5rem 0; }
+  .links { margin: 0.5rem 0 0; }
+  .links a { margin-right: 1rem; }
+  a { color: #0969da; }
+  .message { color: #59636e; }
+  .error { color: #b3261e; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="page-title">Projects</h1>
+  <div id="intro" class="intro" hidden></div>
+
+  <div class="controls" id="controls" hidden>
+    <div class="controls-row">
+      <span class="control-name" id="tags-label">Tags</span>
+      <ul class="tag-list" id="tag-filter" aria-labelledby="tags-label"></ul>
+    </div>
+    <div class="controls-row">
+      <label><span class="control-name">Show projects with</span>
+        <select id="mode">
+          <option value="any">any selected tag</option>
+          <option value="all">all selected tags</option>
+        </select>
+      </label>
+      <label><span class="control-name">Sort by</span>
+        <select id="sort">
+          <option value="match">most matching tags</option>
+          <option value="updated">recently updated</option>
+          <option value="title">title</option>
+          <option value="status">status</option>
+        </select>
+      </label>
+      <button type="button" class="clear" id="clear">Clear tags</button>
+    </div>
+  </div>
+
+  <p class="count" id="count" aria-live="polite"></p>
+  <div id="projects"><p class="message">Loading projects…</p></div>
+</main>
+
+<!--
+  The logic below is plain functions with no access to the page, so that it can be tested
+  outside a browser (tests/test_projects_page.py runs this exact block under Node).
+-->
+<script id="projects-page-logic">
+(function (root) {
+  "use strict";
+
+  // ---------------------------------------------------------------------------------------
+  // A reader for the subset of YAML that projects.yaml uses: mappings, lists ("- item" or
+  // "[a, b]"), plain and quoted strings, "|" block text, and # comments. Anything else is
+  // refused with a line number, so a file either reads correctly or not at all.
+  // ---------------------------------------------------------------------------------------
+  function YamlError(message, lineNo) {
+    this.name = "YamlError";
+    this.message = (lineNo ? "line " + lineNo + ": " : "") + message;
+  }
+  YamlError.prototype = Object.create(Error.prototype);
+
+  var KEY_RE = /^([A-Za-z_][A-Za-z0-9_-]*)[ ]*:(?:[ ]+(.*))?$/;
+
+  function stripComment(text) {
+    var quote = null;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      var prev = i === 0 ? " " : text[i - 1];
+      if (quote === '"') {
+        if (c === "\\") { i++; } else if (c === '"') { quote = null; }
+      } else if (quote === "'") {
+        if (c === "'") {
+          if (text[i + 1] === "'") { i++; } else { quote = null; }
+        }
+      } else if ((c === '"' || c === "'") && /[\s\[,:-]/.test(prev)) {
+        quote = c;
+      } else if (c === "#" && /\s/.test(prev)) {
+        return text.slice(0, i).replace(/\s+$/, "");
+      }
+    }
+    return text.replace(/\s+$/, "");
+  }
+
+  function parseDoubleQuoted(s, lineNo) {
+    var out = "";
+    for (var i = 1; i < s.length; i++) {
+      var c = s[i];
+      if (c === '"') {
+        if (i !== s.length - 1) { throw new YamlError("text after closing quote", lineNo); }
+        return out;
+      }
+      if (c === "\\") {
+        var e = s[++i];
+        var simple = { n: "\n", t: "\t", "\\": "\\", '"': '"', "/": "/", r: "\r", "0": "\0" };
+        if (Object.prototype.hasOwnProperty.call(simple, e)) {
+          out += simple[e];
+        } else if (e === "u" && /^[0-9A-Fa-f]{4}$/.test(s.slice(i + 1, i + 5))) {
+          out += String.fromCharCode(parseInt(s.slice(i + 1, i + 5), 16));
+          i += 4;
+        } else {
+          throw new YamlError("unsupported escape \\" + e, lineNo);
+        }
+      } else {
+        out += c;
+      }
+    }
+    throw new YamlError("unclosed double quote (quoted text must end on the same line)", lineNo);
+  }
+
+  function parseSingleQuoted(s, lineNo) {
+    var out = "";
+    for (var i = 1; i < s.length; i++) {
+      if (s[i] === "'") {
+        if (s[i + 1] === "'") { out += "'"; i++; continue; }
+        if (i !== s.length - 1) { throw new YamlError("text after closing quote", lineNo); }
+        return out;
+      }
+      out += s[i];
+    }
+    throw new YamlError("unclosed single quote (quoted text must end on the same line)", lineNo);
+  }
+
+  function splitFlow(inner, lineNo) {
+    var items = [], cur = "", quote = null;
+    for (var i = 0; i < inner.length; i++) {
+      var c = inner[i];
+      if (quote) {
+        cur += c;
+        if (quote === '"' && c === "\\") { cur += inner[++i]; } else if (c === quote) { quote = null; }
+      } else if (c === '"' || c === "'") {
+        quote = c; cur += c;
+      } else if (c === ",") {
+        items.push(cur); cur = "";
+      } else if (c === "[" || c === "]" || c === "{" || c === "}") {
+        throw new YamlError("nested [ ] or { } are not supported", lineNo);
+      } else {
+        cur += c;
+      }
+    }
+    if (quote) { throw new YamlError("unclosed quote in [ ] list", lineNo); }
+    items.push(cur);
+    items = items.map(function (x) { return x.trim(); });
+    if (items.length === 1 && items[0] === "") { return []; }
+    if (items[items.length - 1] === "") { items.pop(); }
+    return items.map(function (x) {
+      if (x === "") { throw new YamlError("empty item in [ ] list", lineNo); }
+      return parseScalar(x, lineNo);
+    });
+  }
+
+  function parseScalar(s, lineNo) {
+    s = s.trim();
+    if (s === "" || s === "~" || s === "null" || s === "Null" || s === "NULL") { return null; }
+    var c = s[0];
+    if (c === '"') { return parseDoubleQuoted(s, lineNo); }
+    if (c === "'") { return parseSingleQuoted(s, lineNo); }
+    if (c === "[") {
+      if (s[s.length - 1] !== "]") {
+        throw new YamlError("a [ ] list must close on the same line", lineNo);
+      }
+      return splitFlow(s.slice(1, -1), lineNo);
+    }
+    if (c === ">") { throw new YamlError("folded text (>) is not supported; use |", lineNo); }
+    if ("{&*!%@`|".indexOf(c) >= 0) {
+      throw new YamlError("unsupported YAML feature starting with '" + c + "'", lineNo);
+    }
+    if (/:(\s|$)/.test(s)) {
+      throw new YamlError("unquoted text contains ': '; put the value in quotes", lineNo);
+    }
+    return s;
+  }
+
+  function parseYaml(text) {
+    var raw = String(text).replace(/\r\n?/g, "\n").split("\n");
+    if (raw.length && raw[0].charCodeAt(0) === 0xfeff) { raw[0] = raw[0].slice(1); }
+    var lines = raw.map(function (r, i) {
+      var m = /^( *)(.*)$/.exec(r);
+      return { n: i + 1, raw: r, indent: m[1].length, text: m[2] };
+    });
+    var pos = 0;
+
+    function isBlank(line) {
+      return /^\s*$/.test(line.raw) || /^#/.test(line.text);
+    }
+    function next() {
+      while (pos < lines.length && isBlank(lines[pos])) { pos++; }
+      if (pos >= lines.length) { return null; }
+      var line = lines[pos];
+      if (/^\t/.test(line.text)) { throw new YamlError("tab used for indentation; use spaces", line.n); }
+      if (line.indent === 0 && /^(---|\.\.\.|%)/.test(line.text)) {
+        throw new YamlError("document markers and directives are not supported", line.n);
+      }
+      return line;
+    }
+    function isDash(t) { return t === "-" || /^- /.test(t); }
+
+    function parseNode(indent) {
+      var line = next();
+      if (!line || line.indent < indent) { return null; }
+      var t = stripComment(line.text);
+      if (isDash(t)) { return parseSeq(line.indent); }
+      if (KEY_RE.test(t)) { return parseMap(line.indent); }
+      pos++;
+      return parseScalar(t, line.n);
+    }
+
+    function parseSeq(indent) {
+      var items = [];
+      for (;;) {
+        var line = next();
+        if (!line || line.indent < indent) { break; }
+        var t = stripComment(line.text);
+        if (line.indent > indent) { throw new YamlError("unexpected indentation", line.n); }
+        if (!isDash(t)) { break; }
+        var rest = t.slice(1);
+        var content = rest.replace(/^ +/, "");
+        if (content === "") {
+          pos++;
+          var nl = next();
+          items.push(nl && nl.indent > indent ? parseNode(nl.indent) : null);
+          continue;
+        }
+        // Treat the text after "- " as if it started a line at its own column.
+        line.indent = indent + 1 + (rest.length - content.length);
+        line.text = content;
+        items.push(parseNode(line.indent));
+      }
+      return items;
+    }
+
+    function parseBlockText(indent, header, lineNo) {
+      var m = /^\|([+-]?)$/.exec(header);
+      if (!m) { throw new YamlError("unsupported block text header '" + header + "'", lineNo); }
+      var chomp = m[1];
+      var body = [];
+      var contentIndent = null;
+      while (pos < lines.length) {
+        var l = lines[pos];
+        if (/^\s*$/.test(l.raw)) { body.push(""); pos++; continue; }
+        if (l.indent <= indent) { break; }
+        if (contentIndent === null) { contentIndent = l.indent; }
+        if (l.indent < contentIndent) { throw new YamlError("block text is less indented than its first line", l.n); }
+        body.push(l.raw.slice(contentIndent));
+        pos++;
+      }
+      var trailing = 0;
+      while (body.length && body[body.length - 1] === "") { body.pop(); trailing++; }
+      if (!body.length) { return ""; }
+      var core = body.join("\n");
+      if (chomp === "-") { return core; }
+      if (chomp === "+") { return core + new Array(trailing + 2).join("\n"); }
+      return core + "\n";
+    }
+
+    function parseMap(indent) {
+      var obj = {};
+      for (;;) {
+        var line = next();
+        if (!line || line.indent < indent) { break; }
+        if (line.indent > indent) { throw new YamlError("unexpected indentation", line.n); }
+        var t = stripComment(line.text);
+        if (isDash(t)) { throw new YamlError("list item where a 'key: value' line was expected", line.n); }
+        var m = KEY_RE.exec(t);
+        if (!m) { throw new YamlError("expected 'key: value'", line.n); }
+        var key = m[1], rest = m[2] === undefined ? "" : m[2].trim();
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          throw new YamlError("key '" + key + "' appears twice", line.n);
+        }
+        pos++;
+        if (rest === "") {
+          var nl = next();
+          if (nl && nl.indent > indent) {
+            obj[key] = parseNode(nl.indent);
+          } else if (nl && nl.indent === indent && isDash(stripComment(nl.text))) {
+            obj[key] = parseSeq(indent);
+          } else {
+            obj[key] = null;
+          }
+        } else if (rest[0] === "|") {
+          obj[key] = parseBlockText(indent, rest, line.n);
+        } else {
+          obj[key] = parseScalar(rest, line.n);
+        }
+      }
+      return obj;
+    }
+
+    var result = parseNode(0);
+    var extra = next();
+    if (extra) { throw new YamlError("unexpected text", extra.n); }
+    return result;
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Data, filtering, sorting.
+  // ---------------------------------------------------------------------------------------
+  var STATUS_ORDER = ["active", "paused", "finished", "archived"];
+
+  function str(x) { return x === null || x === undefined ? "" : String(x); }
+
+  function normalize(data) {
+    data = data || {};
+    var projects = Array.isArray(data.projects) ? data.projects : [];
+    return {
+      title: str(data.title).trim() || "Projects",
+      intro: str(data.intro),
+      projects: projects.map(function (p, i) {
+        p = p || {};
+        var links = p.links || {};
+        return {
+          index: i,
+          title: str(p.title),
+          description: str(p.description),
+          tags: Array.isArray(p.tags) ? p.tags.map(str).filter(function (t) { return t !== ""; }) : [],
+          status: str(p.status),
+          updated: str(p.updated),
+          links: { repo: str(links.repo), site: str(links.site), doi: str(links.doi) }
+        };
+      })
+    };
+  }
+
+  function compareText(a, b) {
+    return a.localeCompare(b, "en", { sensitivity: "base" });
+  }
+
+  function allTags(projects) {
+    var counts = {};
+    projects.forEach(function (p) {
+      p.tags.forEach(function (t) { counts[t] = (counts[t] || 0) + 1; });
+    });
+    return Object.keys(counts).sort(compareText).map(function (t) {
+      return { tag: t, count: counts[t] };
+    });
+  }
+
+  function matchCount(p, selected) {
+    return selected.filter(function (t) { return p.tags.indexOf(t) >= 0; }).length;
+  }
+
+  function filterProjects(projects, selected, mode) {
+    if (!selected.length) { return projects.slice(); }
+    return projects.filter(function (p) {
+      var n = matchCount(p, selected);
+      return mode === "all" ? n === selected.length : n > 0;
+    });
+  }
+
+  function statusRank(s) {
+    var i = STATUS_ORDER.indexOf(s);
+    return i < 0 ? STATUS_ORDER.length : i;
+  }
+
+  // Newest first; entries without a date go last.
+  function compareUpdated(a, b) {
+    if (a.updated === b.updated) { return 0; }
+    if (!a.updated) { return 1; }
+    if (!b.updated) { return -1; }
+    return a.updated < b.updated ? 1 : -1;
+  }
+
+  function sortProjects(projects, key, selected) {
+    selected = selected || [];
+    var byTitle = function (a, b) { return compareText(a.title, b.title) || a.index - b.index; };
+    var cmp;
+    if (key === "title") {
+      cmp = byTitle;
+    } else if (key === "updated") {
+      cmp = function (a, b) { return compareUpdated(a, b) || byTitle(a, b); };
+    } else if (key === "status") {
+      cmp = function (a, b) { return statusRank(a.status) - statusRank(b.status) || byTitle(a, b); };
+    } else {
+      cmp = function (a, b) {
+        return matchCount(b, selected) - matchCount(a, selected) || compareUpdated(a, b) || byTitle(a, b);
+      };
+    }
+    return projects.slice().sort(cmp);
+  }
+
+  var SORT_KEYS = ["match", "updated", "title", "status"];
+  var DEFAULT_STATE = { tags: [], mode: "any", sort: "match" };
+
+  // Page state lives in the URL fragment, e.g. #tags=ecology,data&mode=all&sort=title,
+  // so a filtered view can be linked to.
+  function parseState(hash, knownTags) {
+    var state = { tags: [], mode: DEFAULT_STATE.mode, sort: DEFAULT_STATE.sort };
+    str(hash).replace(/^#/, "").split("&").forEach(function (part) {
+      var eq = part.indexOf("=");
+      if (eq < 0) { return; }
+      var k = part.slice(0, eq), v;
+      try { v = decodeURIComponent(part.slice(eq + 1)); } catch (e) { return; }
+      if (k === "tags") {
+        state.tags = v.split(",").filter(function (t, i, arr) {
+          return t !== "" && arr.indexOf(t) === i && (!knownTags || knownTags.indexOf(t) >= 0);
+        });
+      } else if (k === "mode" && (v === "any" || v === "all")) {
+        state.mode = v;
+      } else if (k === "sort" && SORT_KEYS.indexOf(v) >= 0) {
+        state.sort = v;
+      }
+    });
+    return state;
+  }
+
+  function formatState(state) {
+    var parts = [];
+    if (state.tags.length) { parts.push("tags=" + state.tags.map(encodeURIComponent).join(",")); }
+    if (state.mode !== DEFAULT_STATE.mode) { parts.push("mode=" + state.mode); }
+    if (state.sort !== DEFAULT_STATE.sort) { parts.push("sort=" + state.sort); }
+    return parts.length ? "#" + parts.join("&") : "";
+  }
+
+  function toggleTag(state, tag) {
+    var tags = state.tags.indexOf(tag) >= 0
+      ? state.tags.filter(function (t) { return t !== tag; })
+      : state.tags.concat([tag]);
+    return { tags: tags, mode: state.mode, sort: state.sort };
+  }
+
+  function view(data, state) {
+    var shown = sortProjects(filterProjects(data.projects, state.tags, state.mode), state.sort, state.tags);
+    return {
+      shown: shown,
+      total: data.projects.length,
+      tags: allTags(data.projects).map(function (t) {
+        return { tag: t.tag, count: t.count, selected: state.tags.indexOf(t.tag) >= 0 };
+      })
+    };
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // HTML. Every value from projects.yaml is escaped; links must be http(s).
+  // ---------------------------------------------------------------------------------------
+  function escapeHtml(s) {
+    return str(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  function safeUrl(u) {
+    return /^https?:\/\/[^\s]+$/i.test(u) ? u : "";
+  }
+
+  function doiUrl(doi) {
+    if (!doi) { return ""; }
+    if (/^10\.\d{4,9}\/\S+$/.test(doi)) { return "https://doi.org/" + doi; }
+    return safeUrl(doi);
+  }
+
+  function paragraphs(text) {
+    return str(text).trim().split(/\n\s*\n/).filter(function (p) { return p.trim() !== ""; })
+      .map(function (p) { return "<p>" + escapeHtml(p.trim()) + "</p>"; }).join("");
+  }
+
+  var STATUS_LABELS = { active: "Active", paused: "Paused", finished: "Finished", archived: "Archived" };
+
+  function renderTagButtons(tags) {
+    return tags.map(function (t) {
+      return '<li><button type="button" class="tag" data-tag="' + escapeHtml(t.tag) +
+        '" aria-pressed="' + (t.selected ? "true" : "false") + '">' + escapeHtml(t.tag) +
+        (t.count !== undefined ? '<span class="tag-count">' + t.count + "</span>" : "") +
+        "</button></li>";
+    }).join("");
+  }
+
+  function renderProject(p, selected) {
+    var meta = [];
+    if (p.status) { meta.push(escapeHtml(STATUS_LABELS[p.status] || p.status)); }
+    if (p.updated) { meta.push("updated " + escapeHtml(p.updated)); }
+    var links = [];
+    var repo = safeUrl(p.links.repo), site = safeUrl(p.links.site), doi = doiUrl(p.links.doi);
+    if (site) { links.push('<a href="' + escapeHtml(site) + '">Website</a>'); }
+    if (repo) { links.push('<a href="' + escapeHtml(repo) + '">Code</a>'); }
+    if (doi) { links.push('<a href="' + escapeHtml(doi) + '">DOI ' + escapeHtml(p.links.doi) + "</a>"); }
+    var desc = paragraphs(p.description);
+    var html = '<article class="project">';
+    html += "<h2>" + escapeHtml(p.title) + "</h2>";
+    if (meta.length) { html += '<p class="meta">' + meta.join(" · ") + "</p>"; }
+    if (desc) { html += '<div class="description">' + desc + "</div>"; }
+    if (p.tags.length) {
+      html += '<ul class="tag-list">' + renderTagButtons(p.tags.map(function (t) {
+        return { tag: t, selected: (selected || []).indexOf(t) >= 0 };
+      })) + "</ul>";
+    }
+    if (links.length) { html += '<p class="links">' + links.join(" ") + "</p>"; }
+    return html + "</article>";
+  }
+
+  function renderProjects(shown, selected) {
+    if (!shown.length) {
+      return '<p class="message">No project matches the selected tags.</p>';
+    }
+    return shown.map(function (p) { return renderProject(p, selected); }).join("");
+  }
+
+  function countText(v) {
+    return v.shown.length === v.total
+      ? v.total + (v.total === 1 ? " project" : " projects")
+      : "Showing " + v.shown.length + " of " + v.total + " projects";
+  }
+
+  var api = {
+    YamlError: YamlError, parseYaml: parseYaml, normalize: normalize, allTags: allTags,
+    filterProjects: filterProjects, sortProjects: sortProjects, parseState: parseState,
+    formatState: formatState, toggleTag: toggleTag, view: view, escapeHtml: escapeHtml,
+    doiUrl: doiUrl, paragraphs: paragraphs, renderTagButtons: renderTagButtons,
+    renderProjects: renderProjects, countText: countText
+  };
+  if (typeof module !== "undefined" && module.exports) { module.exports = api; }
+  root.ProjectsPage = api;
+})(typeof window !== "undefined" ? window : globalThis);
+</script>
+
+<script>
+(function () {
+  "use strict";
+  var P = window.ProjectsPage;
+  var DATA_FILE = "projects.yaml";
+  var data = null;
+  var state = null;
+  var $ = function (id) { return document.getElementById(id); };
+
+  function draw() {
+    var v = P.view(data, state);
+    $("tag-filter").innerHTML = P.renderTagButtons(v.tags);
+    $("projects").innerHTML = P.renderProjects(v.shown, state.tags);
+    $("count").textContent = P.countText(v);
+    $("mode").value = state.mode;
+    $("sort").value = state.sort;
+    $("clear").hidden = state.tags.length === 0;
+  }
+
+  function setState(next) {
+    state = next;
+    var hash = P.formatState(state);
+    if (hash !== location.hash && !(hash === "" && location.hash === "#")) {
+      history.replaceState(null, "", hash || location.pathname + location.search);
+    }
+    draw();
+  }
+
+  function knownTags() {
+    return P.allTags(data.projects).map(function (t) { return t.tag; });
+  }
+
+  function start(text) {
+    data = P.normalize(P.parseYaml(text));
+    document.title = data.title;
+    $("page-title").textContent = data.title;
+    var intro = P.paragraphs(data.intro);
+    $("intro").innerHTML = intro;
+    $("intro").hidden = intro === "";
+    $("controls").hidden = data.projects.length === 0;
+    state = P.parseState(location.hash, knownTags());
+    draw();
+
+    document.addEventListener("click", function (e) {
+      var b = e.target.closest ? e.target.closest("button[data-tag]") : null;
+      if (b) { setState(P.toggleTag(state, b.getAttribute("data-tag"))); }
+    });
+    $("mode").addEventListener("change", function (e) {
+      setState({ tags: state.tags, mode: e.target.value, sort: state.sort });
+    });
+    $("sort").addEventListener("change", function (e) {
+      setState({ tags: state.tags, mode: state.mode, sort: e.target.value });
+    });
+    $("clear").addEventListener("click", function () {
+      setState({ tags: [], mode: state.mode, sort: state.sort });
+    });
+    window.addEventListener("hashchange", function () {
+      state = P.parseState(location.hash, knownTags());
+      draw();
+    });
+  }
+
+  function fail(message) {
+    $("projects").innerHTML = '<p class="error">' + P.escapeHtml(message) + "</p>";
+  }
+
+  if (location.protocol === "file:") {
+    fail("Browsers do not let a page opened from a file read " + DATA_FILE +
+         ". Serve the directory instead, e.g. run \"python3 -m http.server\" in it and open " +
+         "http://localhost:8000/.");
+    return;
+  }
+  fetch(DATA_FILE, { cache: "no-cache" })
+    .then(function (r) {
+      if (!r.ok) { throw new Error("could not load " + DATA_FILE + " (HTTP " + r.status + ")"); }
+      return r.text();
+    })
+    .then(start)
+    .catch(function (err) { fail("Error in " + DATA_FILE + ": " + err.message); });
+})();
+</script>
+</body>
+</html>

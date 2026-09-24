@@ -1,0 +1,2 @@
+/* expect: pill-shaped button */
+button { border-radius: 50%; }

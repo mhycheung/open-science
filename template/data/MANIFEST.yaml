@@ -1,0 +1,24 @@
+# Every dataset the project keeps under data/. This file is tracked; the data are not.
+# Scratch space is purged on most clusters: without this list a purged dataset cannot be
+# rebuilt or even identified. One entry per dataset:
+#
+# - path: data/t07-mode-fit-v2/posteriors      # relative to the repo root
+#   size_bytes: 123456789
+#   sha256: <checksum of the file, or of the reproducible tar of the directory:
+#            opsci zenodo checksum data/t07-mode-fit-v2/posteriors>
+#   source: "task t07-mode-fit-v2, src@a1b2c3d"  # or a URL / DOI for external data
+#   used_by: [t08-summary]
+#   zenodo: none                                # none | DOI of the release that holds it
+#
+# Zenodo releases (opsci zenodo release; see the framework's docs/zenodo.md). Optional
+# `zenodo:` section:
+#
+# zenodo:
+#   groups:            # tar groups; without this, each entry of data/ is its own group.
+#     - name: finished # at most 99 groups: a record holds 100 files, one is FILES.tsv
+#       paths: [data/t01-setup, data/t02-first-fit]
+#   metadata:          # overrides for the Zenodo metadata (default: from CITATION.cff)
+#     license: cc-by-4.0
+#   sandbox: ...       # written by the tool: concept DOI, releases, file checksums
+#   production: ...
+datasets: []

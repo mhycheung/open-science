@@ -1,0 +1,11 @@
+#!/bin/bash
+# Stand-in for the `claude` process in context-management tests. Its process name
+# is `claude`, so the plugin scripts find it by walking up the process tree. It
+# links its own state file, <config>/sessions/<pid>.json, to $FAKE_STATE (the file
+# the fake TUI updates), then runs the given command as a child.
+set -u
+mkdir -p "$CLAUDE_CONFIG_DIR/sessions"
+ln -sf "$FAKE_STATE" "$CLAUDE_CONFIG_DIR/sessions/$$.json"
+# The link is left in place on exit: a real session's state file outlives the
+# commands it runs, and the detached jump worker reads it after this returns.
+"$@"

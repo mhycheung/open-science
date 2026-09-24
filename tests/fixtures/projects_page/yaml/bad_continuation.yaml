@@ -1,0 +1,8 @@
+# expect: text over several lines needs '|'
+# js: refuse
+projects:
+  - title: A
+    description: a description that
+      runs on to a second line
+    tags: [a]
+    status: active

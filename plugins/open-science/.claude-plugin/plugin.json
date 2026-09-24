@@ -1,0 +1,9 @@
+{
+  "name": "open-science",
+  "version": "0.3.0",
+  "description": "Onboarding for the open-science framework: asks which components you want, checks your machine, and sets up tokens safely. Install this first.",
+  "license": "MIT",
+  "author": {
+    "name": "open-science contributors"
+  }
+}

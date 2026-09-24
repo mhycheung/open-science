@@ -1,0 +1,7 @@
+# expect: quoted text must close on the same line
+# js: refuse
+projects:
+  - title: "A
+    description: ""
+    tags: [a]
+    status: active

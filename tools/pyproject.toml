@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opsci"
+version = "0.1.0"
+description = "Command-line tools for the open-science research project framework"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["pyyaml>=6", "jsonschema>=4.20"]
+
+[project.scripts]
+opsci = "opsci.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["opsci*"]
+
+[tool.setuptools.package-data]
+opsci = ["schemas/*.json"]

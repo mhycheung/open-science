@@ -1,0 +1,7 @@
+# expect: unknown key 'summary'
+projects:
+  - title: A
+    summary: typo for description
+    description: ""
+    tags: [a]
+    status: active

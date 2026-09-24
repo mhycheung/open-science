@@ -1,0 +1,23 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          cache: true
+      # git needs an identity for tests that make commits in scratch repositories.
+      - run: |
+          git config --global user.name "CI"
+          git config --global user.email "ci@example.invalid"
+      # tmux and jq: the context-management scripts and their tests use them.
+      - run: sudo apt-get update && sudo apt-get install -y tmux jq
+      - run: pixi run test
