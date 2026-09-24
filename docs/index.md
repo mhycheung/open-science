@@ -1,20 +1,43 @@
 # Get started
 
-open-science is a framework for running a research project with Claude Code so that the
-project can be published openly. Plans, results, failed routes and sources are written down
-in a fixed layout, so that the work can be reproduced and checked. You and the agents work in
-a private repository. A public copy is made only through a checked export: it contains only
-the files you allow, it is scanned for private material, and nothing is pushed until you
-approve the exact export.
+open-science is a set of tools for doing research in the open. You work in a private
+repository, where drafts, notes and failed attempts are all committed. From it you publish a
+public record of the project: what you did and why, the results, the routes that failed, the
+sources, and the data, released on Zenodo with a DOI. A public copy is made only through a
+checked export: it contains only the files you allow, it is scanned for private material and
+secrets, and nothing is pushed until you approve the exact export.
 
-Agents keep short "current state" files (`context.md` for the project,
-`tasks/<id>/context.md` for each task), so any session, or any person, can pick up the work
-from them.
+Plans, results and sources are written in a fixed layout, and each project and task keeps a
+short "current state" file (`context.md` for the project, `tasks/<id>/context.md` for each
+task), so that anyone, a collaborator, a reader, or you a year later, can pick up the work
+and check it.
 
-## The best way to start: the onboarding skill
+You do not need an AI agent to use any of this. A project is plain files in git, and every
+step is a command of the `opsci` tool. If you use Claude Code, plugins add skills that run
+the same steps with you, and optional components that help agents keep track of long work.
 
-The best way to get started is the onboarding skill, `open-science:onboard`. Install the
-`open-science` plugin, then run the skill in Claude Code:
+## Start without an agent
+
+Clone the repository, install `opsci` from the clone (Python 3.11 or later), and create a
+project:
+
+```bash
+git clone https://github.com/mhycheung/open-science.git
+pip install -e open-science/tools
+opsci template instantiate my-project --name my-project --title "My project" --author "Your Name"
+cd my-project && git init
+opsci task new --title "First question" first-question
+opsci map build
+```
+
+Then read [Project template and layout](project-template.md) for what goes where, and
+[Publishing and the filter](publishing.md) for `opsci publish check` and
+`opsci publish push`. All commands are listed in [The opsci command](cli.md).
+
+## Start with Claude Code: the onboarding skill
+
+If you use Claude Code, the best way to get started is the onboarding skill,
+`open-science:onboard`. Install the `open-science` plugin, then run the skill in Claude Code:
 
 ```bash
 claude plugin marketplace add mhycheung/open-science   # or the path to a local checkout
@@ -38,25 +61,27 @@ without a yes to that change, and it never asks you to paste a token into the ch
 are written by a script that you run in a terminal of your own. New plugins load only in a
 new Claude Code session. Run `/open-science:onboard` again to add components later.
 
-To install by hand instead, see "By hand" in the repository's `README.md`.
+To install the plugins by hand instead, see "With Claude Code, by hand" in the repository's
+`README.md`.
 
 ## Components
 
 The framework has five components. Use any combination; each works without the others,
-except context management, which needs the project structure. Four of them are Claude Code
-plugins; the projects list has no plugin. A fifth plugin, `open-science`, holds the
-onboarding skill.
+except context management, which needs the project structure. Publishing, the project
+structure and the projects list are used through `opsci` and plain files; their Claude Code
+plugins are optional. Context management and SLURM resurrection exist for Claude Code
+sessions. One more plugin, `open-science`, holds the onboarding skill.
 
 | component | what it does | page |
 |---|---|---|
 | project template | the layout every project is copied from: description, tasks, map, rules, citations, context files, publish settings | [Project template and layout](project-template.md) |
 | `open-science-project` plugin (project structure) | skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project skills](project-skills.md) |
-| `open-science-context` plugin (context management) | agents clear their own conversation and resume from the context files ("session jumps"); needs tmux | [Context management and session jumps](context-management.md) |
+| `open-science-context` plugin (context management, for agents) | Claude Code agents clear their own conversation and resume from the context files ("session jumps"); needs tmux | [Context management and session jumps](context-management.md) |
 | `open-science-publish` plugin (publishing) | the checked, owner-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
 | personal projects page (projects list) | one page on your personal GitHub Pages site that lists your projects | [Personal projects page](projects-page.md) |
 | `slurm-resurrect` plugin (optional) | when a SLURM job reaches its time limit, rebuilds the tmux session in a new job and resumes its Claude sessions | [SLURM resurrection](slurm-resurrect.md) |
 | `open-science` plugin | the onboarding skill `open-science:onboard` | this page |
-| `opsci` command | the command-line tool the skills call: map build, tasks, context caps, publish, site, Zenodo, notifications | [The opsci command](cli.md), [Notifications](notify.md) |
+| `opsci` command | the command-line tool behind every step, run by you or by the skills: map build, tasks, context caps, publish, site, Zenodo, notifications | [The opsci command](cli.md), [Notifications](notify.md) |
 
 ## How a project is laid out and published
 
@@ -95,7 +120,7 @@ flowchart LR
     F1["publish/manifest.yaml<br/>include · never · hard_private"]
     F2["opsci publish export<br/>snapshot of one commit;<br/>map rebuilt from exported nodes;<br/>redaction markers applied"]
     F3["opsci publish check<br/>policy · leak · secret · citation<br/>map · status · copyright<br/>evidence · human-verified<br/>references · private-content<br/>redaction"]
-    F4["report and diff in publish/reports/<br/>agent review: tone, claims,<br/>paraphrase of excluded files"]
+    F4["report and diff in publish/reports/<br/>optional agent review: tone,<br/>claims, paraphrase of excluded files"]
     F5{"owner approves<br/>this export id"}
     F1 --> F2 --> F3 --> F4 --> F5
   end
@@ -133,7 +158,7 @@ How to read it:
   name; a `hard-private` task may not appear anywhere in the release. See
   [Project template and layout](project-template.md).
 - **The filter.** `opsci publish check` exports one commit, runs every check, and writes a
-  report. The agent adds its review. Nothing is pushed until you approve that export by its
+  report. If you use an agent, it adds a review of tone and claims. Nothing is pushed until you approve that export by its
   id. See [Publishing and the filter](publishing.md).
 - **Public outputs.** `opsci publish push` copies the approved export into the public
   repository as a new commit, so the private history never reaches it. The public repository

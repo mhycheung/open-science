@@ -2,10 +2,10 @@
 
 ## The idea
 
-Everything in a project is written down so that it can be made public, reproduced and
-checked, including the routes that failed. Agents keep short "current state" files
-(`context.md` for the project, `tasks/<id>/context.md` for each task), so any session, or any
-person, can pick up the work from them.
+You work privately and publish a checked public record: plans, results, failed routes,
+sources, data with a DOI. Short "current state" files (`context.md`,
+`tasks/<id>/context.md`) let anyone pick up the work. Every step is an `opsci` command; this
+guide covers the optional Claude Code plugins.
 
 ## One-time setup
 

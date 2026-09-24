@@ -3,7 +3,7 @@
 #   pixi run mkdocs serve              # preview at http://127.0.0.1:8000/
 # .github/workflows/docs.yml builds it and deploys it to GitHub Pages on a push to main.
 site_name: open-science
-site_description: Run a research project with Claude Code so that it can be published openly.
+site_description: "Do research in the open: a private working repository, a checked public record, and citable data releases."
 site_url: https://mhycheung.github.io/open-science/
 repo_url: https://github.com/mhycheung/open-science
 docs_dir: docs

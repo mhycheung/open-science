@@ -1,6 +1,6 @@
 # Publishing and the filter (`open-science-publish`)
 
-Each project has two repositories. The **private** one is where you and the agents work; it
+Each project has two repositories. The **private** one is where you work, with collaborators or agents if you use them; it
 can hold drafts, notes and anything else. The **public** one holds only what you allowed,
 after checks, and only after you approved the exact export. You never copy files to it by
 hand.
@@ -33,11 +33,12 @@ the map and the node headers.
    public map names no soft- or hard-private node.
 3. **The checks.** `opsci publish check` runs every check below on the export and writes a
    report. Any problem fails the publish.
-4. **The review.** The agent reads the diff since the last publish with the review rubric
+4. **The review.** You read the diff since the last publish. If you publish with the
+   `open-science-publish:publish` skill, the agent also reviews it with the review rubric
    and writes its findings into the report. The review never blocks the publish by itself;
    you decide.
-5. **Your approval.** You approve this export id, in the conversation. An earlier general
-   "go ahead" does not count.
+5. **Your approval.** You approve this export id: by running the push with it, or, with the
+   skill, in the conversation. An earlier general "go ahead" does not count.
 6. **The push.** `opsci publish push --export-id <id>` copies the export into the public
    repository as a new commit, pushes it, and records the publish.
 

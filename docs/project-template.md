@@ -1,18 +1,20 @@
 # Project template and layout
 
 Every project is copied from `template/` in the framework repository. The layout is the same
-in every project, so you and every agent find things in the same place. This page lists what
-a new project contains and what each part is for.
+in every project, so you, your collaborators and any agents you use find things in the same
+place. This page lists what a new project contains and what each part is for.
 
 ## Creating a project
 
-Ask for `open-science-project:new-project` in Claude Code (see [Project skills](project-skills.md)).
-It asks for a directory, a short name, a title, your name, and what the project is about,
-then runs:
+Run `opsci template instantiate` yourself, then `git init` in the new directory:
 
 ```bash
 opsci template instantiate <dir> --name <slug> --title "<title>" --author "<name>" --template <framework>/template
 ```
+
+Or ask for `open-science-project:new-project` in Claude Code (see
+[Project skills](project-skills.md)). It asks for a directory, a short name, a title, your
+name, and what the project is about, then runs the same command.
 
 `opsci template instantiate`:
 

@@ -1,15 +1,22 @@
 # open-science
 
-A framework for running a research project in the open, with AI agents and people working
-together. Everything is written down so that it can be made public, reproduced and checked,
-including the routes that failed.
+Tools for doing research in the open. You work in a private repository and publish from it
+a public record of the project: what you did and why, the results, the routes that failed,
+the sources, and the data, released with a DOI. Nothing leaves the private repository unless
+you listed it for publication, it passed the checks for private material and secrets, and
+you approved that exact export.
+
+You do not need an AI agent to use it. A project is plain files in git, and every step
+(creating a project and its tasks, building the project map, publishing, building the project
+website, releasing data on Zenodo) is a command of the `opsci` tool. If you use Claude Code,
+plugins add skills that run the same steps with you, and optional components that help
+agents keep track of long work. Use as much or as little of that as you like.
 
 **Start with the [user guide](USER_GUIDE.md)**: what you do and what you will see, in about
 three minutes of reading.
 
-**Documentation:** the full documentation, starting with the [Get started](docs/index.md)
-page, is in `docs/`. It is built as a website with `pixi run mkdocs build --strict` and will
-be published on GitHub Pages.
+**Documentation:** <https://mhycheung.github.io/open-science/>, starting with the
+[Get started](docs/index.md) page (source in `docs/`).
 
 ## Install
 
@@ -20,14 +27,29 @@ except context management, which needs the project structure.
 |---|---|---|---|
 | publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
 | project structure | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`) | git, `opsci` |
-| context management | `open-science-context` | agents clear their own conversation and resume from the context files (`context-management`, `continue-context`, `advise-with-context`) | the project structure (installed with it), tmux, `opsci` |
+| context management (for agents) | `open-science-context` | Claude Code agents clear their own conversation and resume from the context files (`context-management`, `continue-context`, `advise-with-context`) | the project structure (installed with it), tmux, `opsci` |
 | projects list | none: `projects-page/` | one page on your personal GitHub site listing your projects | a GitHub Pages site; `opsci` only to check the file |
 | SLURM resurrection | `slurm-resurrect` | when a SLURM job reaches its time limit, rebuild the tmux session in a new job and resume its Claude sessions; see `plugins/slurm-resurrect/README.md` | tmux inside a SLURM batch job; `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel` |
 
 `opsci` is the command-line tool in `tools/`; it needs Python 3.11 or later.
 
-**The easy way.** Add this repository as a plugin marketplace, install the `open-science`
-plugin, and run its onboarding skill in Claude Code:
+**Without Claude Code.** Clone this repository and install `opsci` from the clone; the
+project template is taken from it:
+
+```bash
+git clone https://github.com/mhycheung/open-science.git
+pip install -e open-science/tools
+opsci template instantiate my-project --name my-project --title "My project" --author "Your Name"
+cd my-project && git init
+opsci task new --title "First question" first-question
+opsci map build
+```
+
+Publishing is `opsci publish check`, then `opsci publish push --export-id <id>` with the id
+from the check's report ([Publishing and the filter](docs/publishing.md)).
+
+**With Claude Code.** Add this repository as a plugin marketplace, install the
+`open-science` plugin, and run its onboarding skill:
 
 ```bash
 claude plugin marketplace add mhycheung/open-science   # or the path to a local checkout
@@ -39,7 +61,7 @@ already has, asks which components you want (explaining each), installs their pl
 `opsci`, and sets up GitHub access, notifications and tokens. It changes none of your
 settings without asking, and never asks you to paste a token into the chat.
 
-**By hand.**
+**With Claude Code, by hand.**
 
 1. Install the plugins you want: `claude plugin install <plugin>@open-science`.
    Installing `open-science-context` also installs `open-science-project`. Skills are called
@@ -69,7 +91,7 @@ the framework's.
 | path | what |
 |---|---|
 | `template/` | the project skeleton that a new project is copied from |
-| `plugins/` | the Claude Code plugins: `open-science` (onboarding) and one per component |
+| `plugins/` | optional Claude Code plugins: `open-science` (onboarding) and one per component |
 | `tools/` | the `opsci` Python package and command line (map build, publish, sync, Zenodo, notify, site) |
 | `projects-page/` | a personal projects page for a GitHub Pages site |
 | `tests/` | `tests/run_all` runs every automated test |
