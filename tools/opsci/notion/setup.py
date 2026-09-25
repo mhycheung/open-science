@@ -49,6 +49,10 @@ This project is mirrored to Notion, where the user reads it (skill
   blocker for the user as `question` or `blocker` with `--mention`; a long job submitted
   or finished as `status`. While work runs, post a `status` at least once per session. Do
   not post routine steps.
+- **Anything that waits on the user goes to the Feed**, unasked: a new plan to approve, a
+  hold point, a decision, a question. Sync first, so the task page shows what the message
+  is about, then post it as `question` with `--task` and `--mention` before ending the turn.
+  A message only in the chat is one the user may never see.
 - **Messages expire.** Feed messages are removed after a few days. Anything that must last
   goes in the project files, which the task pages show.
 """

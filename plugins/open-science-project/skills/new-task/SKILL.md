@@ -75,7 +75,10 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
    user's next prompt. Say in one line that the session now drives the new task.
 
 7. Commit, and **report the plan to the user and stop.** Execution starts when the user
-   approves it.
+   approves it. Report it where the user reads: in a project mirrored to Notion (an
+   `AGENTS.md` "Notion" section), run `opsci notion sync` and post
+   `opsci notion post --kind question --task <id> --mention "<id>: plan ready for approval\n\n<goal, subtasks, cost in a few lines>"`;
+   otherwise `opsci notify` it. Do this unasked.
 
 ## Privacy tier
 

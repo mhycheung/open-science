@@ -11,6 +11,12 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Anything that waits on the user goes to the Feed without being asked: a new plan to
+  approve, a hold point, a decision, a question. The agent syncs, then posts a `question`
+  with `--task` and `--mention`. New bullet in the Notion section of `AGENTS.md` (template
+  and `opsci notion enable`); the notion skill's Feed table and the new-task skill's step 7
+  say the same. No layout change: a project mirrored to Notion before this adds the bullet
+  to its `AGENTS.md` "Notion" section by hand.
 - Agents switch the session to every task they create (planned, no plan, brainstorm,
   verification) unless the user says to stay on the current one: they register the pane for
   the new task, so jumps and `/clear` resume it and the session name shows its short name.

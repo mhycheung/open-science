@@ -45,12 +45,13 @@ What is in Notion, under the project's page:
    | when | command |
    |---|---|
    | a subtask finished, with its result | `opsci notion post --kind result --task <id> --mention --file <key plot> "<title>\n\n<result with numbers>"` |
-   | a question or decision for the user | `--kind question --mention` |
+   | a plan to approve, a hold point, a question or decision for the user: anything the turn ends waiting on | `--kind question --task <id> --mention "<id>: <what is needed>\n\n<the choice or the plan in a few lines>"`, after a sync |
    | a blocker | `--kind blocker --mention` |
    | a long job submitted or finished | `--kind status` (no `--mention`) |
 
-   While work runs, post a `status` at least once per working session. Do not post routine
-   steps. Set `--author` to who you are (`main:<task-id>`, `subagent:<name>`). The first
+   Post these unasked: an answer the user must give that is only in the chat may never be
+   seen. While work runs, post a `status` at least once per working session. Do not post
+   routine steps. Set `--author` to who you are (`main:<task-id>`, `subagent:<name>`). The first
    paragraph is the title; the rest is the body. Both take markdown and `$LaTeX$`.
    `opsci notify` posts to the Feed too (kind `note`, with a mention).
 7. **Messages expire.** Feed messages are removed after 3 days. A result, decision or plot
