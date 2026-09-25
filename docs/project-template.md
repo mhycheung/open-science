@@ -62,7 +62,7 @@ keeping `data/MANIFEST.yaml`, `messages/README.md` and `config/site.example.yaml
 | `.claude/` | `settings.json` (permissions) and `agents/` (the dispatch tiers) | owner |
 | `brainstorm/` | ideas before they become project work; a smaller copy of the layout; soft-private unless the owner opts in | anyone |
 | `docs/` | project documentation; published | owner, agents |
-| `private-docs/` | private notes; soft-private: committed to the private repository, never exported | owner, agents |
+| `private-docs/` | private notes and side investigations (`investigations/`); soft-private: committed to the private repository, never exported | owner, agents |
 
 Small outputs go in `tasks/<id>/`; large data in `data/<task-id>/`. Names carry an ISO date
 and the parameters that distinguish them. A new run gets a new name; nothing committed or
@@ -90,7 +90,9 @@ These three directories are part of layout version 2.
 - **`private-docs/`** holds private notes. It is in the manifest's `never` list, so it is
   refused even if a broader `include` entry covers it. It is committed to the private
   repository and never exported. It is soft-private; a note that is hard-private is listed
-  under `hard_private:` in the manifest.
+  under `hard_private:` in the manifest. Side investigations, questions that need recorded
+  work but do not drive the project, go in `private-docs/investigations/`, one directory
+  each ([`open-science-project:private-investigation`](project-skills.md#open-science-projectprivate-investigation)).
 
 `config/framework.yaml` records `layout_version: 2`. `opsci` warns when a project's layout
 is older than the framework's; see [Updating a project](updating.md).
