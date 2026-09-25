@@ -41,7 +41,7 @@ three minutes of reading.
 
 ## Install
 
-Install the plugin and start Claude Code:
+If you use Claude Code, install the plugin and start Claude Code:
 
 ```bash
 claude plugin marketplace add mhycheung/open-science
@@ -49,9 +49,13 @@ claude plugin install open-science@open-science
 claude
 ```
 
-In Claude Code, type `/open-science:onboard`. The [tutorial](docs/tutorial.md) says what
-onboarding does and gives the prompts for the next steps: starting a project, brainstorming,
-starting a task and using Notion.
+Then type `/open-science:onboard`. The [tutorial](docs/tutorial.md) says what onboarding
+does and gives the prompts for the next steps: starting a project, brainstorming, starting a
+task and using Notion.
+
+If you are not using agents, install the `opsci` command
+(`pip install "git+https://github.com/mhycheung/open-science#subdirectory=tools"`, see
+[The opsci command](docs/cli.md)) and follow the pages of the components you want (below).
 
 The framework has three components. Use any combination; each works without the others,
 except context management, which needs project management.
