@@ -1,10 +1,15 @@
 # SLURM resurrection (`slurm-resurrect`)
 
-An optional extra (plugin `slurm-resurrect`, in `extras/slurm-resurrect/`) for work on a
-cluster. When a SLURM batch job reaches its time limit, it
-rebuilds your tmux session in a new job and resumes every Claude Code session that was
-running in it, with `--resume`. Windows, panes, layout and working directories are restored.
-Nothing in the other open-science plugins depends on it.
+An optional extra (plugin `slurm-resurrect`, in `extras/slurm-resurrect/`) for one setting
+only: **development on a compute node of a computing cluster that uses the SLURM
+scheduler**, with Claude Code running in tmux inside a batch job on that node. It is of no use
+on a laptop, a workstation, or a cluster login node.
+
+A batch job ends at its time limit, and every Claude Code session running in it ends with it.
+This plugin rebuilds your tmux session in a new job and resumes every Claude Code session
+that was running in it, with `--resume`. Windows, panes, layout and working directories are
+restored. Nothing in the other open-science plugins depends on it. How to start such a job
+and connect to it is in [Working in tmux](tmux.md#on-a-computing-cluster).
 
 ```bash
 claude plugin install slurm-resurrect@open-science

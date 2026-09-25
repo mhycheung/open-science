@@ -1,7 +1,8 @@
 # slurm-resurrect (optional plugin)
 
-When a SLURM batch job reaches its time limit, this plugin rebuilds your tmux
-session in a new job and resumes every Claude Code session that was running in
+For development on a compute node of a computing cluster that uses the SLURM
+scheduler, with Claude Code running in tmux inside a batch job. When the batch
+job reaches its time limit, this plugin rebuilds your tmux session in a new job and resumes every Claude Code session that was running in
 it, with `--resume`. Windows, panes, layout and working directories are
 restored. Nothing in the open-science plugins depends on this plugin.
 

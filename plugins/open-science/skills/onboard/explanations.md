@@ -61,22 +61,71 @@ only if the check found SLURM.
   (<username>.github.io), that lists your projects with a short description, tags and links,
   and lets visitors filter and sort them. You keep the list in one small text file. Works on
   its own. Needs a free GitHub account.
-- **Survive SLURM time limits**: This computer uses the SLURM job scheduler. A job stops at
-  its time limit, which would end your agent sessions. With this extra, before the limit the
-  agents are told to finish cleanly, a new job is queued, and when it starts your tmux
-  windows are rebuilt and every agent session continues where it stopped. Needs tmux, with
-  Claude running inside a SLURM batch job. Works with or without the other parts.
+- **Survive SLURM time limits**: Only for development on a compute node of a computing
+  cluster, and this computer uses the SLURM job scheduler. A job stops at its time limit,
+  which would end your agent sessions. With this extra, before the limit the agents are told
+  to finish cleanly, a new job is queued, and when it starts your tmux windows are rebuilt
+  and every agent session continues where it stopped. Needs tmux, with Claude running inside
+  a SLURM batch job. Works with or without the other parts.
 
 Choosing neither is the default; nothing is installed for them.
 
 ## Branch 1 — context management
 
-**1a — tmux** (skip if already inside tmux): explain: "tmux keeps your terminal windows
-running even if you disconnect, and lets an agent type into its own window. Start it with
-`tmux new -s work`, then start Claude inside it." Offer to add `set -g mouse on` to
-`~/.tmux.conf` so the mouse can click, resize and scroll windows.
+Say first: "Context management needs Claude Code to run inside tmux, a program that keeps
+terminal windows running after you disconnect and lets the agent type into its own window.
+I will set up what is missing."
 
-**1b — older skills with the same names** (skip if the check found none)
+**1a — tmux settings** (skip if the check found them all): "These settings let you use tmux
+with the mouse: click a pane or a window name to switch to it, drag a border to resize, scroll
+with the wheel, and copy by selecting text. May I add them to `~/.tmux.conf`?" Show only the
+lines for the missing settings:
+
+```bash
+set -g mouse on                  # click panes and windows, drag borders, scroll with the wheel
+set -g set-clipboard on          # text copied in tmux also goes to your computer's clipboard
+set -g history-limit 50000       # lines of scroll-back kept per pane
+set -g default-terminal "tmux-256color"
+set -ag terminal-overrides ",xterm-256color:RGB"   # full colour, as in the terminal outside
+```
+
+**1b — how to arrange your work** (no question): "Keep one tmux session for your work, one
+window per project, and one pane per task. Each pane runs one agent on one task and remembers
+which task that is, so after the agent clears its conversation it resumes the right work.
+The keys start with Ctrl-b: Ctrl-b c makes a new window, Ctrl-b % splits a pane, Ctrl-b d
+leaves tmux running and disconnects, and `tmux attach` brings you back. With the mouse
+settings you can also right-click a pane or a window name for a menu. The full guide is the
+page 'Working in tmux' of the documentation."
+
+**1c, local — starting tmux** (not in tmux, no SLURM): "Start tmux with `tmux new -s work`,
+then start Claude inside it. Next time, `tmux attach -t work` brings you back to the same
+windows."
+
+**1c, cluster — tmux on a compute node** (not in tmux, SLURM found, not in a batch job):
+"This computer is part of a cluster that uses the SLURM scheduler. Long agent work should run
+on a compute node, inside a batch job, not on the login node. I can write a small job script
+that keeps a tmux session running on a compute node for the length of the job." The script:
+
+```bash
+#!/bin/bash
+#SBATCH --job-name=tmux-work
+#SBATCH --account=<account>
+#SBATCH --partition=<partition>
+#SBATCH --time=<time limit>
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=<cores>
+tmux new-session -d -s work
+while tmux has-session -t work 2>/dev/null; do sleep 60; done
+```
+
+Then: "Submit it with `sbatch ~/tmux-job.sh`. When it runs, `squeue --me -o "%i %N %T"`
+shows the node name. Connect with `ssh <node>`, then `tmux attach -t work`, and start Claude
+there. On most clusters you may connect to a node only while your job runs on it. The job,
+and everything in its tmux session, ends at its time limit; the SLURM extra can resume it in
+a new job."
+
+**1d — older skills with the same names** (skip if the check found none)
 - **Move them to an archive folder (recommended)**: they are moved, not deleted, and can be
   moved back.
 - **Keep them**: the old ones win whenever a skill is called by its short name, so you must

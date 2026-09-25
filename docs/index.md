@@ -1,42 +1,28 @@
 # Get started
 
-open-science is a set of tools for doing research in the open. You work in a private
-repository, where drafts, notes and failed attempts are all committed. From it you publish a
-public record of the project: what you did and why, the results, the routes that failed, the
-sources, and the data, released on Zenodo with a DOI. A public copy is made only through a
-checked export: it contains only the files you allow, it is scanned for private material and
-secrets, and nothing is pushed until you approve the exact export.
+The way we do science is changing rapidly, but it is more important than ever to keep
+science open.
 
-Plans, results and sources are written in a fixed layout, and each project and task keeps a
-short "current state" file (`context.md` for the project, `tasks/<id>/context.md` for each
-task), so that anyone, a collaborator, a reader, or you a year later, can pick up the work
-and check it.
+open-science is a framework for doing research in the open:
 
-You do not need an AI agent to use any of this. A project is plain files in git, and every
-step is a command of the `opsci` tool. If you use Claude Code, plugins add skills that run
-the same steps with you, and optional components that help agents keep track of long work.
+- **A complete research record.** How the methods were developed, the results, the
+  approaches that failed, and the source code, in a public repository and on a project
+  website, with the data archived on Zenodo with a DOI.
+- **You decide what goes public, and when.** You work in a private repository and can mark
+  any task, file or dataset as private. Nothing is released until you choose to publish.
+  Each release contains only the files you allow, is checked for private material and
+  secrets, and needs your approval.
+- **With or without agents.** It works the same whether an agent does a small part of the
+  work, most of it, or none of it.
+- **Context management for agentic work.** Agents keep a short context file for the project
+  and for each task. They clear their conversation and resume from that file, so a long
+  session is not resent in full on every turn or after the prompt cache expires, which
+  reduces usage. The same files let collaborators and other researchers pick up an ongoing
+  project straight away.
 
-## Start without an agent
+## Install: the onboarding skill
 
-Clone the repository, install `opsci` from the clone (Python 3.11 or later), and create a
-project:
-
-```bash
-git clone https://github.com/mhycheung/open-science.git
-pip install -e open-science/tools
-opsci template instantiate my-project --name my-project --title "My project" --author "Your Name"
-cd my-project && git init
-opsci task new --title "First question" first-question
-opsci map build
-```
-
-Then read [Project template and layout](project-template.md) for what goes where, and
-[Publishing and the filter](publishing.md) for `opsci publish check` and
-`opsci publish push`. All commands are listed in [The opsci command](cli.md).
-
-## Start with Claude Code: the onboarding skill
-
-If you use Claude Code, the best way to get started is the onboarding skill,
+The framework is installed with Claude Code, through the onboarding skill
 `open-science:onboard`. Install the `open-science` plugin, then run the skill in Claude Code:
 
 ```bash
@@ -54,6 +40,9 @@ The skill:
 - asks which components you want, explaining each in plain language, and installs their
   plugins with `claude plugin install <plugin>@open-science`;
 - installs the `opsci` command if it is missing (it needs Python 3.11 or later, or pixi);
+- with context management, sets up tmux for mouse use and explains how to arrange your work
+  in it (see [Working in tmux](tmux.md)); on a SLURM cluster, it can also write a batch job
+  that keeps a tmux session running on a compute node;
 - sets up GitHub access, notifications (files or Slack) and Zenodo tokens.
 
 It changes none of your settings (git config, Claude settings, `~/.tmux.conf`, file modes)
@@ -61,8 +50,8 @@ without a yes to that change, and it never asks you to paste a token into the ch
 are written by a script that you run in a terminal of your own. New plugins load only in a
 new Claude Code session. Run `/open-science:onboard` again to add components later.
 
-To install the plugins by hand instead, see "With Claude Code, by hand" in the repository's
-`README.md`.
+Every step the skills run is also a command of `opsci`, which you can run yourself; see
+[The opsci command](cli.md).
 
 ## Components
 
@@ -75,7 +64,7 @@ the onboarding skill.
 | # | component | what it does | pages |
 |---|---|---|---|
 | 1 | project management: the project template and the `open-science-project` plugin | the layout every project is copied from (description, tasks, map, rules, citations, context files, publish settings), and skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project template and layout](project-template.md), [Project skills](project-skills.md) |
-| 2 | context management: the `open-science-context` plugin, for agents | Claude Code agents clear their own conversation and resume from the context files ("session jumps"); needs tmux | [Context management and session jumps](context-management.md) |
+| 2 | context management: the `open-science-context` plugin, for agents | Claude Code agents clear their own conversation and resume from the context files ("session jumps"); Claude Code must run inside tmux | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
 | 3 | publishing: `opsci publish` and the `open-science-publish` plugin | the checked, owner-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
 
 Also part of the framework:
@@ -87,8 +76,9 @@ Also part of the framework:
 
 Two optional extras live in `extras/` of the repository; nothing in the three components
 depends on them: a [personal projects page](projects-page.md) that lists your projects on
-your GitHub Pages site, and [SLURM resurrection](slurm-resurrect.md), which resumes Claude
-Code sessions in a new SLURM job when the current one reaches its time limit.
+your GitHub Pages site, and [SLURM resurrection](slurm-resurrect.md), for development on a
+compute node of a computing cluster that uses the SLURM scheduler: it resumes your Claude
+Code sessions in a new batch job when the current one reaches its time limit.
 
 ## How a project is laid out and published
 

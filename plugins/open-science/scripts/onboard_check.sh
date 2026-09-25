@@ -26,6 +26,30 @@ if have tmux; then
             "$HOME/.tmux.conf" && mouse=on || mouse=off
     fi
     kv tmux_mouse "$mouse"
+    # the settings docs/tmux.md recommends: live values inside tmux, else ~/.tmux.conf
+    conf_has() { grep -Eq "^[[:space:]]*set(-option)?[[:space:]]+-[gas]+[[:space:]]+$1" "$HOME/.tmux.conf" 2>/dev/null; }
+    if [ -n "${TMUX:-}" ]; then
+        clip=$(tmux show -sv set-clipboard 2>/dev/null)
+        hist=$(tmux show -gv history-limit 2>/dev/null)
+        term=$(tmux show -sv default-terminal 2>/dev/null)
+        over=$(tmux show -sv terminal-overrides 2>/dev/null)
+        [ "$clip" = on ] && clip=1 || clip=0
+        [[ "$hist" =~ ^[0-9]+$ ]] && [ "$hist" -ge 10000 ] && hist=1 || hist=0
+        [ "$term" = tmux-256color ] && term=1 || term=0
+        [[ "$over" == *RGB* || "$over" == *Tc* ]] && over=1 || over=0
+    else
+        conf_has 'set-clipboard[[:space:]]+on' && clip=1 || clip=0
+        conf_has 'history-limit[[:space:]]+[0-9]{5,}' && hist=1 || hist=0
+        conf_has 'default-terminal[[:space:]]+"?tmux-256color' && term=1 || term=0
+        conf_has 'terminal-overrides.*(RGB|Tc)' && over=1 || over=0
+    fi
+    want=""
+    [ "$mouse" = on ] || want="$want${want:+,}mouse"
+    [ "$clip" = 1 ] || want="$want${want:+,}set-clipboard"
+    [ "$hist" = 1 ] || want="$want${want:+,}history-limit"
+    [ "$term" = 1 ] || want="$want${want:+,}default-terminal"
+    [ "$over" = 1 ] || want="$want${want:+,}terminal-overrides"
+    kv tmux_conf_missing "${want:-none}"
 else
     kv tmux missing
 fi

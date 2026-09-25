@@ -44,7 +44,9 @@ nav:
   - 1. Project management:
       - Project template and layout: project-template.md
       - Project skills: project-skills.md
-  - 2. Context management: context-management.md
+  - 2. Context management:
+      - Context management and session jumps: context-management.md
+      - Working in tmux: tmux.md
   - 3. Publishing:
       - Publishing and the filter: publishing.md
       - Zenodo releases: zenodo.md

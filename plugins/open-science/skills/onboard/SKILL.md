@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: Set up the open-science framework for a user - check what this machine already has, ask which of the three components they want (project management, context management, publishing) and whether they want the optional extras (projects list, SLURM resurrection), install those plugins, and set up GitHub access, Zenodo and Slack tokens safely. Use when the user asks to onboard, install, set up or configure open-science, or to add a component later.
+description: Set up the open-science framework for a user - check what this machine already has, ask which of the three components they want (project management, context management, publishing) and whether they want the optional extras (projects list, SLURM resurrection), install those plugins, set up tmux for context management (mouse settings, one pane per task, a tmux batch job on a SLURM cluster), and set up GitHub access, Zenodo and Slack tokens safely. Use when the user asks to onboard, install, set up or configure open-science, or to add a component later.
 ---
 
 # Onboard
@@ -57,12 +57,25 @@ question also put the longer text in its `preview`. Do not shorten the texts int
    marketplace (`claude plugin marketplace list`). Verify with `opsci --help`.
 
 7. **One branch per chosen component**, in this order, with the texts in `explanations.md`:
-   - **Branch 1, context management.** 1a only if `in_tmux=no`; offer `set -g mouse on` in
-     `~/.tmux.conf` only if `tmux_mouse` is `off`. `tmux=missing`: tell the user to ask
-     their system administrator, or to install it with their package manager; the component
-     does not work without it. 1b only if `same_name_skills` is not `none`: move the named
-     directories to `<config>/skills-archive/` after a yes. Rename the archive folder if one
-     is already there; never delete anything.
+   - **Branch 1, context management.** Context management requires Claude Code inside tmux;
+     say so. Configure what is missing; skip what the checks say is done.
+     `tmux=missing`: tell the user to ask their system administrator, or to install it with
+     their package manager; the component does not work without it, so skip 1a-1c.
+     - 1a, tmux settings, only if `tmux_conf_missing` is not `none`: show the lines of the
+       recommended block in `explanations.md` for the settings it names, and offer to append
+       them to `~/.tmux.conf` (one yes for the block; back up an existing file to
+       `~/.tmux.conf.bak-<date>` first). If `in_tmux=yes`, then run
+       `tmux source-file ~/.tmux.conf`.
+     - 1b, the layout: say the "1b" text (one session, one window per project, one pane per
+       task). If `in_tmux=yes`, offer to rename the current window after the project the
+       user will work on first (`tmux rename-window <name>`).
+     - 1c, where tmux runs, only if `in_tmux=no`. With `slurm=present` and `batch_job=no`:
+       say the "1c, cluster" text and offer to write `~/tmux-job.sh` from the job script in
+       `explanations.md`, with the account, partition and time limit the user gives
+       (`sbatch` it only after a yes), then give the connect steps of that text. Otherwise say the "1c, local" text.
+     - 1d, only if `same_name_skills` is not `none`: move the named directories to
+       `<config>/skills-archive/` after a yes. Rename the archive folder if one is already
+       there; never delete anything.
    - **Branch 2, publishing.** 2a GitHub username: take it from `github_ssh=ok:<name>` if
      present, else ask. 2b only if `github_ssh` is not `ok`: SSH key (help make one with
      `ssh-keygen -t ed25519`, then the user adds `~/.ssh/id_ed25519.pub` on github.com →
@@ -78,12 +91,13 @@ question also put the longer text in its `preview`. Do not shorten the texts int
      `opsci` is installed. Commit in the site repo only after a yes; never push. If they have
      no site, give the steps from the text and stop the branch there. If branch 2 was not
      chosen, run its 2b too: the site is pushed with git.
-   - **Branch 4, SLURM resurrection (extra).** Check `batch_tools=ok` (else say which are missing),
+   - **Branch 4, SLURM resurrection (extra).** It is for development on a compute node of a
+     SLURM cluster; say so. Check `batch_tools=ok` (else say which are missing),
      and that `rr_state_dir` is shared by the compute nodes: `rr_state_fs` `nfs`, `lustre`
      or `gpfs` is; `tmpfs` or a path under `/tmp` is not (explain `RR_STATE_DIR`); for
-     anything else ask the user. 4a: Claude must run in tmux inside a batch job; if `batch_job=no`, offer
-     to write a job script that starts a tmux server and waits (`sbatch` it only after a
-     yes). 4b: ask how they start Claude; if not plain `claude`, they will run
+     anything else ask the user. 4a: Claude must run in tmux inside a batch job; if
+     `batch_job=no` and 1c did not already write it, offer the job script of 1c (`sbatch` it
+     only after a yes). 4b: ask how they start Claude; if not plain `claude`, they will run
      `set launch_cmd <command>`. 4c, 4d, 4e with the texts. 4g: **you cannot register.**
      Give the user the exact line to type in a Claude pane of that tmux session, e.g.
      `/slurm-resurrect:resurrect register --permission-mode acceptEdits --remote-control off`,

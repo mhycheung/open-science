@@ -13,7 +13,9 @@ guide covers the optional Claude Code plugins.
    `/open-science:onboard`. It explains the three components (project management, context
    management, publishing), asks which you want, and sets them up, asking before any change
    to your settings.
-2. **tmux.** Context management needs Claude Code running inside tmux. Put `set -g mouse on` in `~/.tmux.conf` so you can click, resize and scroll panes.
+2. **tmux.** Context management requires Claude Code to run inside tmux. Onboarding sets
+   tmux up for the mouse; `docs/tmux.md` covers the keys and, on a cluster, running tmux on
+   a compute node.
 3. **Notifications.** With no setup, messages for you are written as files in the project's
    `messages/` directory. For Slack instead, create your own Slack app with only the
    `chat:write` and `files:write` scopes; onboarding stores its token in
@@ -24,7 +26,8 @@ guide covers the optional Claude Code plugins.
 
 - **Start a project** with `open-science-project:new-project`, and each piece of work with
   `open-science-project:new-task`. You review a task's plan before work starts.
-- **Each tmux pane is registered to one context file**, so it knows which work it drives.
+- **One tmux window per project, one pane per task.** Each pane is registered to one
+  context file, so it knows which work it drives.
   To take over work in a pane, type `/open-science-context:continue-context`. Doing this in the
   wrong pane resumes the wrong work; it prints which file it uses, so check that line.
 - **Agents clear their own conversation and type a prompt into their own pane.** This is

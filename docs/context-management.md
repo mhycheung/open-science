@@ -11,9 +11,12 @@ claude plugin install open-science-context@open-science
 ```
 
 Installing it also installs `open-science-project`: a jump is only as good as the context
-file it resumes from. It needs tmux (Claude Code must run inside tmux), `jq`, and `opsci`.
-Put `set -g mouse on` in `~/.tmux.conf` so you can click, resize and scroll panes with the
-mouse.
+file it resumes from. It needs `jq`, `opsci`, and tmux.
+
+**Claude Code must run inside tmux.** A jump types into the agent's own tmux pane, and each
+pane records which context file it drives. Outside tmux, `jump.sh` refuses and the Stop hook
+does nothing. [Working in tmux](tmux.md) shows how to arrange your work (one pane per task),
+how to set tmux up for the mouse, and how to run it on a compute node of a cluster.
 
 | skill | use it to |
 |---|---|

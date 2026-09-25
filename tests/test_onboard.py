@@ -102,6 +102,42 @@ def test_check_configured_machine_and_never_prints_secrets(tmp_path):
     assert SLACK_TOKEN not in out and ZENODO_TOKEN not in out
 
 
+RECOMMENDED_TMUX_CONF = """set -g mouse on
+set -g set-clipboard on
+set -g history-limit 50000
+set -g default-terminal "tmux-256color"
+set -ag terminal-overrides ",xterm-256color:RGB"
+"""
+
+
+def test_check_tmux_conf_lists_missing_settings(tmp_path):
+    b = make_bin(tmp_path)
+    stub(b, "tmux", 'case "$1" in -V) echo "tmux 9.9";; esac')
+    home = Path(env_for(tmp_path, b)["HOME"])
+    (home / ".tmux.conf").write_text(RECOMMENDED_TMUX_CONF)
+    kv, _ = check(tmp_path, b)
+    assert kv["tmux_mouse"] == "on" and kv["tmux_conf_missing"] == "none"
+    # refusal case: a short history and no clipboard line are reported
+    (home / ".tmux.conf").write_text(RECOMMENDED_TMUX_CONF.replace("50000", "2000")
+                                     .replace("set -g set-clipboard on\n", ""))
+    kv, _ = check(tmp_path, b)
+    assert kv["tmux_conf_missing"] == "set-clipboard,history-limit"
+
+
+def test_check_tmux_conf_reads_live_values_inside_tmux(tmp_path):
+    b = make_bin(tmp_path)
+    stub(b, "tmux", """case "$1 $2 $3" in
+  "-V  ") echo "tmux 9.9";;
+  "show -gv mouse") echo on;;
+  "show -sv set-clipboard") echo external;;
+  "show -gv history-limit") echo 50000;;
+  "show -sv default-terminal") echo tmux-256color;;
+  "show -sv terminal-overrides") echo "xterm-256color:Tc";;
+esac""")
+    kv, _ = check(tmp_path, b, TMUX="/tmp/x,1,0")
+    assert kv["tmux_conf_missing"] == "set-clipboard"
+
+
 def test_check_flags_open_secret_dir(tmp_path):
     b = make_bin(tmp_path)
     env = env_for(tmp_path, b)
