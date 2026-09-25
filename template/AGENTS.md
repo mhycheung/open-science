@@ -39,7 +39,9 @@ generated `map/graph.md`. Rules: `rules/README.md`.
   to: a brainstorm task when the owner says "brainstorm" or the idea is exploratory, a
   project task for planned project work. When a request may not be work (a quick question,
   a question about the tools), answer it, then ask at the end whether to start a task that
-  records it. Never make the owner say "task" or "not a task" before they get an answer.
+  records it. Never make the owner say "task" or "not a task" before they get an answer. A
+  side question that needs recorded work but does not drive the project is a private
+  investigation (`open-science-project:private-investigation`), without asking.
 - **Literature.** Every source read in full is saved in `lit_cache/`, named by its
   identifier, and listed in `citations/consulted.md` or `citations/used.bib`. When more
   than one paper is consulted, subagents read the full texts (the `literature` tier in
@@ -72,7 +74,7 @@ generated `map/graph.md`. Rules: `rules/README.md`.
 |---|---|---|
 | main agent | driving a task: planning, dispatching, debugging, reporting | `contracts/main.md`, `context.md`, your task's `tasks/<id>/context.md` |
 | subagent | dispatched with a spec | your spec; `contracts/subagent.md` if your tier says so |
-| side quest | a one-off request that is not project work (§2, "Record the work") | nothing more |
+| side quest | a one-off request that is not project work (§2, "Record the work") | nothing more; if it needs recorded work, its `private-docs/investigations/` file |
 
 Do not read more than your role's list. Rules in `rules/` are opened when a context file or
 a dispatch names their id, not before.
@@ -96,7 +98,7 @@ a dispatch names their id, not before.
 | `paper/` | optional, laid out by the owner | owner |
 | `lit_cache/` | full texts of sources; never published | anyone |
 | `archive/` | retired material | main agent |
-| `private-docs/` | private notes; committed, never exported | anyone |
+| `private-docs/` | private notes and side investigations (`investigations/`); committed, never exported | anyone |
 | `brainstorm/` | ideas before they become project work, with its own `context.md`, `tasks/`, `map/`, `log/`; not published unless the owner adds it to the manifest | anyone |
 | `config/` | `site.example.yaml` (tracked), `site.local.yaml` (git-ignored), `framework.yaml` | owner |
 | `publish/` | publish allowlist, private policy (never exported), last published commit | owner, `publish` skill |

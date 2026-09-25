@@ -91,7 +91,7 @@ done
 # The plugins are cached apart once installed, so the names are listed here;
 # tests/test_onboard.py checks the list against the skill directories of the plugins.
 SKILL_NAMES="onboard publish zenodo-release new-project new-task context-files migrate-project
-update-from-template context-management continue-context advise-with-context"
+update-from-template private-investigation context-management continue-context advise-with-context"
 same=""
 for n in $SKILL_NAMES; do
     [ -e "$CFG/skills/$n" ] && same="$same${same:+,}$n"

@@ -2,7 +2,9 @@
 
 Notes that are never shared with the public: meeting notes, correspondence, drafts of
 things not yet agreed with collaborators, remarks about people, reviews, anything under a
-confidentiality agreement.
+confidentiality agreement. Side investigations, questions the owner asks that need
+recorded work but do not drive the project, go in `investigations/`, one directory each
+(`open-science-project:private-investigation`).
 
 These files are committed to the private repo, so they are versioned and backed up with the
 project, but they are never exported: `publish/manifest.yaml` lists `private-docs` under

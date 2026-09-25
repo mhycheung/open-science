@@ -114,6 +114,9 @@ A brainstorm task needs no plan and no approval. Make it as soon as the owner sa
 the brainstorm `context.md` table, commit, and carry on with the conversation. Step 6's
 stop does not apply. Keep its `context.md` current as the discussion goes on.
 
+A side question about existing work, not a new idea, is a private investigation instead
+(`open-science-project:private-investigation`).
+
 **Graduating an idea** is a new project task (no `--root`) whose `context.md` or `plan.md`
 restates the idea: the question, what was found, the evidence, copied or rewritten so that
 the task stands alone. It never links to `brainstorm/`; it may mention the idea in passing

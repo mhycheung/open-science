@@ -40,8 +40,9 @@ guide covers the optional Claude Code plugins.
 - `map/README.md`: the logic of the project. `opsci map build` writes the full graph and
   the list of dead ends next to it.
 - `rules/README.md`: the project's rules, one line each. Add or change rules here.
-- `brainstorm/`: ideas not yet tasks. `private-docs/`: private notes. Both are soft-private
-  (`AGENTS.md` §6).
+- `brainstorm/`: ideas not yet tasks. `private-docs/`: private notes, and side
+  investigations (`open-science-project:private-investigation`).
+  Both are soft-private (`AGENTS.md` §6).
 - **Marking a result human-verified.** Every task and result has a header with a
   `verification:` line. Agents may set `verified`. After checking a result yourself, set
   `verification: human-verified` in its header and commit. Only you can: agents are blocked

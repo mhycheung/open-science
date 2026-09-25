@@ -14,7 +14,7 @@ PLUGINS = {
     "open-science": ("onboard",),
     "open-science-publish": ("publish", "zenodo-release"),
     "open-science-project": ("new-project", "new-task", "context-files", "migrate-project",
-                             "update-from-template"),
+                             "update-from-template", "private-investigation"),
     "open-science-context": ("context-management", "continue-context", "advise-with-context"),
 }
 PLUGIN_OF = {s: p for p, ss in PLUGINS.items() for s in ss}

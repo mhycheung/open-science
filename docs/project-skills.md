@@ -1,7 +1,7 @@
 # Project skills (`open-science-project`)
 
 The `open-science-project` plugin is the project-structure component. It gives Claude Code
-five skills and two hooks that work on a project made from the
+six skills and two hooks that work on a project made from the
 [template](project-template.md). It needs git and `opsci`.
 
 ```bash
@@ -20,6 +20,7 @@ folder.
 | `open-science-project:context-files` | keep the context files current and under their line caps |
 | `open-science-project:migrate-project` | move an existing project into the layout without losing a file |
 | `open-science-project:update-from-template` | take framework improvements into a project made from an older template |
+| `open-science-project:private-investigation` | record a side question in a private context file |
 
 ## `open-science-project:new-project`
 
@@ -111,6 +112,22 @@ After every finished subtask the agent answers four questions (`contracts/main.m
 2. Does the next agent need to know? Update `context.md`.
 3. Was a source or package used or consulted? Update `citations/`.
 4. Append one line to the task log and one to `log/YYYY-MM.md`.
+
+## `open-science-project:private-investigation`
+
+For a question you ask on the side that needs real work to answer (reading code or papers,
+a computation, a test run) but does not advance the project. The agent uses it when you
+invoke it, and on its own when such a question comes up; a question it can answer quickly
+it just answers.
+
+The investigation gets its own directory, `private-docs/investigations/<YYYY-MM-DD>-<slug>/`,
+with a `context.md` holding the question, the state of the work and the answer, and the
+scripts and plots it needed. `private-docs/` is never exported. The investigation is
+soft-private by default: the task's public `context.md` names the file in backticks and says
+when to read it, without stating the question or the findings. A hard-private investigation
+is listed under `hard_private:` in `publish/manifest.yaml` and is named in no exported
+file; `private-docs/investigations/README.md` indexes all of them. If the answer changes the
+project, the agent restates what the task needs in the task's own files.
 
 ## `open-science-project:migrate-project`
 

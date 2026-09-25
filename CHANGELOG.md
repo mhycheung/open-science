@@ -11,6 +11,14 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- New skill `open-science-project:private-investigation`: a side question that needs
+  recorded work but does not drive the project gets its own context file in
+  `private-docs/investigations/<YYYY-MM-DD>-<slug>/`, soft-private by default. A public task
+  context names the file in backticks without stating the question; a hard-private
+  investigation is listed under `hard_private:` and named nowhere in the export. Template
+  `AGENTS.md` §2, §4 and §5 and `private-docs/README.md` mention it.
+- No project layout change: the directory is created when the first investigation is made.
+
 - The default autonomy level `maximal` is renamed `autonomous` (`opsci task new --autonomy
   autonomous|checkpoints|collaborative`). Plans written before this release that say
   `autonomy: maximal` mean `autonomous`; edit the header to the new name.
