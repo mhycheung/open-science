@@ -52,16 +52,6 @@ There are also two [optional extras](#optional-extras).
 Context management needs Claude Code to run inside tmux; the
 [tmux guide](docs/tmux.md) shows how to set it up, including on a cluster's compute node.
 
-## Updates
-
-`CHANGELOG.md` lists what each release changed. To update, first the code:
-`claude plugin marketplace update open-science`, then
-`claude plugin update <plugin>@open-science` for each installed plugin, and `pip install -U`
-of `opsci` ([The opsci command](docs/cli.md)). Then, in each project, run
-`/open-science-project:update-from-template`: it applies the template changes and the
-changelog's "Project migration" steps. `opsci` warns when a project's layout is older than
-the framework's.
-
 ## Optional extras
 
 Both are in `extras/`, and nothing in the three components depends on them.
