@@ -10,10 +10,15 @@ CAPS = (
     ("context.md", 200),
     ("tasks/*/context.md", 200),
     ("map/README.md", 150),
+    # Verification tasks, in a task or at the top of the project.
+    ("tasks/*/verifications/*/context.md", 200),
+    ("verifications/*/context.md", 200),
     # The brainstorm sub-root has the same layout and the same caps.
     ("brainstorm/context.md", 200),
     ("brainstorm/tasks/*/context.md", 200),
     ("brainstorm/map/README.md", 150),
+    ("brainstorm/tasks/*/verifications/*/context.md", 200),
+    ("brainstorm/verifications/*/context.md", 200),
 )
 
 

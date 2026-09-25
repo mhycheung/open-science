@@ -1,6 +1,6 @@
 ---
 name: new-task
-description: Start a new task in an open-science project - settle the design with the user, write tasks/<id>/plan.md from the plan template, and create the task's context, log and subcontext. Use when the user asks to start a task, plan a piece of work, start a campaign, or track a piece of work that will outlive one session. Also for small tasks and explorations that need no plan, and, without asking, when the user says "brainstorm" or asks to explore an idea or question in the project (a brainstorm task).
+description: Start a new task in an open-science project - settle the design with the user, write tasks/<id>/plan.md from the plan template, and create the task's context, log and subcontext. Use when the user asks to start a task, plan a piece of work, start a campaign, or track a piece of work that will outlive one session. Also for small tasks and explorations that need no plan; without asking, when the user says "brainstorm" or asks to explore an idea or question in the project (a brainstorm task); and, without asking, when the user asks to audit, check, reproduce or adversely review work that is already done (a verification task).
 ---
 
 # New task
@@ -124,6 +124,18 @@ restates the idea: the question, what was found, the evidence, copied or rewritt
 the task stands alone. It never links to `brainstorm/`; it may mention the idea in passing
 (`AGENTS.md` §5). Then mark the brainstorm node `done`, naming the new task in its
 `summary`.
+
+## Verification tasks
+
+A verification task audits, checks, reproduces or adversely reviews finished work (a task,
+a result, a dataset). When the user asks for one, make it without asking; when it is unclear
+whether the request checks finished work or asks for new work, propose one and ask. Never
+start one to recheck your own work (`AGENTS.md` §2). Same procedure, with
+`opsci task new v01-<slug> --title "<title>" --verifies <id>...`: it goes in
+`tasks/<id>/verifications/` when every verified node lies in that task, else in
+`verifications/`; its privacy is the strictest of the verified nodes (do not ask). Its
+findings are results in its own `results/`; a confirmed node gets `verification: verified`
+with `evidence:` there, a refuted one a new `status` (`tasks/README.md`).
 
 ## Autonomy (plan header)
 

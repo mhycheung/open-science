@@ -21,14 +21,21 @@ SKIP_DIRS = ("data", "lit_cache", ".git", ".pixi", "private-docs")
 # Sub-roots: directories with the project's layout on a smaller scale. Their nodes are part
 # of the project graph, and `opsci map build` also writes a map of each sub-root alone.
 SUBROOTS = ("brainstorm",)
-# Directories whose subdirectories are tasks.
-TASK_ROOTS = ("tasks",) + tuple(f"{s}/tasks" for s in SUBROOTS)
+# Verification tasks (audits, checks, adverse reviews of finished work) live in a
+# `verifications/` directory: inside the task whose work they check, or at the top of the
+# project (or sub-root) when they check the work of several tasks.
+VERIFICATIONS = "verifications"
+# Directories whose subdirectories are tasks, as globs relative to the project root.
+TASK_ROOT_GLOBS = tuple(f"{pre}{d}" for pre in ("", *(f"{s}/" for s in SUBROOTS))
+                        for d in ("tasks", VERIFICATIONS, f"tasks/*/{VERIFICATIONS}"))
 # Files map build writes itself.
 GENERATED = ("map/graph.md", "map/dead_ends.md", "map/claims.md", "results/README.md") + tuple(
     f"{s}/map/{f}" for s in SUBROOTS for f in ("graph.md", "dead_ends.md", "claims.md"))
 DEAD_STATUSES = ("failed", "superseded", "abandoned")
 PRIVACY_TIERS = ("public", "soft-private", "hard-private")
-EDGE_FIELDS = ("depends_on", "supersedes", "related")
+EDGE_FIELDS = ("depends_on", "supersedes", "related", "verifies")
+# The strictest privacy tier first.
+PRIVACY_ORDER = {"hard-private": 0, "soft-private": 1, "public": 2}
 
 
 @dataclass
@@ -126,13 +133,57 @@ def graph_root(root: Path) -> tuple[Path, str]:
     return root, ""
 
 
-def task_file(path: str) -> tuple[str, str] | None:
-    """(task directory, file name) of a file directly in ``tasks/<id>/`` or
-    ``brainstorm/tasks/<id>/``, else None."""
+def is_task_root(d: str) -> bool:
+    """Whether the directory ``d`` (relative to the project root) holds tasks: ``tasks``,
+    ``verifications``, ``tasks/<id>/verifications``, and the same under a sub-root."""
+    parts = PurePosixPath(d).parts
+    if parts and parts[0] in SUBROOTS:
+        parts = parts[1:]
+    return parts in (("tasks",), (VERIFICATIONS,)) or (
+        len(parts) == 3 and parts[0] == "tasks" and parts[2] == VERIFICATIONS)
+
+
+def task_dirs(path: str) -> list[str]:
+    """The task directories holding ``path``, outermost first: ``[tasks/t07]`` for a file of
+    task t07, ``[tasks/t07, tasks/t07/verifications/v01]`` for a file of a verification task
+    inside it."""
     p = PurePosixPath(path)
-    if len(p.parts) >= 3 and "/".join(p.parts[:-2]) in TASK_ROOTS:
+    return ["/".join(p.parts[:i + 1]) for i in range(1, len(p.parts) - 1)
+            if is_task_root("/".join(p.parts[:i]))]
+
+
+def task_file(path: str) -> tuple[str, str] | None:
+    """(task directory, file name) of a file directly in a task directory (``tasks/<id>/``,
+    ``brainstorm/tasks/<id>/``, ``tasks/<id>/verifications/<vid>/``, ...), else None."""
+    p = PurePosixPath(path)
+    if len(p.parts) >= 3 and is_task_root("/".join(p.parts[:-2])):
         return p.parent.as_posix(), p.name
     return None
+
+
+def is_verification(n: "Node") -> bool:
+    """A verification task: a task that names the nodes it checks in ``verifies``."""
+    return n.get("type") == "task" and bool(n.get("verifies"))
+
+
+def display_type(n: "Node") -> str:
+    """The node's type as the graphs show it: ``verification`` for a verification task."""
+    return "verification" if is_verification(n) else str(n.get("type"))
+
+
+def default_privacy(root: Path) -> str:
+    """The manifest's `policy.default_privacy`: the tier of a node with no `privacy`."""
+    try:
+        manifest = yaml.safe_load((Path(root) / "publish" / "manifest.yaml").read_text()) or {}
+        tier = (manifest.get("policy") or {}).get("default_privacy", "public")
+    except (OSError, yaml.YAMLError, AttributeError):
+        return "public"
+    return tier if tier in PRIVACY_TIERS else "public"
+
+
+def strictest(tiers) -> str:
+    """The strictest of the privacy tiers ``tiers`` (``public`` if there are none)."""
+    return min(tiers, key=PRIVACY_ORDER.__getitem__, default="public")
 
 
 def is_task_context(path: str) -> bool:
@@ -263,6 +314,8 @@ def _check_graph(res: ScanResult, plans: list[Node]) -> None:
         if state.get(i) is None:
             visit(i, [i])
 
+    _check_verifications(res, ids)
+
     superseded_by = {t for n in res.nodes for t in n.get("supersedes", []) or []}
     for n in res.nodes:
         if n.get("status") == "superseded" and n.id not in superseded_by:
@@ -277,3 +330,45 @@ def _check_graph(res: ScanResult, plans: list[Node]) -> None:
         for k in ("status",) + EDGE_FIELDS:
             if (p.get(k) or None) != (ctx.get(k) or None):
                 res.warnings.append(Problem(p.path, f"{k} differs from {ctx.path}; context.md is the one the map uses"))
+
+
+def verification_home(targets: list[Node]) -> str:
+    """Where a verification task of ``targets`` goes: ``<task>/verifications`` when every
+    target lies in one task (a verification task inside it counts as that task), else the
+    ``verifications`` directory of the sub-root holding every target, else the project's."""
+    owners = {(task_dirs(t.path) or [None])[0] for t in targets}
+    if len(owners) == 1 and None not in owners:
+        return f"{owners.pop()}/{VERIFICATIONS}"
+    subs = {t.path.split("/", 1)[0] for t in targets}
+    sub = subs.pop() if len(subs) == 1 else None
+    return f"{sub}/{VERIFICATIONS}" if sub in SUBROOTS else VERIFICATIONS
+
+
+def _check_verifications(res: ScanResult, ids: dict[str, Node]) -> None:
+    """A verification task is a task context with `verifies`, in a `verifications/`
+    directory; every task in such a directory is one. Warn when it is not where
+    `verification_home` puts it."""
+    for n in res.nodes:
+        if not n.get("verifies"):
+            if is_task_context(n.path) and PurePosixPath(n.path).parts[-3] == VERIFICATIONS:
+                res.errors.append(Problem(n.path, f"a task in a {VERIFICATIONS}/ directory is a "
+                                          "verification task: name what it checks in `verifies`"))
+            continue
+        if n.get("type") != "task" or not is_task_context(n.path):
+            res.errors.append(Problem(n.path, "verifies: only a task's context.md has it"))
+            continue
+        if PurePosixPath(n.path).parts[-3] != VERIFICATIONS:
+            res.errors.append(Problem(n.path, f"a verification task (a task with `verifies`) goes in a "
+                                      f"{VERIFICATIONS}/ directory"))
+            continue
+        if n.id in n.get("verifies"):
+            res.errors.append(Problem(n.path, "verifies: a task cannot verify itself"))
+            continue
+        targets = [ids[t] for t in n.get("verifies") if t in ids]
+        if len(targets) != len(n.get("verifies")):
+            continue  # _check_graph reports the ids that are not nodes
+        home = verification_home(targets)
+        here = PurePosixPath(n.path).parent.parent.as_posix()
+        if here != home:
+            res.warnings.append(Problem(n.path, f"a verification of {', '.join(t.id for t in targets)} "
+                                        f"belongs in {home}/, not {here}/"))

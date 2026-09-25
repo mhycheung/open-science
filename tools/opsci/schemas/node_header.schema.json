@@ -24,6 +24,11 @@
     "depends_on": {"$ref": "#/$defs/idlist"},
     "supersedes": {"$ref": "#/$defs/idlist"},
     "related": {"$ref": "#/$defs/idlist"},
+    "verifies": {
+      "description": "A verification task's targets: the nodes whose finished work it audits, checks or reviews adversely. A task with verifies is a verification task; it lives in a verifications/ directory.",
+      "$ref": "#/$defs/idlist",
+      "minItems": 1
+    },
     "privacy": {
       "description": "public: may be released. soft-private: not released and not in the public map, but may be named elsewhere. hard-private: must not appear anywhere in the release, not even by name. Absent: the manifest's policy.default_privacy.",
       "enum": ["public", "soft-private", "hard-private"]

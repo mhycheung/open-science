@@ -147,11 +147,15 @@ def main(argv=None) -> int:
                                   depends_on=args.depends_on, related=args.related,
                                   supersedes=args.supersedes, plan=args.plan,
                                   autonomy=args.autonomy, hold_at=args.hold_at, goal=args.goal,
-                                  privacy=args.privacy, short_name=args.short_name)
+                                  privacy=args.privacy, short_name=args.short_name,
+                                  verifies=args.verifies)
         except tasks.TaskError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        made = sorted(p.relative_to(Path(args.root)).as_posix() for p in tdir.rglob("*") if p.is_file())
+        base = Path(args.root)
+        if not tdir.is_relative_to(base):  # a verification task outside a sub-root
+            base = nodes.graph_root(base)[0]
+        made = sorted(p.relative_to(base).as_posix() for p in tdir.rglob("*") if p.is_file())
         print(f"created {tdir}: " + ", ".join(made))
         return 0
 
@@ -170,6 +174,10 @@ def main(argv=None) -> int:
     tn.add_argument("--hold-at", nargs="*", default=[], metavar="POINT", help="needs --autonomy checkpoints")
     tn.add_argument("--privacy", choices=nodes.PRIVACY_TIERS,
                     help="public, soft-private or hard-private (default: public; soft-private for a brainstorm task)")
+    tn.add_argument("--verifies", nargs="+", default=[], metavar="ID",
+                    help="make a verification task (an audit, check or adverse review) of these nodes: it goes "
+                         "in <task>/verifications/ if they all lie in one task, else in verifications/, and its "
+                         "privacy defaults to theirs, the strictest")
     tn.add_argument("--root", default=".", help="project root (default: .); `brainstorm` for a brainstorm task")
     tn.set_defaults(func=cmd_task_new)
 

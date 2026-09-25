@@ -11,6 +11,25 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Verification tasks: audits, checks, reproductions and adverse reviews of work that is
+  already done. A verification task is a task whose header names what it checks in the new
+  field `verifies:`. It lives in `tasks/<id>/verifications/<vid>/` when it checks one task's
+  work, and in the project's new `verifications/<vid>/` directory when it checks the work of
+  several tasks (`brainstorm/verifications/` for brainstorm work). `opsci task new
+  --verifies ID...` chooses the place and gives it, by default, the strictest privacy of the
+  nodes it verifies. `map/graph.md`, `map/claims.md`, the node tables and the Notion Tasks
+  database label it `verification`; the graphs draw it as a hexagon with a dotted `verifies`
+  arrow to each node it checks. `opsci map build` reports a task in a `verifications/`
+  directory without `verifies` and a `verifies` outside one, and warns when a verification
+  task is in the wrong place or less private than what it verifies. The publish filter
+  exports a verification task inside a task only when both are public. Agents make a
+  verification task without asking when the user asks for a check of finished work, and
+  propose one when unsure (template `AGENTS.md` §2, the new-task skill). Template:
+  `verifications/README.md`, `tasks/README.md` "Verification tasks", `AGENTS.md` §5, the
+  manifest includes `verifications`, `.gitattributes` merges verification task logs.
+- No project layout change. After updating, add `- path: verifications` under `include` in
+  `publish/manifest.yaml`, and the four `verifications` lines to `.gitattributes`.
+
 - When something is a result: something later work will rely on, or that answers part of
   the task's goal. Debugging findings go only in the task's `map.md`, unless they matter
   conceptually. Agents set `milestone: true` when a result obviously answers part of the

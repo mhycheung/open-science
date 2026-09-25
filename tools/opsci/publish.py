@@ -40,7 +40,10 @@ STATUS_EXEMPT = ("README.md", "**/README.md", "AGENTS.md", "CLAUDE.md", "PROJECT
                  "log/**", "map/**", "citations/**", "rules/**", "tasks/*/log.md", "tasks/*/map.md",
                  "tasks/*/subcontext/**", "docs/**", "brainstorm/context.md", "brainstorm/log/**",
                  "brainstorm/map/**", "brainstorm/tasks/*/log.md",
-                 "brainstorm/tasks/*/map.md", "brainstorm/tasks/*/subcontext/**")
+                 "brainstorm/tasks/*/map.md", "brainstorm/tasks/*/subcontext/**",
+                 "verifications/*/log.md", "verifications/*/map.md", "verifications/*/subcontext/**",
+                 "brainstorm/verifications/*/log.md", "brainstorm/verifications/*/map.md",
+                 "brainstorm/verifications/*/subcontext/**")
 MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo"}
 POLICY_KEYS = {"default_privacy", "collaborators_agreed"}
 PRIVACY_TIERS = nodes.PRIVACY_TIERS
@@ -201,17 +204,6 @@ def _privacy(header: dict, man: Manifest) -> str:
     return str(header.get("privacy", man.default_privacy))
 
 
-TASK_ROOTS = nodes.TASK_ROOTS  # directories whose subdirectories are tasks
-
-
-def _task_dir(f: str) -> str | None:
-    """The task directory holding file ``f`` (``tasks/<id>`` or ``brainstorm/tasks/<id>``)."""
-    for troot in TASK_ROOTS:
-        n = troot.count("/") + 1
-        parts = PurePosixPath(f).parts
-        if "/".join(parts[:n]) == troot and len(parts) > n + 1:
-            return "/".join(parts[:n + 1])
-    return None
 
 
 def select(snap: Path, man: Manifest) -> tuple[list[str], dict[str, str], list, set]:
@@ -221,20 +213,24 @@ def select(snap: Path, man: Manifest) -> tuple[list[str], dict[str, str], list, 
     by_path = {n.path: n for n in all_nodes(snap)}
     # plan.md repeats its task's header; the task's context.md decides for the directory.
     task_tier = {}
-    for troot in TASK_ROOTS:
-        tr = snap / troot
-        for d in sorted(tr.iterdir()) if tr.is_dir() else []:
+    for glob in nodes.TASK_ROOT_GLOBS:
+        for d in sorted(snap.glob(f"{glob}/*/")):
             if d.is_dir():
-                ctx = by_path.get(f"{troot}/{d.name}/context.md")
+                rel = d.relative_to(snap).as_posix()
+                ctx = by_path.get(f"{rel}/context.md")
                 # A task with no valid header is treated as hard-private: nothing is known of it.
-                task_tier[f"{troot}/{d.name}"] = _privacy(ctx.header, man) if ctx else "hard-private"
+                task_tier[rel] = _privacy(ctx.header, man) if ctx else "hard-private"
     dir_nodes = {str(PurePosixPath(p).parent): n for p, n in by_path.items() if p.endswith("node.yaml")}
 
     def tier(f: str) -> tuple[str, str]:
         """(tier, what decided it) of snapshot path f."""
-        tdir = _task_dir(f)
-        if tdir is not None and task_tier.get(tdir, "public") != "public":
-            return task_tier[tdir], f"task {tdir.rsplit('/', 1)[1]}"
+        # A verification task inside another task: the stricter of the two decides.
+        tdirs = nodes.task_dirs(f)
+        tdir = tdirs[-1] if tdirs else None
+        tiers = [(task_tier.get(d, "public"), d) for d in tdirs]
+        strict = min(tiers, key=lambda t: nodes.PRIVACY_ORDER[t[0]], default=("public", None))
+        if strict[0] != "public":
+            return strict[0], f"task {strict[1].rsplit('/', 1)[1]}"
         node = by_path.get(f)
         if node is not None and _privacy(node.header, man) != "public" and not (
                 tdir is not None and f in (f"{tdir}/context.md", f"{tdir}/plan.md")):

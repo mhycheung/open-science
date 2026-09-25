@@ -21,6 +21,7 @@ include:
   - path: citations
   - path: rules
   - path: tasks
+  - path: verifications
   - path: docs
 # - path: paper
 #   type: paper
@@ -44,4 +45,5 @@ never:
 #                             # tasks/*/map.md, tasks/*/subcontext/**, docs/**,
 #                             # brainstorm/context.md, brainstorm/log/**, brainstorm/map/**,
 #                             # brainstorm/tasks/*/log.md, brainstorm/tasks/*/map.md,
-#                             # brainstorm/tasks/*/subcontext/**
+#                             # brainstorm/tasks/*/subcontext/**, and the log.md, map.md
+#                             # and subcontext/** of the tasks in verifications/

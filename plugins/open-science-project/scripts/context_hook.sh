@@ -33,7 +33,7 @@ if [ "$n" -gt "$cap" ]; then
   echo "open-science-project: $F has $n lines, over its cap of $cap. Prune it now: move finished or background material to a subcontext/ file or the log, and keep only what the next agent needs." >&2
   exit 2
 fi
-if [ "$base" = context.md ] && [ "$grand" = tasks ]; then
+if [ "$base" = context.md ] && { [ "$grand" = tasks ] || [ "$grand" = verifications ]; }; then
     msg="open-science-project: task context saved ($n/$cap lines). If a subtask just finished, check: (1) did a status or edge change, or a subtask start, finish, fail or branch? update the header and the task map.md; did a result land, change or fail (something later work relies on, or that answers part of the task goal; not a debugging finding)? update its file in the task's results/; run opsci map build; (2) does the next agent need it? update the project context.md; (3) did you use or consult a source or package? update citations/, and the uses: of any result that relies on it; (4) one line in the task log.md."
     jq -n --arg m "$msg" '{hookSpecificOutput:{hookEventName:"PostToolUse", additionalContext:$m}}'
 fi

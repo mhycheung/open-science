@@ -2,9 +2,9 @@
 
 Pages under the project's root page: Project (PROJECT.md), Context, Map (the Mermaid graph as a
 code block), Log, Rules, Brainstorm context, Private docs, the Feed (feed.py), and the Tasks
-database: one row per task in tasks/ and brainstorm/tasks/, its properties from the node
-header, its body the task's context.md, then Plan, Task log and subcontext files as toggles,
-then its plots.
+database: one row per task in tasks/, brainstorm/tasks/ and the verifications/ directories,
+its properties from the node header, its body the task's context.md, then Plan, Task log and
+subcontext files as toggles, then its plots.
 
 Plots: every image or PDF under tasks/<id>/ (not data/). Files that differ only by an ISO date
 in the name (bands_2026-09-25.png, bands_2026-09-28.png) are versions of one plot: only the
@@ -27,13 +27,14 @@ import json
 import re
 from pathlib import Path
 
+from ..nodes import TASK_ROOT_GLOBS
 from . import blocks as nb
 from .client import MAX_UPLOAD, NotionError
 from .project import Project
 
-TASK_ROOTS = ("tasks", "brainstorm/tasks")
 PLOT_EXT = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".pdf")
-SKIP_PARTS = {"data", "lit_cache", ".git", ".pixi", "__pycache__", ".ipynb_checkpoints"}
+SKIP_PARTS = {"data", "lit_cache", ".git", ".pixi", "__pycache__", ".ipynb_checkpoints",
+              "verifications"}  # a verification task inside a task has its own page
 DATE_IN_NAME = re.compile(r"[_-](\d{4}-\d{2}-\d{2})(?=\.[^.]+$)")
 KEEP_TYPES = ("child_page", "child_database")
 CAPTION_SUFFIX = ".caption.md"
@@ -162,8 +163,8 @@ def render(root: Path) -> list[dict]:
              [nb.toggle(f"`{p.relative_to(root)}`", nb.demote(nb.md_to_blocks(_read(p)), 2)) for p in priv],
              icon="🔒")
 
-    for tr in TASK_ROOTS:
-        for td in sorted((root / tr).glob("*/")):
+    for tr in TASK_ROOT_GLOBS:
+        for td in sorted(root.glob(f"{tr}/*/")):
             ctx = td / "context.md"
             if not ctx.exists():
                 continue
@@ -179,7 +180,8 @@ def render(root: Path) -> list[dict]:
                 if sc.name != "README.md":
                     blocks.append(nb.toggle(f"`subcontext/{sc.name}`", nb.demote(nb.md_to_blocks(_read(sc)), 2)))
             props = {"Name": f"{tid}: {fm.get('title', '')}".rstrip(": "), "ID": tid,
-                     "Status": fm.get("status"), "Type": fm.get("type", "task"),
+                     "Status": fm.get("status"),
+                     "Type": "verification" if fm.get("verifies") else fm.get("type", "task"),
                      "Area": "brainstorm" if tr.startswith("brainstorm") else "project",
                      "Privacy": fm.get("privacy"), "Verification": fm.get("verification"),
                      "Summary": str(fm.get("summary", ""))}
