@@ -56,7 +56,7 @@ The skill:
 - with context management, sets up tmux for mouse use and explains how to arrange your work
   in it (see [Working in tmux](tmux.md)); on a SLURM cluster, it can also write a batch job
   that keeps a tmux session running on a compute node;
-- sets up GitHub access, notifications (files or Slack) and Zenodo tokens.
+- sets up GitHub access, notifications (Notion, Slack or files) and Zenodo tokens.
 
 It changes none of your settings (git config, Claude settings, `~/.tmux.conf`, file modes)
 without a yes to that change, and it never asks you to paste a token into the chat: tokens
@@ -84,7 +84,7 @@ Also part of the framework:
 
 | part | what it does | page |
 |---|---|---|
-| `opsci` command | the command-line tool behind every step, run by you or by the skills: map build, tasks, context caps, publish, site, Zenodo, notifications | [The opsci command](cli.md), [Notifications](notify.md) |
+| `opsci` command | the command-line tool behind every step, run by you or by the skills: map build, tasks, context caps, publish, site, Zenodo, notifications, Notion | [The opsci command](cli.md), [Notifications](notify.md), [Notion](notion.md) |
 | `open-science` plugin | the onboarding skill `open-science:onboard` | this page |
 
 Two optional extras live in `extras/` of the repository; nothing in the three components

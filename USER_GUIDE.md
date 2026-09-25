@@ -16,11 +16,11 @@ guide covers the optional Claude Code plugins.
 2. **tmux.** Context management requires Claude Code to run inside tmux. Onboarding sets
    tmux up for the mouse; `docs/tmux.md` covers the keys and, on a cluster, running tmux on
    a compute node.
-3. **Notifications.** With no setup, messages for you are written as files in the project's
-   `messages/` directory. For Slack instead, create your own Slack app with only the
-   `chat:write` and `files:write` scopes; onboarding stores its token in
-   `~/.config/opsci/slack.env` with mode 600. Never commit or share that file, and never
-   paste a token into the chat. Steps: `docs/notify.md`.
+3. **Notifications.** Recommended: Notion. Each project gets a page in your Notion, kept in
+   sync as the agents work, with a Feed of their messages that notifies you. Onboarding
+   stores your integration's token in `~/.config/opsci/notion.env` with mode 600
+   (`docs/notion.md`). Or Slack (`docs/notify.md`), or files in `messages/` with no setup.
+   Never commit or share a token file, and never paste a token into the chat.
 
 ## Daily use
 

@@ -11,6 +11,32 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Notion: a project can be mirrored to the owner's Notion workspace, and agents' messages go
+  to the project's **Feed** there (`opsci notion`, `docs/notion.md`, skill
+  `open-science-project:notion`). The mirror has Project, Context, Map (the graph as a
+  Mermaid diagram), Log, Rules, Brainstorm and Private docs pages, and a Tasks database with
+  one page per task holding its context, plan, map, log, subcontext files and plots with
+  their captions. Mathematics in `$...$` becomes Notion equations. Pages are written by the
+  owner's own Notion integration through the REST API; its @mentions notify the owner.
+  A remade plot (a new dated name) replaces the old one in place. Feed messages are removed
+  after three days and kept in `messages/notion-feed.jsonl`.
+- `opsci notify` has a `notion` back end, and onboarding offers Notion first (recommended),
+  then Slack, then files. Choosing Notion leads straight into a step-by-step setup (the
+  integration, `secret_file.sh notion` for the token, a shared parent page, a test
+  notification), which can be deferred; until it is done, messages go to files.
+- Template: `opsci template instantiate --notion` keeps a new `<!-- opsci:notion -->` block,
+  `AGENTS.md` section 10 (rules for agents in a mirrored project), adds a Claude Code Stop
+  hook that syncs the mirror when a turn ends (`opsci notion sync --hook || true`, never
+  blocking), and records `notion: true|false` in `config/framework.yaml`. Only projects of a
+  user who chose Notion get the section and the hook. `.gitignore` ignores
+  `config/notion.local.yaml` (the page ids of the checkout).
+- Template `AGENTS.md` section 2, for every project: mathematics is written in LaTeX in every
+  file and message, and every plot has a self-contained caption file beside it
+  (`<stem>.caption.md`).
+- No project layout change. To mirror an existing project: `opsci notion enable`, commit,
+  then `opsci notion init`. `open-science-project:update-from-template` brings in the two new
+  rules of section 2.
+
 - Every task has a graph, `tasks/<id>/map.md`: a Mermaid graph of its subtasks, their
   status and the arrows between them. `opsci task new` writes it with a single node;
   `opsci map build` writes that starting map for any task that has none and never rewrites
