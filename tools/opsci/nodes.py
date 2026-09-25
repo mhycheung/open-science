@@ -16,11 +16,16 @@ from pathlib import Path, PurePosixPath
 import jsonschema
 import yaml
 
-# Directories never scanned for nodes: bulk data, copyrighted full texts, the brainstorm
-# sub-root (it has its own map: `opsci map build brainstorm`) and private notes.
-SKIP_DIRS = ("data", "lit_cache", ".git", ".pixi", "brainstorm", "private-docs")
+# Directories never scanned for nodes: bulk data, copyrighted full texts and private notes.
+SKIP_DIRS = ("data", "lit_cache", ".git", ".pixi", "private-docs")
+# Sub-roots: directories with the project's layout on a smaller scale. Their nodes are part
+# of the project graph, and `opsci map build` also writes a map of each sub-root alone.
+SUBROOTS = ("brainstorm",)
+# Directories whose subdirectories are tasks.
+TASK_ROOTS = ("tasks",) + tuple(f"{s}/tasks" for s in SUBROOTS)
 # Files map build writes itself.
-GENERATED = ("map/graph.md", "map/dead_ends.md")
+GENERATED = ("map/graph.md", "map/dead_ends.md") + tuple(
+    f"{s}/map/{f}" for s in SUBROOTS for f in ("graph.md", "dead_ends.md"))
 DEAD_STATUSES = ("failed", "superseded", "abandoned")
 PRIVACY_TIERS = ("public", "soft-private", "hard-private")
 EDGE_FIELDS = ("depends_on", "supersedes", "related")
@@ -111,14 +116,33 @@ def read_front_matter(text: str):
     return None, True  # opened but never closed
 
 
+def graph_root(root: Path) -> tuple[Path, str]:
+    """(project root, prefix of root inside it). A sub-root such as ``brainstorm/`` belongs to
+    the graph of the project around it; any other directory is its own project root."""
+    root = Path(root)
+    here = root.resolve()
+    if here.name in SUBROOTS and (here.parent / "context.md").is_file() and (here.parent / "tasks").is_dir():
+        return here.parent, here.name + "/"
+    return root, ""
+
+
+def task_file(path: str) -> tuple[str, str] | None:
+    """(task directory, file name) of a file directly in ``tasks/<id>/`` or
+    ``brainstorm/tasks/<id>/``, else None."""
+    p = PurePosixPath(path)
+    if len(p.parts) >= 3 and "/".join(p.parts[:-2]) in TASK_ROOTS:
+        return p.parent.as_posix(), p.name
+    return None
+
+
 def is_task_context(path: str) -> bool:
-    parts = PurePosixPath(path).parts
-    return len(parts) == 3 and parts[0] == "tasks" and parts[2] == "context.md"
+    t = task_file(path)
+    return t is not None and t[1] == "context.md"
 
 
 def is_task_plan(path: str) -> bool:
-    parts = PurePosixPath(path).parts
-    return len(parts) == 3 and parts[0] == "tasks" and parts[2] == "plan.md"
+    t = task_file(path)
+    return t is not None and t[1] == "plan.md"
 
 
 def scan(root: Path) -> ScanResult:
@@ -183,7 +207,7 @@ def scan(root: Path) -> ScanResult:
             continue
         node = Node(rel, header)
         if is_task_context(rel):
-            task_dir = PurePosixPath(rel).parts[1]
+            task_dir = PurePosixPath(rel).parts[-2]
             if node.id != task_dir:
                 res.errors.append(Problem(rel, f"id '{node.id}' does not match task directory '{task_dir}'"))
                 res.bad_ids.add(node.id)
@@ -246,9 +270,9 @@ def _check_graph(res: ScanResult, plans: list[Node]) -> None:
 
     for p in plans:
         ctx = ids.get(p.id)
-        task_dir = PurePosixPath(p.path).parts[1]
-        if ctx is None or PurePosixPath(ctx.path).parts[1] != task_dir:
-            res.errors.append(Problem(p.path, f"plan header id '{p.id}' does not match a task context in tasks/{task_dir}/"))
+        task_dir = PurePosixPath(p.path).parent.as_posix()
+        if ctx is None or PurePosixPath(ctx.path).parent.as_posix() != task_dir:
+            res.errors.append(Problem(p.path, f"plan header id '{p.id}' does not match a task context in {task_dir}/"))
             continue
         for k in ("status",) + EDGE_FIELDS:
             if (p.get(k) or None) != (ctx.get(k) or None):

@@ -44,4 +44,4 @@ record, and `evidence` points to both. Only the owner sets `human-verified`.
 `privacy` grades the node: `public`, `soft-private` or `hard-private` (definitions in
 `AGENTS.md` §6). Only a public task's directory is exported. A soft- or hard-private task
 keeps its work inside its directory. `opsci task new <id> --title "..." --privacy <tier>`
-sets it; the default is `public`.
+sets it; the default is `public`, and `soft-private` for a brainstorm task (`--root brainstorm`).

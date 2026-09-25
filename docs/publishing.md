@@ -29,8 +29,9 @@ the map and the node headers.
    leak. It copies the allowed files and computes an **export id**, a hash of every exported
    path and its content. It refuses a symbolic link among the exported files. It replaces
    each redaction marker with `[redacted (<reason>)]` (see [Redaction](#redaction)). It
-   rebuilds `map/graph.md` and `map/dead_ends.md` from the exported nodes only, so the
-   public map names no soft- or hard-private node.
+   rebuilds `map/graph.md` and `map/dead_ends.md`: hard-private nodes are left out, and
+   every other node whose files are not exported is named without a link (see
+   [Unpublished nodes in the map](#unpublished-nodes-in-the-map)).
 3. **The checks.** `opsci publish check` runs every check below on the export and writes a
    report. Any problem fails the publish.
 4. **The review.** You read the diff since the last publish. If you publish with the
@@ -55,9 +56,10 @@ the map and the node headers.
 | `copyright` | a PDF, EPUB or DjVu file not covered by a `type: paper` node; a quotation of more than 150 words; a run of 40 or more words shared with a file in `lit_cache/` |
 | `evidence` | a `verified` or `human-verified` node whose `evidence` file is not exported |
 | `human-verified` | a node whose `verification: human-verified` line was last changed in a commit made by an agent (a commit message with a `Claude-Session:`, `Agent:` or Claude `Co-Authored-By:` line) |
-| `references` | a node header whose `depends_on`, `supersedes` or `related` names a hard-private node (an edge to a soft-private node is allowed; the public map drops it); a link in an exported markdown or HTML file to a file or directory of the commit that is not exported. For a soft-private target the fix is a plain mention in backticks instead of the link |
+| `references` | a node header whose `depends_on`, `supersedes` or `related` names a hard-private node (an edge to a soft-private node is allowed; the public map shows it); a link in an exported markdown or HTML file to a file or directory of the commit that is not exported. For a soft-private target the fix is a plain mention in backticks instead of the link |
 | `private-content` | exported text that contains, from hard-private material only: the id of a hard-private node (only ids containing `-`, `_` or a digit are matched); its title, if the title has 3 or more words; the path of a hard-private task directory or file; a run of 12 words shared with a hard-private prose file. Text of the template and of the task skeleton is ignored in that comparison. Mentions of soft-private material are allowed; the report lists them as notes |
 | `redaction` | a redaction marker with no closing `<!-- /redact -->`, or one with an empty reason |
+| `map-overrides` | in `publish/map_overrides.yaml`: a group or node entry that names a published, hard-private or unknown node, a group with fewer than two members or an id already in use, a node in two entries, a missing title or summary, an unknown key |
 
 The `map` and `status` checks run only in a project made from the template (one with
 `AGENTS.md` and `config/framework.yaml`); elsewhere the report notes that they were skipped.
@@ -101,6 +103,37 @@ flags three kinds of passage:
 
 `publish/reports/` is tracked in the private repository: the approved report is the record
 of your approval.
+
+## Unpublished nodes in the map
+
+The public map shows that private work exists without showing what it is. It names every
+node that is not hard-private; a node whose files are not exported, such as a soft-private
+task or a brainstorm idea, appears without a link, with its title, summary, status and
+edges. Hard-private nodes and their edges do not appear at all.
+
+A title or summary can say too much: a reader could reconstruct the work from "Acme
+detector gain at 3.2 kV, March run". The report lists how each unpublished node appears,
+under "Unpublished nodes in the public map". The agent, or you, then decides for each node
+whether to show it as it is, to give it a more general title and summary, or to replace a
+group of connected unpublished nodes with one node that names the kind of work only. The
+choices go in `publish/map_overrides.yaml`, which is committed and never exported:
+
+```yaml
+groups:
+  - id: private-calibration
+    title: Private calibration work
+    summary: Several private studies of the detector calibration.
+    members: [t05-gain, t06-drift]
+nodes:
+  t07-residuals:
+    title: A private cross-check
+    summary: A cross-check of the fit.
+```
+
+A group takes the place of its members: edges to a member point to the group, and edges
+between members disappear. The status of a group is its members' status if they agree,
+otherwise `active` if any member is active, otherwise `done`; `status:` in the entry sets
+it. Only the published copy of the map changes; the committed map keeps every node as it is.
 
 ## Hard-private mentions
 

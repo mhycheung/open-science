@@ -23,8 +23,8 @@ include:
   - path: docs
 # - path: paper
 #   type: paper
-# - path: brainstorm   # private by default; add this line to publish the brainstorm
-#                      # directory. It is soft-private: it may be named, not linked.
+# - path: brainstorm   # add this line to publish the brainstorm tasks whose header says
+#                      # privacy: public. The others (soft-private by default) stay private.
 never:
   - publish/PRIVATE_POLICY.md
   - lit_cache

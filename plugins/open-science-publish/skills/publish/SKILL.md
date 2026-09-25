@@ -55,21 +55,32 @@ never leak.
    (`depends_on`, `related`, `supersedes`) to a hard-private node is removed or changed, not
    redacted. Apply the owner's choices, commit, and go back to step 2.
 
-4. **Review the diff.** Read the `.diff` with `reference/review-rubric.md` and write the
+4. **Unpublished nodes in the public map.** The published map names every node that is not
+   hard-private; a node whose files are not exported (a soft-private task, a brainstorm
+   idea) appears without a link, with its title, summary and edges. The report section
+   `## Unpublished nodes in the public map` lists them. For each one, judge whether a reader
+   could reconstruct the private work from what is shown. Where they could, rewrite the node
+   in more general words, or replace several connected nodes with one that says only that
+   private work of that kind exists, in `publish/map_overrides.yaml`. Hide no more than
+   needed. Format, examples and rules: `reference/map-overrides.md`. Show the owner each
+   group and rewrite beside the original titles; the owner approves or changes them. Commit
+   and go back to step 2.
+
+5. **Review the diff.** Read the `.diff` with `reference/review-rubric.md` and write the
    findings (tone, claims not `verified`, private material) under `## Review (tone,
    claims)` in the report. The report's notes list soft-private mentions; check that each
    one is in passing. Quote each flagged passage with its file and line. Do not edit the
    flagged files yourself; the owner decides.
 
-5. **Stop for approval.** Show the owner the report path, the check result, the files
-   exported, and your review findings. The owner approves **this export id**, in this
+6. **Stop for approval.** Show the owner the report path, the check result, the files
+   exported, your review findings, and how the unpublished nodes appear in the map. The owner approves **this export id**, in this
    conversation. A general "go ahead" given earlier does not cover it. Without approval, do
    not push.
 
-6. **Commit the report** (`publish/reports/` is tracked; the approved report is the record
+7. **Commit the report** (`publish/reports/` is tracked; the approved report is the record
    of the approval).
 
-7. **Push:**
+8. **Push:**
 
    ```bash
    opsci publish push --export-id <id>
@@ -82,7 +93,7 @@ never leak.
    records the private and public commits in `publish/LAST_PUBLISHED` with a commit of its
    own.
 
-8. **Record it:** add one line to the log, and report the public commit to the owner.
+9. **Record it:** add one line to the log, and report the public commit to the owner.
 
 ## Public-side changes
 

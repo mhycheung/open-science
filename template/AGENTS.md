@@ -107,7 +107,8 @@ published is overwritten.
 
 **`brainstorm/` and `private-docs/` are soft-private (§6).** No file outside them links to a
 file in them, so the public project has no broken links; a mention in passing, in backticks,
-is allowed. An idea from `brainstorm/` becomes project work as a new task that restates it
+is allowed. The generated `map/graph.md` is the exception: its published copy links only to
+published files. An idea from `brainstorm/` becomes project work as a new task that restates it
 (see the README in that directory).
 
 ## 6. Node headers
@@ -115,7 +116,10 @@ is allowed. An idea from `brainstorm/` becomes project work as a new task that r
 Every task, result, paper, site page and published dataset carries a node header: YAML
 front matter at the top of its main document, or a `node.yaml` beside a non-markdown
 artifact. Fields and allowed values: `tasks/README.md`. After changing a header, run
-`opsci map build`. Nodes under `brainstorm/` form a separate graph: `opsci map build brainstorm`.
+`opsci map build`. Nodes under `brainstorm/` are part of the project graph, drawn in a box of
+their own, and edges may join them to project nodes; `opsci map build` also writes
+`brainstorm/map/` with the brainstorm nodes alone. A brainstorm task is soft-private unless
+its header says otherwise.
 
 The header field `privacy:` grades a node (absent: `policy.default_privacy` in
 `publish/manifest.yaml`, `public` in the template):
@@ -123,7 +127,7 @@ The header field `privacy:` grades a node (absent: `policy.default_privacy` in
 | `privacy` | meaning | examples |
 |---|---|---|
 | `public` (default) | may be released; a public task's directory is exported | |
-| `soft-private` | not released and not shown in the public map, but may be mentioned by name elsewhere | private notes, brainstorm ideas, work too messy to release |
+| `soft-private` | not released, but may be mentioned by name elsewhere; the public map names it without a link, grouped with others or reworded if its header gives too much away | private notes, brainstorm ideas, work too messy to release |
 | `hard-private` | must not appear anywhere in the release, not even by name | proprietary data, unpublished ideas, collaborators' unpublished work, private information about people |
 
 A soft- or hard-private task keeps its work inside `tasks/<id>/`, so that it is easy to keep

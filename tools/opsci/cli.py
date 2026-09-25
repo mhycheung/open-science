@@ -7,7 +7,7 @@ import datetime as dt
 import sys
 from pathlib import Path
 
-from . import layout, mapbuild, template
+from . import layout, mapbuild, nodes, template
 from . import notify
 
 
@@ -27,7 +27,10 @@ def cmd_map_build(args) -> int:
             return 1
         print(f"map build --check: {len(res.nodes)} nodes, generated files up to date.")
         return 0
-    print(f"map build: {len(res.nodes)} nodes; wrote map/graph.md and map/dead_ends.md.")
+    root, _ = nodes.graph_root(Path(args.root))
+    subs = [f"{d}/map/" for d in nodes.SUBROOTS if (root / d).is_dir()]
+    print(f"map build: {len(res.nodes)} nodes; wrote map/graph.md and map/dead_ends.md"
+          + (f", and the same in {', '.join(subs)}" if subs else "") + ".")
     return 0
 
 
@@ -153,8 +156,8 @@ def main(argv=None) -> int:
     tn.add_argument("--plan", action="store_true", help="also write plan.md from the plan template")
     tn.add_argument("--autonomy", default="maximal", choices=tasks.AUTONOMY)
     tn.add_argument("--hold-at", nargs="*", default=[], metavar="POINT", help="needs --autonomy checkpoints")
-    tn.add_argument("--privacy", default="public", choices=nodes.PRIVACY_TIERS,
-                    help="public (default), soft-private or hard-private")
+    tn.add_argument("--privacy", choices=nodes.PRIVACY_TIERS,
+                    help="public, soft-private or hard-private (default: public; soft-private for a brainstorm task)")
     tn.add_argument("--root", default=".", help="project root (default: .); `brainstorm` for a brainstorm task")
     tn.set_defaults(func=cmd_task_new)
 

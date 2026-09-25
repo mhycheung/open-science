@@ -83,7 +83,9 @@ Fatal means: a plan assumption shown false, the budget ceiling would be exceeded
 irreversible action the plan does not cover, missing access, or a result that contradicts
 the goal.
 
-A brainstorm task lives under `brainstorm/tasks/` (`opsci task new <id> --root brainstorm`).
+A brainstorm task lives under `brainstorm/tasks/` (`opsci task new <id> --root brainstorm`)
+and is soft-private by default. Its node is part of the project graph, and edges may join it
+to project tasks.
 When an idea is ready to become project work, the agent creates a new project task that
 restates it; it never links to the brainstorm task.
 

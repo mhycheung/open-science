@@ -199,45 +199,71 @@ def test_migrate_inventory_refuses_non_git(tmp_path):
     assert r.returncode == 1 and "not a git work tree" in r.stderr
 
 
-# ---- brainstorm sub-root and private-docs (layout 2) ----------------------------------------
+# ---- brainstorm sub-root and private-docs ------------------------------------------------
 
-def test_brainstorm_is_its_own_root(project):
+def test_brainstorm_nodes_join_the_project_graph(project):
     b = project / "brainstorm"
     r = run_opsci("task", "new", "b01-idea", "--title", "An idea", "--root", b)
     assert r.returncode == 0, r.stderr
     assert header(b / "tasks" / "b01-idea" / "context.md")["id"] == "b01-idea"
     assert run_opsci("task", "new", "t01-work", "--title", "Work", "--root", project).returncode == 0
-    for root in (b, project):
+    for root in (b, project):  # either root builds the same maps
         r = run_opsci("map", "build", root)
         assert r.returncode == 0, r.stderr
+        assert "brainstorm/map/" in r.stdout
         r = run_opsci("context", "check", root)
         assert r.returncode == 0, r.stderr
-    # the brainstorm node is in the brainstorm graph only, with a link that resolves from there
+    # the project graph has both, the brainstorm node in its own box, linked from map/
+    pgraph = (project / "map" / "graph.md").read_text()
+    assert "t01-work" in pgraph and '  subgraph brainstorm["brainstorm"]\n    n_b01_idea[' in pgraph
+    assert "[b01-idea](../brainstorm/tasks/b01-idea/context.md)" in pgraph
+    assert "n_t01_work[" not in pgraph.split("subgraph brainstorm")[1].split("  end")[0]
+    # the brainstorm map has the brainstorm node only, with a link that resolves from there
     bgraph = (b / "map" / "graph.md").read_text()
     assert "[b01-idea](../tasks/b01-idea/context.md)" in bgraph and "t01-work" not in bgraph
-    pgraph = (project / "map" / "graph.md").read_text()
-    assert "t01-work" in pgraph and "b01-idea" not in pgraph
 
 
-def test_brainstorm_edges_cannot_name_project_nodes(project):
-    run_opsci("task", "new", "t01-work", "--title", "Work", "--root", project)
-    r = run_opsci("task", "new", "b01-idea", "--title", "x", "--depends-on", "t01-work",
-                  "--root", project / "brainstorm")
-    assert r.returncode == 1 and "not nodes" in r.stderr
-    # control: the same edge from a project task is accepted
-    r = run_opsci("task", "new", "t02", "--title", "x", "--depends-on", "t01-work", "--root", project)
+def test_brainstorm_task_privacy_defaults_to_soft_private(project):
+    b = project / "brainstorm"
+    run_opsci("task", "new", "b01", "--title", "x", "--root", b)
+    run_opsci("task", "new", "b02", "--title", "x", "--root", b, "--privacy", "public")
+    run_opsci("task", "new", "t01", "--title", "x", "--root", project)
+    assert header(b / "tasks/b01/context.md")["privacy"] == "soft-private"
+    assert header(b / "tasks/b02/context.md")["privacy"] == "public"
+    assert header(project / "tasks/t01/context.md")["privacy"] == "public"  # control
+
+
+def test_edges_cross_between_project_and_brainstorm(project):
+    b = project / "brainstorm"
+    assert run_opsci("task", "new", "t01-work", "--title", "Work", "--root", project).returncode == 0
+    r = run_opsci("task", "new", "b01-idea", "--title", "x", "--depends-on", "t01-work", "--root", b)
     assert r.returncode == 0, r.stderr
+    r = run_opsci("task", "new", "t02", "--title", "x", "--related", "b01-idea", "--root", project)
+    assert r.returncode == 0, r.stderr
+    assert run_opsci("map", "build", project).returncode == 0
+    pgraph = (project / "map" / "graph.md").read_text()
+    assert "n_t01_work --> n_b01_idea" in pgraph and "n_b01_idea --- n_t02" in pgraph
+    # control: an id that is not a node is still refused
+    r = run_opsci("task", "new", "b02", "--title", "x", "--depends-on", "nosuch", "--root", b)
+    assert r.returncode == 1 and "not nodes" in r.stderr
 
 
-@pytest.mark.parametrize("skipped", ["brainstorm", "private-docs"])
-def test_project_map_skips_brainstorm_and_private_docs(project, skipped):
+@pytest.mark.parametrize("first,second", [("project", "brainstorm"), ("brainstorm", "project")])
+def test_task_id_unique_across_project_and_brainstorm(project, first, second):
+    roots = {"project": project, "brainstorm": project / "brainstorm"}
+    assert run_opsci("task", "new", "x01", "--title", "x", "--root", roots[first]).returncode == 0
+    r = run_opsci("task", "new", "x01", "--title", "x", "--root", roots[second])
+    assert r.returncode == 1 and "already used by" in r.stderr
+
+
+def test_project_map_includes_brainstorm_but_skips_private_docs(project):
     from opsci import nodes
     text = ("---\nid: x-note\ntitle: A note\ntype: result\nstatus: done\n"
             "summary: Not part of the project graph.\n---\n")
-    (project / skipped / "note.md").write_text(text)
+    (project / "private-docs" / "note.md").write_text(text)
     assert "x-note" not in {n.id for n in nodes.scan(project).nodes}
-    # control: the same file in a scanned directory is a node
-    (project / "docs" / "note.md").write_text(text)
+    # control: the same file under brainstorm/ is a node
+    (project / "brainstorm" / "note.md").write_text(text)
     assert "x-note" in {n.id for n in nodes.scan(project).nodes}
 
 

@@ -56,13 +56,15 @@ def test_exported_map_leaves_out_private_nodes(proj):
     assert any("secret-collab" in p for p in of(probs, "private-content"))
 
 
-def test_soft_private_dependency_is_allowed_but_not_in_the_map(proj):
+def test_soft_private_dependency_is_shown_unlinked(proj):
     add_secret(proj, privacy="soft-private")
     commit(proj)
     probs, ex = problems(proj)
     assert probs == [], [str(p) for p in probs]
     graph = (ex.tree / "map/graph.md").read_text()
-    assert "open-work" in graph and "secret-collab" not in graph and "Rivendell" not in graph
+    assert "n_secret_collab --> n_open_work" in graph and SECRET_TITLE in graph
+    assert "| secret-collab (not published) |" in graph and "../tasks/secret-collab" not in graph
+    assert "[open-work](../tasks/open-work/context.md)" in graph  # control: published, linked
     assert "tasks/secret-collab/context.md" not in ex.files
     assert any(n.startswith("soft-private material is mentioned") and "secret-collab" in n
                for n in notes_of(proj))
@@ -75,21 +77,23 @@ def test_private_task_without_references_passes(proj):
     assert probs == [], [str(p) for p in probs]
     assert "secret-collab" not in (ex.tree / "map/graph.md").read_text()
     _, info = publish.run_checks(proj, ex)
-    assert any("rebuilt from the 2 published nodes" in n for n in info["notes"])
+    assert any("rebuilt from the 2 nodes that are not hard-private, 2 of them published" in n
+               for n in info["notes"])
     assert any(n.startswith("private-content: compared") for n in info["notes"])
 
 
-def test_dead_ends_leave_out_private_superseder(proj):
+@pytest.mark.parametrize("privacy,shown", [("soft-private", True), ("hard-private", False)])
+def test_dead_ends_and_private_superseder(proj, privacy, shown):
     tasks.new_task(proj, "old-way", "Old way", summary="Tried first.")
     set_header(proj / "tasks/old-way/context.md", "status", "superseded")
     tasks.new_task(proj, "new-way-private", "New way", summary="Replaces it.", supersedes=["old-way"],
-                   privacy="soft-private")
+                   privacy=privacy)
     commit(proj)
     probs, ex = problems(proj)
     dead = (ex.tree / "map/dead_ends.md").read_text()
-    assert "old-way" in dead and "new-way-private" not in dead
+    assert "old-way" in dead and ("new-way-private" in dead) == shown
     assert "new-way-private" in (proj / "map/dead_ends.md").read_text()  # control: private map has it
-    assert probs == [], [str(p) for p in probs]
+    assert probs == [], [str(p) for p in probs]  # the private node names the public one, not the reverse
 
 
 @pytest.mark.parametrize("privacy,msg", [
@@ -236,18 +240,19 @@ def test_published_brainstorm_honours_task_headers(proj):
     from opsci import layout
     m = proj / "publish/manifest.yaml"
     m.write_text(m.read_text().replace("  - path: tasks\n", "  - path: tasks\n  - path: brainstorm\n"))
-    tasks.new_task(proj / "brainstorm", "idea-open", "Open idea", summary="Shared.")
+    tasks.new_task(proj / "brainstorm", "idea-open", "Open idea", summary="Shared.", privacy="public")
+    tasks.new_task(proj / "brainstorm", "idea-soft", "Soft idea", summary="Named only.")  # default tier
     tasks.new_task(proj / "brainstorm", "idea-closed", "Closed idea about Rivendell", summary="Private.",
                    privacy="hard-private")
-    from opsci import mapbuild
-    mapbuild.build(proj / "brainstorm")
     commit(proj)
     probs, ex = problems(proj)
     assert "brainstorm/tasks/idea-open/log.md" in ex.files  # control
-    assert not [f for f in ex.files if "idea-closed" in f]
-    graph = (ex.tree / "brainstorm/map/graph.md").read_text()
-    assert "idea-open" in graph and "idea-closed" not in graph and "Rivendell" not in graph
-    assert "idea-open" not in (ex.tree / "map/graph.md").read_text()
+    assert not [f for f in ex.files if "idea-closed" in f or "idea-soft" in f]
+    for rel, link in (("brainstorm/map/graph.md", "../tasks/idea-open/context.md"),
+                      ("map/graph.md", "../brainstorm/tasks/idea-open/context.md")):
+        graph = (ex.tree / rel).read_text()
+        assert f"[idea-open]({link})" in graph and "| idea-soft (not published) |" in graph, rel
+        assert "idea-closed" not in graph and "Rivendell" not in graph, rel
     assert probs == [], [str(p) for p in probs]
     assert layout.outdated_message(proj) is None
 
@@ -330,3 +335,86 @@ def test_old_publish_field_and_policy_are_refused(proj):
     m.write_text(m.read_text().replace("default_privacy: public", 'embargo_default: "no"'))
     with pytest.raises(publish.PublishError, match="replaced by policy.default_privacy"):
         publish.load_manifest(proj)
+
+
+# ------------------------------------------------------------------ unpublished brainstorm in the map
+
+def test_unpublished_brainstorm_is_named_in_the_project_map(proj):
+    """brainstorm/ is not in the manifest: no file is exported, but its soft-private nodes are
+    named in the public project map, in their box; hard-private ones are not."""
+    tasks.new_task(proj / "brainstorm", "idea-soft", "Soft idea", summary="Named only.",
+                   depends_on=["t01-fit"])
+    tasks.new_task(proj / "brainstorm", "idea-closed", "Closed idea about Rivendell", summary="Private.",
+                   privacy="hard-private")
+    commit(proj)
+    probs, ex = problems(proj)
+    assert probs == [], [str(p) for p in probs]
+    assert not [f for f in ex.files if f.startswith("brainstorm/")]
+    graph = (ex.tree / "map/graph.md").read_text()
+    assert 'subgraph brainstorm["brainstorm"]' in graph and "n_t01_fit --> n_idea_soft" in graph
+    assert "| idea-soft (not published) |" in graph
+    assert "idea-closed" not in graph and "Rivendell" not in graph
+
+
+# ------------------------------------------------------------------ map overrides
+
+OVERRIDES = """\
+groups:
+  - id: private-calibration
+    title: Private calibration work
+    summary: Two private studies of the calibration.
+    members: [cal-a, cal-b]
+nodes:
+  cal-c:
+    title: A private cross-check
+    summary: A cross-check of the fit.
+"""
+
+
+def add_calibration(root):
+    tasks.new_task(root, "cal-a", "Acme detector gain at 3.2 kV", summary="Gain curve from the Acme run.",
+                   depends_on=["t01-fit"], privacy="soft-private")
+    tasks.new_task(root, "cal-b", "Acme gain drift in March", summary="Drift of the Acme gain.",
+                   depends_on=["cal-a"], privacy="soft-private")
+    tasks.new_task(root, "cal-c", "Fit residuals against Acme temperature log", summary="Residuals.",
+                   privacy="soft-private")
+    tasks.new_task(root, "open-work", "Open work", summary="Published.", depends_on=["cal-b"])
+
+
+def test_map_overrides_group_and_rewrite_unpublished_nodes(proj):
+    add_calibration(proj)
+    commit(proj)
+    graph = (problems(proj)[1].tree / "map/graph.md").read_text()
+    assert "Acme" in graph  # control: without overrides the headers are shown as they are
+    (proj / "publish/map_overrides.yaml").write_text(OVERRIDES)
+    commit(proj)
+    probs, ex = problems(proj)
+    assert probs == [], [str(p) for p in probs]
+    graph = (ex.tree / "map/graph.md").read_text()
+    for gone in ("Acme", "cal-a", "cal-b", "n_cal_a", "Residuals"):
+        assert gone not in graph, gone
+    assert "| private-calibration (not published) |" in graph and "Private calibration work" in graph
+    # edges to members point to the group; the edge between members is gone
+    assert "n_t01_fit --> n_private_calibration" in graph and "n_private_calibration --> n_open_work" in graph
+    assert "n_private_calibration --> n_private_calibration" not in graph
+    assert "| cal-c (not published) |" in graph and "A private cross-check" in graph
+    assert "publish/map_overrides.yaml" not in ex.files
+    _, report, _ = publish.check(proj)
+    text = report.read_text()
+    assert "## Unpublished nodes in the public map" in text and "`cal-a`: in group `private-calibration`" in text
+
+
+@pytest.mark.parametrize("text,msg", [
+    ("groups:\n  - {id: g, title: G, summary: S, members: [cal-a, open-work]}\n", "member 'open-work' is published"),
+    ("groups:\n  - {id: g, title: G, summary: S, members: [cal-a]}\n", "at least two"),
+    ("groups:\n  - {id: t01-fit, title: G, summary: S, members: [cal-a, cal-b]}\n", "already used"),
+    ("groups:\n  - {id: g, title: G, summary: S, members: [cal-a, nosuch]}\n", "'nosuch' is not a node"),
+    ("nodes:\n  cal-c: {title: T}\n  t01-fit: {title: T, summary: S}\n", "'t01-fit' is published"),
+    ("nodes:\n  cal-c: {title: T, summary: ''}\n", "`summary` must be one non-empty line"),
+    ("group: []\n", "unknown key 'group'")])
+def test_bad_map_overrides_refused(proj, text, msg):
+    add_calibration(proj)
+    (proj / "publish/map_overrides.yaml").write_text(text)
+    commit(proj)
+    mo = of(problems(proj)[0], "map-overrides")
+    assert len(mo) == 1 and msg in mo[0], mo

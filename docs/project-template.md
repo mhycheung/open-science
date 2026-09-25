@@ -74,16 +74,18 @@ These three directories are part of layout version 2.
 
 - **`brainstorm/`** is for thinking before work starts. It has its own `README.md`,
   `context.md`, `map/`, `tasks/` and `log/`, with the same node headers as the project, and
-  shares the project's `PROJECT.md`, `rules/` and `citations/`. It is not published unless
-  the owner adds `brainstorm` to `include` in `publish/manifest.yaml`. Until then it is
-  soft-private (see [Privacy tiers](#privacy-tiers)): nothing outside `brainstorm/` may link
-  to it, so the public project has no broken links, but a mention in passing is allowed. An
+  shares the project's `PROJECT.md`, `rules/` and `citations/`. Its nodes are part of the
+  project graph: the project's `map/graph.md` draws them in a box of their own, edges may
+  join them to project nodes, and `brainstorm/map/` shows the brainstorm nodes alone. A
+  brainstorm task is `soft-private` by default. No file in it is published unless the owner
+  adds `brainstorm` to `include` in `publish/manifest.yaml`; then the tasks whose header
+  says `privacy: public` are exported and the others stay private. It is soft-private (see
+  [Privacy tiers](#privacy-tiers)): nothing outside `brainstorm/` may link to it (the
+  generated map excepted), so the public project has no broken links, but a mention in passing is allowed. An
   idea becomes project work through a new project task that restates it, not a link to it.
   The `references` check of `opsci publish check` refuses links to it; the exact rules are
   in [Publishing and the filter](publishing.md#the-checks). A hard-private brainstorm task
   is marked `privacy: hard-private` like any other.
-  When the owner does publish `brainstorm/`, its node headers decide what is exported, as
-  in `tasks/`, and `brainstorm/map/` is rebuilt from the published brainstorm nodes.
 - **`docs/`** holds the project's documentation. It is in the manifest's `include` list.
 - **`private-docs/`** holds private notes. It is in the manifest's `never` list, so it is
   refused even if a broader `include` entry covers it. It is committed to the private
@@ -141,7 +143,7 @@ Every node has a privacy tier, set by `privacy:` in its header
 | tier | meaning | examples |
 |---|---|---|
 | `public` | may be released; a public task's directory is exported | |
-| `soft-private` | not released and not shown in the public map, but may be mentioned by name elsewhere | private notes, brainstorm ideas, work too messy to release |
+| `soft-private` | not released, but may be mentioned by name elsewhere; the public map names it without a link, grouped with others or reworded if its header gives too much away ([Publishing](publishing.md#unpublished-nodes-in-the-map)) | private notes, brainstorm ideas, work too messy to release |
 | `hard-private` | must not appear anywhere in the release, not even by name | proprietary data, unpublished ideas, collaborators' unpublished work, private information about people |
 
 - `brainstorm/` (unless the owner publishes it) and `private-docs/` are soft-private as

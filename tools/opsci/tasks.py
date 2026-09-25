@@ -137,14 +137,22 @@ def _front(header: dict) -> str:
 
 def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
              depends_on=(), related=(), supersedes=(), plan: bool = False,
-             autonomy: str = "maximal", hold_at=(), goal: str | None = None, privacy: str = "public",
+             autonomy: str = "maximal", hold_at=(), goal: str | None = None, privacy: str | None = None,
              date: dt.date | None = None, short_name: str | None = None) -> Path:
     """Create tasks/<id>/ in the project at root. Returns the task directory.
 
-    Refuses: a bad id, an existing task, a root that is not a project, edges to ids that
-    are not nodes, an unknown autonomy level or privacy tier, hold points without `checkpoints`.
+    ``root`` may be a sub-root (``brainstorm/``): the task goes in its ``tasks/``, its edges
+    may name any node of the project graph, and its privacy defaults to soft-private
+    instead of public.
+
+    Refuses: a bad id, an id already used in the project graph, an existing task, a root that
+    is not a project, edges to ids that are not nodes, an unknown autonomy level or privacy
+    tier, hold points without `checkpoints`.
     """
     root = Path(root)
+    graph, prefix = nodes.graph_root(root)
+    if privacy is None:
+        privacy = "soft-private" if prefix else "public"
     if not (root / "tasks").is_dir() or not (root / "context.md").is_file():
         raise TaskError(f"'{root}' is not a project root (needs context.md and tasks/)")
     if not ID_RE.fullmatch(task_id):
@@ -161,8 +169,10 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
     if tdir.exists():
         raise TaskError(f"tasks/{task_id} already exists")
 
-    res = nodes.scan(root)
-    known = set(res.by_id())
+    res = nodes.scan(graph)
+    known = res.by_id()
+    if task_id in known:
+        raise TaskError(f"id '{task_id}' is already used by {known[task_id].path}")
     missing = [t for t in (*depends_on, *related, *supersedes) if t not in known]
     if missing:
         raise TaskError("not nodes in this project: " + ", ".join(missing))
@@ -192,8 +202,8 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
             (tdir / "plan.md").write_text(_front(ph) + "\n" + PLAN_BODY.format(title=title, id=task_id),
                                           encoding="utf-8")
 
-        after = nodes.scan(root)
-        mine = [str(p) for p in after.errors if p.path.startswith(f"tasks/{task_id}/")]
+        after = nodes.scan(graph)
+        mine = [str(p) for p in after.errors if p.path.startswith(f"{prefix}tasks/{task_id}/")]
         if mine:
             raise TaskError("the new task fails the map scan: " + "; ".join(mine))
     except BaseException:

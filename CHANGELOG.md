@@ -11,6 +11,25 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Brainstorm nodes are part of the project graph. `opsci map build` scans `brainstorm/`,
+  draws its nodes in a box of their own in `map/graph.md`, and also writes `brainstorm/map/`
+  with the brainstorm nodes alone (`opsci map build brainstorm` does the same). Edges may
+  join brainstorm and project nodes in either direction, and a task id must be unique across
+  both.
+- `opsci task new --root brainstorm` gives `privacy: soft-private` by default. With
+  `brainstorm` in the manifest, only brainstorm tasks marked `privacy: public` are exported.
+- The published map names every node that is not hard-private. A node whose files are not
+  exported is named without a link; before, soft-private nodes were left out. The new file
+  `publish/map_overrides.yaml` (never exported) groups several unpublished nodes into one
+  or gives one a more general title and summary in the published map; the new check
+  `map-overrides` validates it. The publish report lists how each unpublished node appears,
+  and the `open-science-publish:publish` skill judges which ones are too specific and asks
+  the owner.
+- No project layout change. After updating, run `opsci map build`: the committed map now
+  includes the brainstorm nodes, and the publish check reports it out of date until it is
+  rebuilt. Brainstorm tasks made before this release say `privacy: public`; if `brainstorm`
+  is in the manifest, check them.
+
 - The framework is described as three components, in this order: 1. project management
   (the project template and `open-science-project`; formerly "project structure"),
   2. context management (`open-science-context`), 3. publishing (`open-science-publish`).

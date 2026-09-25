@@ -43,6 +43,11 @@ STATUS_EXEMPT = ("README.md", "**/README.md", "AGENTS.md", "CLAUDE.md", "PROJECT
 MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo"}
 POLICY_KEYS = {"default_privacy", "collaborators_agreed"}
 PRIVACY_TIERS = nodes.PRIVACY_TIERS
+# How unpublished nodes appear in the published map: groups that replace several nodes with
+# one less specific node, and new titles and summaries for single nodes. Written by the
+# publish skill, approved by the owner; never exported (it is under publish/).
+MAP_OVERRIDES = "publish/map_overrides.yaml"
+OVERRIDE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
 # Redaction marker, written in the private file; the export replaces the span with
 # "[redacted (<reason>)]".
 REDACT_RE = re.compile(r"<!--\s*redact:(.*?)-->(.*?)<!--\s*/redact\s*-->", re.S)
@@ -105,7 +110,9 @@ class Export:
     tree: Path  # directory holding the exported files
     snapshot: Path  # directory holding the whole commit
     nodes: list = field(default_factory=list)  # node headers of the exported files
-    rebuilt_map: list = field(default_factory=list)  # map files rebuilt from the exported nodes
+    rebuilt_map: list = field(default_factory=list)  # map files rebuilt for the export
+    map_nodes: list = field(default_factory=list)  # nodes in the rebuilt map: all but hard-private
+    map_private: list = field(default_factory=list)  # how each unpublished node appears in it
     hard: set = field(default_factory=set)  # snapshot paths that are hard-private
     redacted: dict = field(default_factory=dict)  # exported path -> number of redacted spans
     redaction_problems: list = field(default_factory=list)
@@ -193,7 +200,7 @@ def _privacy(header: dict, man: Manifest) -> str:
     return str(header.get("privacy", man.default_privacy))
 
 
-TASK_ROOTS = ("tasks", "brainstorm/tasks")  # directories whose subdirectories are tasks
+TASK_ROOTS = nodes.TASK_ROOTS  # directories whose subdirectories are tasks
 
 
 def _task_dir(f: str) -> str | None:
@@ -338,22 +345,164 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
                                           "redaction: put the redacted value in quotes"))
                 else:
                     exported_nodes[by_path[f]] = node
-    rebuilt = []
+    rebuilt, map_nodes = [], []
     if is_template_project(snap):
-        # The committed map is built from every node, published or not. The exported copy is
-        # rebuilt from the exported nodes only, so it names nothing that stays private.
-        project = [n for n in exported_nodes if not n.path.startswith("brainstorm/")]
-        ideas = [nodes.Node(n.path[len("brainstorm/"):], n.header) for n in exported_nodes
-                 if n.path.startswith("brainstorm/")]
-        for rel, text in (("map/graph.md", mapbuild.render_graph(project)),
-                          ("map/dead_ends.md", mapbuild.render_dead_ends(project)),
-                          ("brainstorm/map/graph.md", mapbuild.render_graph(ideas)),
-                          ("brainstorm/map/dead_ends.md", mapbuild.render_dead_ends(ideas))):
+        # The committed map links every node. The exported copy is rebuilt: it leaves out the
+        # hard-private nodes, names the other unexported ones without a link, and shows every
+        # header as redacted.
+        map_nodes, mprobs = _map_nodes(snap, hard, exported_nodes)
+        map_nodes, oprobs, map_private = apply_map_overrides(map_nodes, set(files), snap / MAP_OVERRIDES)
+        rprobs += mprobs + oprobs
+        texts = mapbuild.outputs(map_nodes, lambda sub: f"{sub}/map/graph.md" in files, set(files))
+        for rel, text in texts.items():
             if rel in files:
                 (tree / rel).write_text(text, encoding="utf-8")
                 rebuilt.append(rel)
     return Export(sha, files, excluded, export_id(tree, files), tree, snap, exported_nodes, rebuilt,
-                  hard, redacted, rprobs)
+                  map_nodes, map_private if rebuilt else [], hard, redacted, rprobs)
+
+
+def apply_map_overrides(map_nodes: list, exported: set, path: Path) -> tuple[list, list[Problem], list[str]]:
+    """The map nodes with ``publish/map_overrides.yaml`` applied, its problems, and one line
+    per unpublished node saying how it appears. Only nodes whose files are not exported can
+    be grouped or rewritten. A group takes the place of its members: edges to a member point
+    to the group, and edges between members disappear."""
+    rel = MAP_OVERRIDES
+    probs: list[Problem] = []
+    ov = {}
+    if path.is_file():
+        try:
+            ov = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as exc:
+            probs.append(Problem("map-overrides", rel, f"not valid YAML: {exc}".splitlines()[0]))
+        if not isinstance(ov, dict):
+            probs.append(Problem("map-overrides", rel, "must be a mapping with `groups` and `nodes`"))
+            ov = {}
+    for k in sorted(set(ov) - {"groups", "nodes"}):
+        probs.append(Problem("map-overrides", rel, f"unknown key '{k}' (allowed: groups, nodes)"))
+    by_id = {n.id: n for n in map_nodes}
+    private = {n.id for n in map_nodes if n.path not in exported}
+
+    def text_ok(where, d, key):
+        v = d.get(key)
+        if not isinstance(v, str) or not v.strip() or "\n" in v.strip():
+            probs.append(Problem("map-overrides", rel, f"{where}: `{key}` must be one non-empty line"))
+            return False
+        return True
+
+    member_of: dict[str, str] = {}
+    groups = []
+    for i, g in enumerate(ov.get("groups") or []):
+        where = f"groups[{i}]"
+        if not isinstance(g, dict):
+            probs.append(Problem("map-overrides", rel, f"{where}: must be a mapping"))
+            continue
+        gid = g.get("id")
+        bad = [k for k in g if k not in ("id", "title", "summary", "members", "status", "type")]
+        if bad:
+            probs.append(Problem("map-overrides", rel, f"{where}: unknown key(s) {', '.join(map(str, bad))}"))
+        if not isinstance(gid, str) or not OVERRIDE_ID_RE.fullmatch(gid):
+            probs.append(Problem("map-overrides", rel, f"{where}: `id` must be lower case letters, digits and hyphens"))
+            continue
+        if gid in by_id or any(gid == x["id"] for x in groups):
+            probs.append(Problem("map-overrides", rel, f"group '{gid}': the id is already used"))
+            continue
+        ok = text_ok(f"group '{gid}'", g, "title") & text_ok(f"group '{gid}'", g, "summary")
+        members = g.get("members")
+        if not isinstance(members, list) or len(members) < 2:
+            probs.append(Problem("map-overrides", rel, f"group '{gid}': `members` must list at least two "
+                                 "node ids (rewrite a single node under `nodes`)"))
+            continue
+        for m in members:
+            if m not in private:
+                why = "is published" if m in by_id else "is not a node of the map (hard-private or unknown)"
+                probs.append(Problem("map-overrides", rel, f"group '{gid}': member '{m}' {why}"))
+                ok = False
+            elif m in member_of:
+                probs.append(Problem("map-overrides", rel, f"group '{gid}': member '{m}' is already in "
+                                     f"group '{member_of[m]}'"))
+                ok = False
+        if ok:
+            for m in members:
+                member_of[m] = gid
+            groups.append(g)
+    rewrites = {}
+    nodes_ov = ov.get("nodes") or {}
+    if not isinstance(nodes_ov, dict):
+        probs.append(Problem("map-overrides", rel, "`nodes` must map node ids to a title and summary"))
+        nodes_ov = {}
+    for nid, d in nodes_ov.items():
+        where = f"nodes.{nid}"
+        if nid not in private:
+            why = "is published" if nid in by_id else "is not a node of the map (hard-private or unknown)"
+            probs.append(Problem("map-overrides", rel, f"{where}: '{nid}' {why}"))
+        elif nid in member_of:
+            probs.append(Problem("map-overrides", rel, f"{where}: '{nid}' is in group '{member_of[nid]}'"))
+        elif not isinstance(d, dict) or set(d) - {"title", "summary"}:
+            probs.append(Problem("map-overrides", rel, f"{where}: must have only `title` and `summary`"))
+        elif all(text_ok(where, d, k) for k in d):
+            rewrites[nid] = d
+
+    def remap(h: dict, self_id: str) -> dict:
+        for f in nodes.EDGE_FIELDS:
+            if h.get(f):
+                h[f] = list(dict.fromkeys(member_of.get(t, t) for t in h[f]))
+                h[f] = [t for t in h[f] if t != self_id]
+        return h
+
+    out = []
+    for n in map_nodes:
+        if n.id in member_of:
+            continue
+        h = remap({**n.header, **rewrites.get(n.id, {})}, n.id)
+        out.append(nodes.Node(n.path, h))
+    for g in groups:
+        ms = [by_id[m] for m in g["members"]]
+        statuses = {m.get("status") for m in ms}
+        status = g.get("status") or (statuses.pop() if len(statuses) == 1 else
+                                     "active" if "active" in statuses else "done")
+        h = {"id": g["id"], "title": g["title"], "type": g.get("type") or "task", "status": status,
+             "summary": g["summary"], "verification": "unverified"}
+        for f in nodes.EDGE_FIELDS:
+            h[f] = [t for m in ms for t in m.get(f, []) or []]
+        h = remap(h, g["id"])
+        subs = {m.path.split("/", 1)[0] for m in ms}
+        box = subs.pop() if len(subs) == 1 and next(iter(subs), None) in nodes.SUBROOTS else None
+        out.append(nodes.Node(f"{box}/(group {g['id']})" if box else f"(group {g['id']})", h))
+    shown = []
+    for nid in sorted(private):
+        if nid in member_of:
+            shown.append(f"`{nid}`: in group `{member_of[nid]}`")
+        else:
+            n = next(x for x in out if x.id == nid)
+            note = " (rewritten)" if nid in rewrites else " (as in its header)"
+            shown.append(f"`{nid}`{note}: {n.get('title')} — {n.get('summary')}")
+    for g in groups:
+        shown.append(f"group `{g['id']}` ({', '.join(g['members'])}): {g['title']} — {g['summary']}")
+    return out, probs, shown
+
+
+def _map_nodes(snap: Path, hard: set, exported_nodes: list) -> tuple[list, list[Problem]]:
+    """The nodes of the project graph that are not hard-private, each with its header as the
+    export shows it: redacted, whether or not its file is exported."""
+    exported = {n.path: n for n in exported_nodes}
+    out, probs = [], []
+    for n in nodes.scan(snap).nodes:
+        if n.path in hard or n.get("privacy") == "hard-private":
+            continue
+        if n.path in exported:
+            out.append(exported[n.path])
+            continue
+        text = _read(snap / n.path)
+        new, k, rp = redact(text) if text and "redact" in text else (text, 0, [])
+        probs += [Problem("redaction", n.path, p) for p in rp]
+        node = _reparse(n, new) if k else n
+        if node is None:
+            probs.append(Problem("redaction", n.path, "the node header is not valid YAML after "
+                                 "redaction: put the redacted value in quotes"))
+            continue
+        out.append(node)
+    return out, probs
 
 
 # --------------------------------------------------------------------------- checks
@@ -536,11 +685,11 @@ def check_map(ex: Export) -> list[Problem]:
 
 
 def all_nodes(snap: Path) -> list:
-    """Every node of the snapshot: the project scan plus the sub-roots in PRIVATE_DIRS, which
-    have their own maps and may be skipped by the project scan."""
+    """Every node of the snapshot: the project scan plus the directories in PRIVATE_DIRS that
+    the project scan skips."""
     found = {n.path: n for n in nodes.scan(snap).nodes}
     for sub in PRIVATE_DIRS:
-        if (snap / sub).is_dir():
+        if sub in nodes.SKIP_DIRS and (snap / sub).is_dir():
             for n in nodes.scan(snap / sub).nodes:
                 found.setdefault(f"{sub}/{n.path}", nodes.Node(f"{sub}/{n.path}", n.header))
     return list(found.values())
@@ -608,7 +757,7 @@ def _hard_path(path: str, ex: Export) -> bool:
 
 def check_references(ex: Export, every: list) -> list[Problem]:
     """Exported files must not point at what the export leaves out: node headers naming a
-    hard-private node (a soft-private one may be named; the public map drops the edge), and
+    hard-private node (a soft-private one may be named; the public map shows it unlinked), and
     links to any non-exported file or directory of the commit (they would be broken)."""
     exported = set(ex.files)
     public_ids = {n.id for n in every if n.path in exported}
@@ -646,8 +795,11 @@ def _boilerplate(n: int) -> tuple[set[str], str]:
     from . import tasks, template
     texts = tasks.skeleton_texts()
     for status in ("active", "failed"):  # the fixed text of the generated map files
-        blank = [nodes.Node("x", {"id": "x", "title": "", "type": "task", "status": status, "summary": ""})]
-        texts += [mapbuild.render_graph(blank), mapbuild.render_dead_ends(blank), mapbuild.render_graph([])]
+        blank = [nodes.Node(f"{d}x", {"id": "x", "title": "", "type": "task", "status": status, "summary": ""})
+                 for d in ("", *(s + "/" for s in nodes.SUBROOTS))]
+        for linked in (None, set()):
+            texts += [mapbuild.render_graph(blank, linked), mapbuild.render_dead_ends(blank, linked)]
+        texts.append(mapbuild.render_graph([]))
     tdir = template.default_template_dir()
     if tdir is not None:
         for p in sorted(tdir.rglob("*")):
@@ -830,8 +982,9 @@ def run_checks(root: Path, ex: Export) -> tuple[list[Problem], dict]:
         notes = ["not a template project (no AGENTS.md + config/framework.yaml): the map and "
                  "`status:` header checks were skipped"] + notes
     if ex.rebuilt_map:
-        notes.append(f"{' and '.join(ex.rebuilt_map)} rebuilt from the {len(ex.nodes)} published nodes "
-                     "(the committed map covers every node)")
+        notes.append(f"{', '.join(ex.rebuilt_map)} rebuilt from the {len(ex.map_nodes)} nodes that are "
+                     f"not hard-private, {len(ex.nodes)} of them published and linked (the committed map "
+                     "links every node)")
     from . import layout
     old_layout = layout.outdated_message(root)
     if old_layout:
@@ -928,6 +1081,10 @@ def write_report(root: Path, ex: Export, probs: list[Problem], info: dict, diff:
     ]
     if info["notes"]:
         lines += ["## Notes", "", *[f"- {n}" for n in info["notes"]], ""]
+    if ex.map_private:
+        lines += ["## Unpublished nodes in the public map", "",
+                  f"Named without a link. Group or rewrite a node that is too specific in `{MAP_OVERRIDES}`.", "",
+                  *[f"- {l}" for l in ex.map_private], ""]
     lines += ["## Excluded files", "", *[f"- `{f}`: {r}" for f, r in sorted(ex.excluded.items())], "",
               "## Review (tone, claims)", "",
               "<!-- Written by the publish skill from the diff, with the rubric in the skill's "

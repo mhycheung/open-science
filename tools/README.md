@@ -10,9 +10,10 @@ Commands:
 
 - `opsci map build [ROOT]` — read every node header in a project, write `map/graph.md` and
   `map/dead_ends.md`, and report bad headers. `--check` reports without writing and fails
-  if the generated files are out of date. The project graph leaves out `brainstorm/` and
-  `private-docs/` (and `data/`, `lit_cache/`); `opsci map build brainstorm` builds the
-  brainstorm directory's own graph.
+  if the generated files are out of date. The project graph includes the `brainstorm/`
+  nodes, in a box of their own, and leaves out `private-docs/` (and `data/`, `lit_cache/`);
+  it also writes `brainstorm/map/` with the brainstorm nodes alone. `opsci map build
+  brainstorm` does the same.
 - `opsci template instantiate DEST --name ... --title ... --author ...` — copy the project
   template into `DEST` and fill its placeholders.
 - `opsci task new ID --title ... [--plan] [--privacy TIER] [--depends-on ID...]` — create

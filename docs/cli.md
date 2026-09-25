@@ -72,7 +72,10 @@ and an edge to a node that does not exist.
 opsci map build [--check] [ROOT]
 ```
 
-Reads every node header and writes `map/graph.md` and `map/dead_ends.md`. It reports header
+Reads every node header and writes `map/graph.md` and `map/dead_ends.md`, and the same two
+files in `brainstorm/map/` for the brainstorm nodes alone. Brainstorm nodes are part of the
+project graph, drawn in a box of their own. ROOT may be the project or its `brainstorm/`
+directory; both build the same files. It reports header
 errors and writes nothing if there are any. `--check` writes nothing and fails if the
 generated files are out of date.
 

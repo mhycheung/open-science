@@ -71,7 +71,7 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
 
 ## Privacy tier
 
-A task is `public` by default (`--privacy` omitted). Do not ask about the tier when nothing
+A task is `public` by default (`--privacy` omitted); a brainstorm task is `soft-private`. Do not ask about the tier when nothing
 points the other way. If what the owner described obviously looks soft- or hard-private
 (private notes, work too messy to release; proprietary data, unpublished ideas,
 collaborators' unpublished work, private information about people), ask before creating the
@@ -79,8 +79,9 @@ task, with both definitions in the question:
 
 > This task looks like it may be private. Which tier should it have?
 > - `public` (default): may be released; the task directory is exported.
-> - `soft-private`: not released and not shown in the public map, but other documents may
->   mention it by name. For example private notes, brainstorm ideas, work too messy to release.
+> - `soft-private`: not released, but other documents may mention it by name, and the public
+>   map names it without a link. For example private notes, brainstorm ideas, work too messy
+>   to release.
 > - `hard-private`: must not appear anywhere in the release, not even by name. For example
 >   proprietary data, unpublished ideas, collaborators' unpublished work, private information
 >   about people.
@@ -88,20 +89,23 @@ task, with both definitions in the question:
 A soft- or hard-private task keeps its work inside `tasks/<id>/` (large data in
 `data/<task-id>/` as usual), so that it is easy to keep out. A public task mentions
 soft-private material at most in passing and never mentions hard-private material
-(`AGENTS.md` §0, §6). The committed `map/graph.md` shows every node, but the published copy
-is rebuilt from public nodes only: a private task's title and summary never reach it, so they
-need no rewording. The project `context.md` and `log/` are published: a line there that
+(`AGENTS.md` §0, §6). The committed `map/graph.md` shows every node. The published copy
+leaves out hard-private nodes and names soft-private ones without a link; at publish time
+the publish skill groups or rewords a soft-private node whose title or summary gives too much
+away, so a private task's header needs no rewording now. The project `context.md` and `log/` are published: a line there that
 names a hard-private task is flagged at the next publish, and the owner decides then how to
 handle it (`open-science-publish:publish`).
 
 ## Brainstorm tasks
 
-An idea not yet ready to be project work goes under `brainstorm/` (its own context, tasks
-and graph, not published by default). Same procedure, with `brainstorm` as the root of every
-`opsci` command: `opsci task new b01-<slug> --title "<title>" --root brainstorm`,
-`opsci map build brainstorm`, `opsci context check brainstorm`. Ids start with `b`; edges
-name only brainstorm nodes. `brainstorm/` is soft-private as a whole; a hard-private idea
-still gets `--privacy hard-private`. The idea goes in the brainstorm `context.md` table, not
+An idea not yet ready to be project work goes under `brainstorm/` (its own context and
+tasks; its nodes are part of the project graph). Same procedure, with `brainstorm` as the
+root: `opsci task new b01-<slug> --title "<title>" --root brainstorm`, `opsci map build`,
+`opsci context check brainstorm`. Ids start with `b`. Edges may join brainstorm and project
+nodes in either direction: add one when the idea builds on project work or project work
+comes from the idea. A brainstorm task is soft-private by default; give `--privacy public`
+only when the owner asks for the idea to be published, and `--privacy hard-private` for a
+hard-private idea. The idea goes in the brainstorm `context.md` table, not
 the project one.
 
 A brainstorm task needs no plan and no approval. Make it as soon as the owner says
