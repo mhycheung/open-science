@@ -98,14 +98,6 @@ Both are in `extras/`, and nothing in the three components depends on them.
 
 `opsci <command> --help` gives the options; `tools/README.md` describes each command.
 
-## Running the tests
-
-```bash
-pixi install
-tests/run_all                 # every automated test
-tests/run_all --run-manual    # also tests that need a real service, scheduler or session
-```
-
 ## Licences
 
 Code: MIT (`LICENSE`). Documentation and other text: CC BY 4.0 (`LICENSE-docs`).
