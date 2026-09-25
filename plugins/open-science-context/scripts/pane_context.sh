@@ -4,10 +4,15 @@
 # with no file named and still resolve the right one.
 #
 # Keyed on the tmux socket and pane id (%N), like the other per-pane records in
-# the state directory. The Claude session id is recorded too, but only for
-# debugging -- a fresh session in the same pane (after a jump, a resurrection, or
-# a plain /clear) is exactly the case this exists to serve, so it MUST inherit the
-# registration.
+# the state directory. The file path is per pane: a fresh session in the same pane
+# (after a jump, a resurrection, or a plain /clear) is exactly the case this exists
+# to serve, so `get` MUST keep returning it.
+#
+# The registration is also the opt-in to the plugin's Stop hook (cm_stop.sh): it
+# arms the cache-cold timer and gives the context-size notice only for the session
+# recorded here as session_id. A jump hands the record to the session it creates
+# (jump.sh worker); any other new session in the pane stays unmanaged until it
+# runs `set` itself. `clear` turns the hook off for the pane.
 #
 # Usage:
 #   pane_context.sh set <path-to-context.md>        register (overwrites)
@@ -18,6 +23,9 @@
 # Nothing here may ever block real work: outside tmux, `set` warns and no-ops,
 # `get` exits 1 silently, and the callers fall through to asking the user.
 set -uo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=cm_lib.sh
+. "$HERE/cm_lib.sh"
 
 STATE_DIR="${OPSCI_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/open-science}"
 REG_DIR="$STATE_DIR/pane_context"
@@ -45,7 +53,7 @@ cmd_set() {
   fi
   mkdir -p "$REG_DIR" || return 1
   jq -n --arg pane "$TMUX_PANE" --arg doc "$abs" \
-        --arg at "$(date -Iseconds)" --arg sid "${CLAUDE_CODE_SESSION_ID:-}" \
+        --arg at "$(date -Iseconds)" --arg sid "$(cm_live_sid)" \
      '{version:1, pane_id:$pane, doc_path:$doc, registered_at:$at, session_id:$sid}' \
      > "$rec.tmp" && mv "$rec.tmp" "$rec" || return 1
   echo "pane_context: pane $TMUX_PANE now drives $abs"

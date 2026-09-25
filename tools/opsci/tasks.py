@@ -115,8 +115,11 @@ class TaskError(Exception):
 
 
 def _header(task_id, title, summary, depends_on, related, supersedes, privacy="public",
-            plan_extra=None) -> dict:
-    h = {"id": task_id, "title": title, "type": "task", "status": "active"}
+            plan_extra=None, short_name=None) -> dict:
+    h = {"id": task_id, "title": title}
+    if short_name:
+        h["short_name"] = short_name
+    h.update({"type": "task", "status": "active"})
     for k, v in (("depends_on", depends_on), ("supersedes", supersedes), ("related", related)):
         if v:
             h[k] = list(v)
@@ -135,7 +138,7 @@ def _front(header: dict) -> str:
 def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
              depends_on=(), related=(), supersedes=(), plan: bool = False,
              autonomy: str = "maximal", hold_at=(), goal: str | None = None, privacy: str = "public",
-             date: dt.date | None = None) -> Path:
+             date: dt.date | None = None, short_name: str | None = None) -> Path:
     """Create tasks/<id>/ in the project at root. Returns the task directory.
 
     Refuses: a bad id, an existing task, a root that is not a project, edges to ids that
@@ -166,7 +169,8 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
 
     date = date or dt.date.today()
     summary = summary or f"TODO: one sentence on what {task_id} established, or why it failed."
-    header = _header(task_id, title, summary, depends_on, related, supersedes, privacy)
+    header = _header(task_id, title, summary, depends_on, related, supersedes, privacy,
+                     short_name=short_name)
     validator = jsonschema.Draft202012Validator(nodes.load_schema())
     errs = [e.message for e in validator.iter_errors(header)]
     if errs:
@@ -184,7 +188,7 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
         (tdir / "subcontext" / "README.md").write_text(SUBCONTEXT_README, encoding="utf-8")
         if plan:
             ph = _header(task_id, title, summary, depends_on, related, supersedes, privacy,
-                         {"autonomy": autonomy, "hold_at": list(hold_at)})
+                         {"autonomy": autonomy, "hold_at": list(hold_at)}, short_name=short_name)
             (tdir / "plan.md").write_text(_front(ph) + "\n" + PLAN_BODY.format(title=title, id=task_id),
                                           encoding="utf-8")
 

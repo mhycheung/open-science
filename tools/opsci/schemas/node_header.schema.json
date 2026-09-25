@@ -13,6 +13,12 @@
       "pattern": "^[a-z0-9][a-z0-9-]*$"
     },
     "title": {"type": "string", "minLength": 1},
+    "short_name": {
+      "description": "A task's short name: a few words, shown after the project name in session names (the Remote Control list, the prompt box). Lower case, digits and hyphens, at most 24 characters.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "maxLength": 24
+    },
     "type": {"enum": ["task", "result", "paper", "page", "dataset"]},
     "status": {"enum": ["active", "done", "failed", "superseded", "abandoned", "paused"]},
     "depends_on": {"$ref": "#/$defs/idlist"},

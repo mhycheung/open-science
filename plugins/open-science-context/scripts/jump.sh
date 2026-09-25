@@ -13,7 +13,8 @@
 # (cm_stop.sh) reads it when the turn ends: for a wait jump it refuses when
 # nothing will wake the session; otherwise it starts the detached worker
 # (`jump.sh --worker <request>`) that waits for the pane to go idle, types /clear,
-# confirms the session id changed, and types the resume prompt. The agent never
+# confirms the session id changed, hands the pane registration (pane_context.sh) to
+# the new session, and types the resume prompt. The agent never
 # types into its own pane, and a jump is detected by this action, never by wording.
 #
 # Refusals (exit 1): not in tmux; context file missing; context file not modified
@@ -59,8 +60,9 @@ if [ "${1:-}" = "--worker" ]; then
   live=$(cm_sid "$SF")
   if [ -n "$live" ] && [ "$live" != "$OLD" ]; then
     # Someone else already cleared this pane since the request was made.
-    [ "$KIND" = wait ] && { cm_log "worker $PANE: already on new sid ${live:0:8}; nothing to do"; finish done; exit 0; }
+    [ "$KIND" = wait ] && { cm_log "worker $PANE: already on new sid ${live:0:8}; nothing to do"; cm_reg_handover "$KEY" "$live"; finish done; exit 0; }
     cm_log "worker $PANE: already on new sid ${live:0:8}; skipping the clear"; skip_clear=1
+    cm_reg_handover "$KEY" "$live"
   fi
 
   if [ "$skip_clear" = 0 ]; then
@@ -95,6 +97,7 @@ if [ "${1:-}" = "--worker" ]; then
       cm_log "worker $PANE: queued clear fired after ${waited} s"
     fi
     cm_log "worker $PANE: cleared, new sid ${new:0:8}"
+    cm_reg_handover "$KEY" "$new"
     set_phase "$REQ" cleared
   fi
 

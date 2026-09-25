@@ -132,7 +132,7 @@ def main(argv=None) -> int:
                                   depends_on=args.depends_on, related=args.related,
                                   supersedes=args.supersedes, plan=args.plan,
                                   autonomy=args.autonomy, hold_at=args.hold_at, goal=args.goal,
-                                  privacy=args.privacy)
+                                  privacy=args.privacy, short_name=args.short_name)
         except tasks.TaskError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
@@ -144,6 +144,7 @@ def main(argv=None) -> int:
     tn = tk.add_parser("new", help="create tasks/ID/ with context.md (node header), log.md, subcontext/ [and plan.md]")
     tn.add_argument("id")
     tn.add_argument("--title", required=True)
+    tn.add_argument("--short-name", help="a few words for session names, e.g. pp-real (lower case, digits, hyphens; <= 24)")
     tn.add_argument("--summary", help="one sentence for the node header (default: a TODO)")
     tn.add_argument("--goal", help="the Goal section of context.md")
     tn.add_argument("--depends-on", nargs="*", default=[], metavar="ID")

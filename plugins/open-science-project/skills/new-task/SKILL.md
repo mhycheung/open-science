@@ -30,12 +30,15 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
 1. **Settle the design.** Ask the owner only the decisions that are theirs: goal, what counts
    as done, constraints, budget, autonomy level. Propose one recommended approach and name
    the alternatives in a line each. The design goes into the plan; there are no spec files.
-   Settle the privacy tier too ("Privacy tier" below).
+   Settle the privacy tier too ("Privacy tier" below), and a short name: a few words, lower
+   case and hyphens, at most 24 characters (`pp-real`, `noise-model`). Sessions driving the
+   task show it after the project name, as `<project> · <short name>`.
 
 2. **Create the task directory:**
 
    ```bash
-   opsci task new <id> --title "<title>" --plan [--privacy public|soft-private|hard-private] \
+   opsci task new <id> --title "<title>" --short-name <short> --plan \
+       [--privacy public|soft-private|hard-private] \
        [--depends-on <id>...] [--related <id>...] [--supersedes <id>...] \
        [--autonomy maximal|checkpoints|collaborative] [--hold-at S2 ...]
    ```

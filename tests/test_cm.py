@@ -36,6 +36,20 @@ def pane_key(sock=SOCK, pane=PANE):
     return f"{k(sock)}__{k(pane)}"
 
 
+def register(env, sid, key=None):
+    """Opt the pane in, as `pane_context.sh set` does, for session `sid`."""
+    rec = Path(env["OPSCI_STATE_DIR"]) / "pane_context" / f"{key or pane_key()}.json"
+    rec.parent.mkdir(parents=True, exist_ok=True)
+    rec.write_text(json.dumps({"version": 1, "pane_id": PANE, "doc_path": "/x/context.md",
+                               "registered_at": "", "session_id": sid}))
+    return rec
+
+
+def registered_sid(env, key=None):
+    rec = Path(env["OPSCI_STATE_DIR"]) / "pane_context" / f"{key or pane_key()}.json"
+    return json.loads(rec.read_text())["session_id"] if rec.exists() else None
+
+
 @pytest.fixture
 def env(tmp_path):
     e = {k: v for k, v in os.environ.items()
@@ -44,6 +58,7 @@ def env(tmp_path):
              TMUX=f"{SOCK},1,0", TMUX_PANE=PANE, OPSCI_JUMP_IDLE_TIMEOUT="2",
              OPSCI_JUMP_RECOVER_WINDOW="1")
     (tmp_path / "state").mkdir()
+    register(e, "sid-A")
     yield e
     # kill any detached timer left behind
     for f in (tmp_path / "state").glob("timer/*.pid"):
@@ -198,7 +213,8 @@ def test_threshold_repeats_only_after_growth(env, tmp_path):
     assert stop(env, payload(transcript=transcript(tmp_path, 300_000)))["decision"] == "block"
     assert stop(env, payload(transcript=transcript(tmp_path, 330_000))) is None
     assert stop(env, payload(transcript=transcript(tmp_path, 350_000)))["decision"] == "block"
-    # a new session in the same pane starts its own count
+    # a new session in the same pane (handed the registration) starts its own count
+    register(env, "sid-B")
     assert stop(env, payload(sid="sid-B", transcript=transcript(tmp_path, 360_000)))["decision"] == "block"
 
 
@@ -219,6 +235,40 @@ def test_stop_outside_tmux_is_silent(env, tmp_path):
 def test_threshold_is_a_setting(env, tmp_path):
     env["OPSCI_JUMP_THRESHOLD"] = "100000"
     assert stop(env, payload(transcript=transcript(tmp_path, 150_000)))["decision"] == "block"
+
+
+# ---- Stop hook: only a registered session is managed ------------------------------------
+
+def test_unregistered_pane_gets_no_timer_and_no_size_notice(env, tmp_path):
+    (Path(env["OPSCI_STATE_DIR"]) / "pane_context" / f"{pane_key()}.json").unlink()
+    assert stop(env, payload(tasks=[SUBAGENT], transcript=transcript(tmp_path, 300_000))) is None
+    assert not timer_file(env).exists()
+
+
+def test_other_session_in_a_registered_pane_is_not_managed(env, tmp_path):
+    # a plain /clear or a new `claude` in the pane does not inherit the hook
+    assert stop(env, payload(sid="sid-B", tasks=[SUBAGENT],
+                             transcript=transcript(tmp_path, 300_000))) is None
+    assert not timer_file(env).exists()
+    assert stop(env, payload(sid="sid-A", tasks=[SUBAGENT])) is None      # the registrant is
+    assert timer_file(env).exists()
+
+
+def test_unregistering_kills_the_timer(env):
+    stop(env, payload(tasks=[SUBAGENT]))
+    pid = int(timer_file(env).read_text())
+    subprocess.run(["bash", str(SCRIPTS / "pane_context.sh"), "clear"], env=env, check=True,
+                   capture_output=True)
+    stop(env, payload(tasks=[SUBAGENT]))
+    time.sleep(0.3)
+    assert not timer_file(env).exists() and not alive(pid)
+
+
+def test_jump_request_is_honoured_without_registration(env):
+    # jump.sh is itself the opt-in; the request path does not depend on the registration
+    (Path(env["OPSCI_STATE_DIR"]) / "pane_context" / f"{pane_key()}.json").unlink()
+    write_request(env, "wait")
+    assert stop(env, payload())["decision"] == "block"
 
 
 # ---- jump.sh launcher refusals --------------------------------------------------------
@@ -279,6 +329,8 @@ def test_jump_request_registers_the_pane(env, session, tmp_path):
     assert pane_registration(env) is None
     assert jump(env, "wait", session["ctx"]).returncode == 0
     assert pane_registration(env) == str(Path(session["ctx"]).resolve())
+    # the live session id, read from the claude state file, not from the environment
+    assert "CLAUDE_CODE_SESSION_ID" not in env and registered_sid(env) == session["sid"]
 
 
 @pytest.mark.parametrize("case", ["no_tmux", "missing_ctx", "stale_ctx", "inhibited",
@@ -421,6 +473,7 @@ def tui(env, tmp_path):
     env.update(TMUX=f"{sock},1,0", TMUX_PANE=pane, FAKE_STATE=str(st), OPSCI_IDLE_STABLE="2",
                OPSCI_JUMP_IDLE_TIMEOUT="60", OPSCI_JUMP_RECOVER_WINDOW="5")
     time.sleep(1)
+    register(env, "sid-A", pane_key(sock, pane))
     yield {"sock": sock, "pane": pane, "state": st, "rec": rec, "key": pane_key(sock, pane)}
     subprocess.run([*tm, "kill-server"], capture_output=True)
     shutil.rmtree(sockdir, ignore_errors=True)
@@ -450,7 +503,9 @@ def test_active_jump_clears_and_delivers_the_resume_prompt(env, tui, tmp_path):
     want = f"/open-science-context:continue-context {ctx}"
     assert wait_for(lambda: want in lines(tui["rec"]), 60), lines(tui["rec"])
     assert lines(tui["rec"]) == ["/clear", want]
-    assert json.loads(tui["state"].read_text())["sessionId"] != "sid-A"
+    new_sid = json.loads(tui["state"].read_text())["sessionId"]
+    assert new_sid != "sid-A"
+    assert registered_sid(env, tui["key"]) == new_sid        # the new session is managed
 
 
 @needs_tmux
@@ -463,6 +518,8 @@ def test_wait_jump_clears_and_delivers_nothing(env, tui, tmp_path):
     assert wait_for(lambda: lines(tui["rec"]) == ["/clear"], 40)
     time.sleep(6)
     assert lines(tui["rec"]) == ["/clear"]
+    new_sid = json.loads(tui["state"].read_text())["sessionId"]
+    assert new_sid != "sid-A" and registered_sid(env, tui["key"]) == new_sid
 
 
 @needs_tmux

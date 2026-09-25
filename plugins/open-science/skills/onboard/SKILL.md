@@ -73,6 +73,10 @@ question also put the longer text in its `preview`. Do not shorten the texts int
        say the "1c, cluster" text and offer to write `~/tmux-job.sh` from the job script in
        `explanations.md`, with the account, partition and time limit the user gives
        (`sbatch` it only after a yes), then give the connect steps of that text. Otherwise say the "1c, local" text.
+     - 1e, session names, only if `session_names=off`: ask with the "1e" text. After a yes,
+       set `"OPSCI_SESSION_NAMES": "1"` in the `env` object of `<config>/settings.json`
+       (`<config>` = `$CLAUDE_CONFIG_DIR` or `~/.claude`; create `env` if absent, keep every
+       other key). It takes effect in new Claude Code sessions.
      - 1d, only if `same_name_skills` is not `none`: move the named directories to
        `<config>/skills-archive/` after a yes. Rename the archive folder if one is already
        there; never delete anything.

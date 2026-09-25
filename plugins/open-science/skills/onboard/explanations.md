@@ -138,6 +138,15 @@ there. On most clusters you may connect to a node only while your job runs on it
 and everything in its tmux session, ends at its time limit; the SLURM extra can resume it in
 a new job."
 
+**1e — session names** (skip if already on): "Each Claude session has a name, shown in the
+list of sessions in the Claude app and on claude.ai when you use Remote Control, and in the
+box where you type. I can make that name say what the session works on: the project name
+(`quad-ratio`, then `quad-ratio-2` for a second session in the same project), and once the
+session works on a task, the task's short name after it (`quad-ratio-2 · pp-real`). A new
+task name appears after your next message. Turn this on?"
+- **Yes (recommended)**: sessions are named after their project and task.
+- **No**: Claude Code keeps its own names, such as `quad-ratio-3f`.
+
 **1d — older skills with the same names** (skip if the check found none)
 - **Move them to an archive folder (recommended)**: they are moved, not deleted, and can be
   moved back.

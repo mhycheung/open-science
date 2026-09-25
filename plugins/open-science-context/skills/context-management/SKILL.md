@@ -23,6 +23,13 @@ bash "$PC" get                          # prints the registered path, or exits 1
 
 Subagents never call `set`: they inherit the main agent's pane.
 
+**Session names** (on when the user said yes in onboarding: `OPSCI_SESSION_NAMES=1` in the
+`env` block of the Claude `settings.json`). A hook names the session after the project
+(`quad-ratio`, `quad-ratio-2` for a second live session) and, once the pane has a registered
+file, adds the task's `short_name` from its header (`quad-ratio-2 · pp-real`). The name
+changes at the user's next prompt after `set`, not at once. Nothing to do by hand: give every
+new task a short name (`opsci task new --short-name`) and register the pane.
+
 ## Jumps
 
 A jump clears this session and resumes from the context file. Jumping costs one context

@@ -32,6 +32,7 @@ cm_pane_key() {  # [sock] [pane] -> key, or return 1 outside tmux
 }
 
 cm_request_path() { printf '%s/jump/%s.json' "$OS_STATE" "$1"; }   # <pane key>
+cm_reg_path()     { printf '%s/pane_context/%s.json' "$OS_STATE" "$1"; }   # <pane key>; pane_context.sh's record
 cm_timer_path()   { printf '%s/timer/%s.pid' "$OS_STATE" "$1"; }   # <pane key>
 cm_lock_path()    { mkdir -p "$OS_STATE/lock" 2>/dev/null; printf '%s/lock/%s.lock' "$OS_STATE" "$1"; }
 
@@ -59,6 +60,27 @@ cm_state_file() {  # <claude pid>
 
 cm_sid()    { jq -r '.sessionId // empty' "$1" 2>/dev/null; }   # <state file>
 cm_status() { jq -r '.status // empty' "$1" 2>/dev/null; }      # <state file>
+
+# The live session id of the claude above this shell: its state file, which follows
+# /clear, else $CLAUDE_CODE_SESSION_ID. Prints nothing when neither is known.
+cm_live_sid() {
+  local cpid sf sid=""
+  cpid=$(cm_claude_pid) && sf=$(cm_state_file "$cpid") && sid=$(cm_sid "$sf")
+  printf '%s' "${sid:-${CLAUDE_CODE_SESSION_ID:-}}"
+}
+
+# The session that registered this pane (pane_context.sh set), or nothing. Only that
+# session gets the Stop hook's timer and size notice: registration is the opt-in.
+cm_registered_sid() {  # <pane key>
+  jq -r '.session_id // empty' "$(cm_reg_path "$1")" 2>/dev/null
+}
+
+# Hand the pane's registration to the session a jump created. No record, no change.
+cm_reg_handover() {  # <pane key> <new sid>
+  local f tmp; f=$(cm_reg_path "$1"); tmp="$f.tmp.$$"
+  [ -f "$f" ] || return 0
+  jq --arg sid "$2" '.session_id=$sid' "$f" > "$tmp" 2>/dev/null && mv "$tmp" "$f" || rm -f "$tmp"
+}
 
 # ---- pane reading ------------------------------------------------------------
 cm_strip() { sed -e 's/\xc2\xa0//g' -e 's/\xe2\x80\x8b//g' -e 's/\xef\xbb\xbf//g' | tr -d '[:space:]'; }

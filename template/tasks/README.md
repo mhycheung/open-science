@@ -23,6 +23,7 @@ header, writes `map/graph.md` and `map/dead_ends.md`, and reports bad headers.
 ---
 id: t07-mode-fit-v2          # unique; lower case, digits, hyphens; a task's id = its directory name
 title: Mode fit with the corrected likelihood
+short_name: mode-fit-v2       # optional; shown in session names as '<project> · <short_name>'
 type: task                   # task | result | paper | page | dataset
 status: active               # active | done | failed | superseded | abandoned | paused
 depends_on: [t03-noise-model]
@@ -35,10 +36,10 @@ evidence: tasks/t07-mode-fit-v2/provenance.yaml   # required unless unverified
 ---
 ```
 
-Required: `id`, `title`, `type`, `status`, `summary`. A plan header may also carry
-`autonomy` and `hold_at`; any node may carry `tags`. Any other key is an error, so a typo is
-caught. `verified` means a stated check was run against a provenance record, and `evidence`
-points to both. Only the owner sets `human-verified`.
+Required: `id`, `title`, `type`, `status`, `summary`. A task may carry `short_name`; a plan
+header may also carry `autonomy` and `hold_at`; any node may carry `tags`. Any other key is
+an error, so a typo is caught. `verified` means a stated check was run against a provenance
+record, and `evidence` points to both. Only the owner sets `human-verified`.
 
 `privacy` grades the node: `public`, `soft-private` or `hard-private` (definitions in
 `AGENTS.md` §6). Only a public task's directory is exported. A soft- or hard-private task

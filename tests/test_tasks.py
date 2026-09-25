@@ -38,6 +38,31 @@ def test_task_new_creates_layout_and_map_builds(project):
     assert "t01-noise" in (project / "map" / "graph.md").read_text()
 
 
+
+def test_task_new_short_name(project):
+    r = run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--short-name", "noise",
+                  "--plan", "--root", project)
+    assert r.returncode == 0, r.stderr
+    t = project / "tasks" / "t01-noise"
+    assert header(t / "context.md")["short_name"] == "noise"
+    assert header(t / "plan.md")["short_name"] == "noise"
+    r = run_opsci("map", "build", project)
+    assert r.returncode == 0, r.stderr
+
+
+@pytest.mark.parametrize("bad", ["Noise", "noise model", "x" * 25])
+def test_task_new_rejects_bad_short_name(project, bad):
+    r = run_opsci("task", "new", "t01-noise", "--title", "N", "--short-name", bad, "--root", project)
+    assert r.returncode != 0
+    assert not (project / "tasks" / "t01-noise").exists()
+
+
+def test_task_new_without_short_name_omits_it(project):
+    r = run_opsci("task", "new", "t01-noise", "--title", "N", "--root", project)
+    assert r.returncode == 0, r.stderr
+    assert "short_name" not in header(project / "tasks" / "t01-noise" / "context.md")
+
+
 def test_task_new_plan_follows_template(project):
     run_opsci("task", "new", "t01-a", "--title", "A", "--root", project)
     r = run_opsci("task", "new", "t02-b", "--title", "B", "--plan", "--depends-on", "t01-a",

@@ -14,6 +14,12 @@
 #      grown by $OPSCI_JUMP_REPEAT tokens (default 50000), so a session that is
 #      waiting for the owner is not stopped at every reply.
 #
+# Steps 2 and 3 run only for the session that registered this pane with
+# pane_context.sh set (the skill does it when it starts driving a task; jump.sh
+# does it too, and a jump hands the registration to the new session). Any other
+# session, in an unregistered pane or a registered pane it did not register, only
+# gets its pane's stale timer killed.
+#
 # It never reads `last_assistant_message`: jumps are detected by the request file.
 # Outside tmux it does nothing. It never fails the stop on its own error.
 set -uo pipefail
@@ -56,6 +62,10 @@ fi
 
 # A jump already in progress for this pane owns it: touch nothing.
 if [ -f "$REQ" ]; then exit 0; fi
+
+# Not opted in: no timer, no size notice.
+REG=$(cm_registered_sid "$KEY")
+if [ -z "$SID" ] || [ "$REG" != "$SID" ]; then cm_timer_kill "$KEY"; exit 0; fi
 
 if [ "${WAKERS:-0}" -gt 0 ]; then
   cm_timer_kill "$KEY"

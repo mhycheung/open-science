@@ -116,6 +116,11 @@ if grep -q 'Read(~/.config/opsci' "$CFG/settings.json" 2>/dev/null; then
 else
     kv deny_rule absent
 fi
+if have jq && [ "$(jq -r '.env.OPSCI_SESSION_NAMES // empty' "$CFG/settings.json" 2>/dev/null)" = 1 ]; then
+    kv session_names on
+else
+    kv session_names off
+fi
 
 # GitHub over SSH: exit 1 with "successfully authenticated" means the key works
 if [ "$NETWORK" = 1 ] && have ssh; then
