@@ -28,8 +28,10 @@ open-science is a framework for doing research in the open:
 Left: the context is over 250k tokens, so the agent saves its state to the task's context
 file and the plugin clears the session and resumes it from that file. Right: the agent
 submits a SLURM job, saves its state and clears; the idle session is woken when the job
-leaves the queue and resumes from the context file. The lines marked in blue are typed by
-open-science, not by the user.
+leaves the queue and resumes from the context file. Clearing before a long wait matters
+because the prompt cache expires while the session sits idle: waking a session that still
+holds a long conversation would resend all of it uncached, which costs far more than a
+fresh start from the context file.
 
 **Start with the [user guide](USER_GUIDE.md)**: what you do and what you will see, in about
 three minutes of reading.
