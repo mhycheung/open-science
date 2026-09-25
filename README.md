@@ -14,13 +14,22 @@ open-science is a framework for doing research in the open:
   secrets, and needs your approval.
 - **With or without agents.** It works the same whether an agent does a small part of the
   work, most of it, or none of it.
-- **Context management for agentic work.** Agents keep a short context file for the project
-  and for each task. They clear their conversation and resume from that file, so a long
-  session is not resent in full on every turn or after the prompt cache expires, which
-  reduces usage. The same files let collaborators and other researchers pick up an ongoing
-  project straight away.
 
 ![How a project is organised and published](docs/figures/project_flow.svg)
+
+- **Context management for agentic work.** Agents keep a short context file for the project
+  and for each task. They clear their conversation on their own and resume from that
+  file, so a long session is not resent in full on every turn or after the prompt cache
+  expires, which reduces usage. The same files let collaborators and other researchers pick up an ongoing
+  project straight away.
+
+![Two agents clearing their context and resuming on their own](docs/figures/context_jumps.svg)
+
+Left: the context is over 250k tokens, so the agent saves its state to the task's context
+file and the plugin clears the session and resumes it from that file. Right: the agent
+submits a SLURM job, saves its state and clears; the idle session is woken when the job
+leaves the queue and resumes from the context file. The lines marked in blue are typed by
+open-science, not by the user.
 
 **Start with the [user guide](USER_GUIDE.md)**: what you do and what you will see, in about
 three minutes of reading.
