@@ -1,7 +1,7 @@
 """The overview figure of docs/index.md, written as SVG by hand.
 
     python3 docs/figures/project_flow.py            # writes project_flow.svg next to this file
-    pixi exec -s librsvg rsvg-convert docs/figures/project_flow.svg -o /tmp/project_flow.png
+    pixi exec -s librsvg rsvg-convert docs/figures/project_flow.svg -o project_flow.png
 """
 from pathlib import Path
 
