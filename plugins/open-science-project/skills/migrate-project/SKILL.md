@@ -36,7 +36,10 @@ project). This skill only says how to get there safely.
 2. **Add the scaffolding** without overwriting any existing file: instantiate the template
    into a scratch directory (`opsci template instantiate`, as in `open-science-project:new-project`),
    then copy over only the files the project does not have (`cp -rn`). Keep the
-   `config/framework.yaml` it wrote: it records the framework commit.
+   `config/framework.yaml` it wrote: it records the framework commit. If the owner chose
+   Notion (`opsci notion check` prints `backend=notion`), use `--notion` there, and after the
+   migration is approved and committed run `opsci notion enable` (it also adds the hook to a
+   settings file the project already had) and `opsci notion init`.
 
 3. **Propose a mapping and get the owner's approval before moving anything.** Ask the owner
    first whether the project lives in more than one place (a code repo, data on scratch, a

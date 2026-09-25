@@ -58,7 +58,11 @@ this itself; the judgement is per hunk.
 
    Template text between `<!-- opsci:context -->` and `<!-- /opsci:context -->` applies only
    if `config/framework.yaml` has `context_management: true`; text between
-   `<!-- opsci:no-context -->` markers only if it is false. Never copy the marker lines.
+   `<!-- opsci:no-context -->` markers only if it is false. In the same way,
+   `<!-- opsci:notion -->` text applies only with `notion: true` and `<!-- opsci:no-notion -->`
+   text only without it (a project with no `notion:` key is not mirrored). Never copy the
+   marker lines. To start mirroring a project to Notion, use `open-science-project:notion`
+   (`opsci notion enable`), not this skill.
 
 6. **Apply by editing the project's files.** Never copy template files over them, and never
    delete a project file because the template dropped it.
