@@ -31,6 +31,12 @@ Under your projects page (for example "Research projects") each project has a pa
 | **Tasks** (a database) | one row per task in `tasks/` and `brainstorm/tasks/`: properties from the node header (status, area, privacy, verification, summary), and a page with the task's `context.md`, then its plan, task map, log and subcontext files as toggles, then its plots |
 | **Feed** | messages from the agents, newest first |
 
+Every mention of a task links to its page: its full id (`t02-posterior-inclination`), its
+short id (`t02`, when only one task starts with it), and a path inside it
+(`tasks/t02-posterior-inclination/context.md`), in every page, table and Feed message. The
+text stays as written. The Mermaid source of the graph is not linked; the node table under it
+is.
+
 Mathematics written as `$...$` or `$$...$$` in the project files appears as equations.
 Tables, lists, code, Mermaid diagrams and links are converted too. A link to a project file
 is shown as its path, since Notion does not have the files.

@@ -121,12 +121,53 @@ def _plot_id(x: dict) -> str:
     return f"{x['path']}@{x['sha']}@{x['cap_sha']}"
 
 
+# ---------------------------------------------------------------- links to task pages
+
+def page_url(page_id: str) -> str:
+    return "https://www.notion.so/" + page_id.replace("-", "")
+
+
+def task_links(st: dict) -> dict:
+    """{task id: URL of its Notion page} for every task page the state knows."""
+    return {k.split(":", 1)[1]: page_url(v["page_id"]) for k, v in (st.get("pages") or {}).items()
+            if k.startswith("task:") and v.get("page_id")}
+
+
+def task_finder(links: dict):
+    """A function text -> [(start, end, url)] finding references to tasks: a full task id
+    (t02-posterior-inclination, also inside a path tasks/t02-.../context.md), or its short
+    form (t02) when exactly one task has it."""
+    if not links:
+        return lambda text, self_url=None: []
+    names = dict(links)
+    shorts = {}
+    for tid in links:
+        m = re.match(r"([a-z]+\d+)-", tid)
+        if m:
+            shorts.setdefault(m.group(1), []).append(tid)
+    for short, tids in shorts.items():
+        if len(tids) == 1 and short not in names:
+            names[short] = links[tids[0]]
+    rx = re.compile(r"(?<![\w-])(" + "|".join(re.escape(n) for n in sorted(names, key=len, reverse=True))
+                    + r")(?![\w-])")
+
+    def find(text, self_url=None):
+        return [(m.start(), m.end(), names[m.group(1)]) for m in rx.finditer(text)
+                if names[m.group(1)] != self_url]
+    return find
+
+
 # ---------------------------------------------------------------- render
 
-def render(root: Path) -> list[dict]:
+def render(root: Path, links: dict | None = None) -> list[dict]:
+    """The project as Notion pages. `links` ({task id: URL}) turns references to tasks into
+    links to their pages."""
     pages = []
+    finder = task_finder(links or {})
 
     def page(key, title, blocks, kind="page", props=None, plots=(), icon=None):
+        self_url = (links or {}).get(key.split(":", 1)[1]) if key.startswith("task:") else None
+        blocks = nb.link_blocks(blocks, lambda text: finder(text, self_url))
         pages.append({"key": key, "kind": kind, "title": title, "icon": icon, "properties": props or {},
                       "blocks": blocks, "plots": list(plots),
                       "text_sha": _sha_json([title, icon, props or {}, blocks])})
@@ -373,10 +414,22 @@ class Mirror:
 
 
 def sync(proj: Project, only=None, plots_only=False, dry_run=False, log=print) -> list[tuple[str, str]]:
-    """Write every changed page; return [(how, key)]. The state is saved after each page."""
+    """Write every changed page; return [(how, key)]. The state is saved after each page.
+
+    New tasks get their (empty) rows first, so that every page can link to every task."""
     m = Mirror(proj) if not dry_run else None
-    st = proj.require_state()
-    todo = changes(render(proj.root), st)
+    st = m.st if m else proj.require_state()
+    if m:
+        for page in render(proj.root, task_links(st)):
+            ent = st["pages"].get(page["key"], {})
+            if page["kind"] == "task" and not ent.get("page_id"):
+                log(f"new    {page['key']}")
+                ent = st["pages"].setdefault(page["key"], {})
+                ent["page_id"] = m.c.call("POST", "/pages", {
+                    "parent": {"database_id": st["tasks_db"]},
+                    "properties": task_properties(page["properties"])})["id"]
+                m.save()
+    todo = changes(render(proj.root, task_links(st)), st)
     if only:
         todo = [(h, p) for h, p in todo if p["key"] in only]
     if plots_only:
@@ -392,7 +445,7 @@ def sync(proj: Project, only=None, plots_only=False, dry_run=False, log=print) -
 
 def diff(proj: Project) -> dict:
     st = proj.require_state()
-    pages = render(proj.root)
+    pages = render(proj.root, task_links(st))
     gone = {k for k in st.get("pages", {})} - {p["key"] for p in pages}
     return {"changes": [(h, p["key"]) for h, p in changes(pages, st)],
             "gone": sorted(gone), "missing_captions": missing_captions(pages)}

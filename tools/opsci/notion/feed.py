@@ -67,11 +67,14 @@ def post(proj: Project, text: str, author: str = "agent", kind: str = "note", ta
     head = []
     if mention:
         head += [{"type": "mention", "mention": {"type": "user", "user": {"id": user}}}] + nb._t(" ")
-    head += nb.fit100(nb.rich(title, {"bold": True}))[:100 - len(head)]
+    from .mirror import task_finder, task_links
+    find = task_finder(task_links(st))         # task ids in a message link to the task pages
+    head += nb.fit100(nb.link_rich(nb.rich(title, {"bold": True}), find))[:100 - len(head)]
     meta = f"{kind} · {author}" + (f" · {task}" if task else "") + f" · {now:%Y-%m-%d %H:%M} UTC"
     children = [nb.blk("paragraph", nb._t(meta, {"italic": True, "color": "gray"}))]
     for para in paras:
-        children += [nb.blk("paragraph", rt) for rt in nb.chunks100(nb.rich(" ".join(para.split())))]
+        children += [nb.blk("paragraph", rt)
+                     for rt in nb.chunks100(nb.link_rich(nb.rich(" ".join(para.split())), find))]
     attached = []
     for f in files or ():
         f = Path(f)

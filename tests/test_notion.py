@@ -682,3 +682,51 @@ def test_real_notion_check():
     assert not NC.TOKEN_RE.search(r.stdout + r.stderr)
     assert r.returncode == 0
     assert "token=ok" in r.stdout and "integration=ok:" in r.stdout
+
+
+# ---------------------------------------------------------------- links to task pages
+
+def _links(mock, page_id):
+    """(text, url) of every linked text item on a page (top level), and the code blocks' links."""
+    out, in_code = [], []
+    for n in mock.kids(page_id):
+        for x in n["body"].get("rich_text", []):
+            link = (x.get("text") or {}).get("link")
+            if link:
+                (in_code if n["type"] == "code" else out).append((x["text"]["content"], link["url"]))
+    return out, in_code
+
+
+def test_task_references_link_to_task_pages(mirrored):
+    S, m = mirrored, mirrored.mock
+    td2 = add_task(S.proj, "t02-other")                  # a new task, created before any linking
+    ctx2 = td2 / "context.md"
+    ctx2.write_text(ctx2.read_text() + "\nBuilds on t01 (`tasks/t01-demo/context.md`); see t02-other.\n")
+    ctx = S.proj / "context.md"
+    ctx.write_text(ctx.read_text() + "\nNext: t02-other, after t01-demo.\n\n"
+                   "```mermaid\nflowchart LR\n  t01-demo --> t02-other\n```\n")
+    run(S, "notion", "sync", cwd=S.proj)
+    assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+    st = state(S.proj)
+    url = {k: mirror.page_url(v["page_id"]) for k, v in st["pages"].items()}
+    links, in_code = _links(m, st["pages"]["context"]["page_id"])
+    assert ("t02-other", url["task:t02-other"]) in links
+    assert ("t01-demo", url["task:t01-demo"]) in links
+    assert in_code == []                                  # the Mermaid source is left alone
+    links, _ = _links(m, st["pages"]["task:t02-other"]["page_id"])
+    assert ("t01", url["task:t01-demo"]) in links          # the short id
+    assert ("tasks/t01-demo/context.md", url["task:t01-demo"]) in links   # a path, linked whole
+    assert all(u != url["task:t02-other"] for _, u in links)            # no link to itself
+    # the Feed links task ids too
+    run(S, "notion", "post", "Done\n\nSee t02-other for the numbers.", cwd=S.proj)
+    msg = m.kids(st["feed_page"])[1]                      # just below the header
+    body = [x for n in m.kids(msg["id"]) for x in n["body"].get("rich_text", [])]
+    assert any((x.get("text") or {}).get("link", {}) == {"url": url["task:t02-other"]} for x in body)
+
+
+def test_task_finder_edges():
+    f = mirror.task_finder({"t01-a": "U1", "t02-b": "U2", "t02-c": "U3"})
+    assert f("t01 and t01-a") == [(0, 3, "U1"), (8, 13, "U1")]
+    assert f("t02 is ambiguous; t02-b is not") == [(18, 23, "U2")]
+    assert f("t01x, xt01, t01-ab") == []
+    assert f("t01", self_url="U1") == []

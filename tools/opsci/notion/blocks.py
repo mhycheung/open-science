@@ -304,6 +304,58 @@ def chunks100(rt: list) -> list[list]:
     return [rt[i:i + 100] for i in range(0, len(rt), 100)] or [[]]
 
 
+# ---------------------------------------------------------------- links to other pages
+
+def link_rich(rt: list, find) -> list:
+    """Add links to a rich text list. `find(text)` returns [(start, end, url)] for the text of
+    one item. Plain text gets the link on the matched words only; an inline code item (a file
+    path) gets it on the whole item, so the path stays one piece."""
+    out = []
+    for x in rt:
+        if x.get("type") != "text" or x["text"].get("link"):
+            out.append(x)
+            continue
+        content, ann = x["text"]["content"], x.get("annotations") or {}
+        spans = find(content)
+        if not spans:
+            out.append(x)
+        elif ann.get("code"):
+            out += _t(content, ann, link=spans[0][2])
+        else:
+            pos = 0
+            for start, end, url in spans:
+                out += _t(content[pos:start], ann) + _t(content[start:end], ann, link=url)
+                pos = end
+            out += _t(content[pos:], ann)
+    return out
+
+
+def link_blocks(blocks: list, find) -> list:
+    """link_rich on every rich text of every block, children and table cells included, except
+    code blocks. A block whose text would exceed 100 items with the links keeps its text
+    without them."""
+    out = []
+    for b in blocks:
+        if b["type"] == "code":             # source text (a Mermaid graph): left as it is
+            out.append(b)
+            continue
+        b = dict(b)
+        body = dict(b[b["type"]])
+        for key in ("rich_text", "caption"):
+            if key in body:
+                new = link_rich(body[key], find)
+                if len(new) <= 100:
+                    body[key] = new
+        if b["type"] == "table_row":
+            cells = [link_rich(c, find) for c in body["cells"]]
+            body["cells"] = [n if len(n) <= 100 else o for n, o in zip(cells, body["cells"])]
+        if "children" in body:
+            body["children"] = link_blocks(body["children"], find)
+        b[b["type"]] = body
+        out.append(b)
+    return out
+
+
 def media(file_upload_id: str, caption: list, kind: str = "image", plot_key: str | None = None) -> dict:
     """An image, pdf or file block showing an uploaded file; caption is a rich text list."""
     b = {"object": "block", "type": kind,

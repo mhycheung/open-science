@@ -57,6 +57,9 @@ layout 1) and the framework's, in order, before it applies the other template ch
   user's own Notion integration through the REST API; its @mentions notify the user.
   A remade plot (a new dated name) replaces the old one in place. Feed messages are removed
   after three days and kept in `messages/notion-feed.jsonl`.
+- In the Notion mirror, every mention of a task (full id, unique short id such as `t02`, or a
+  path under `tasks/<id>/`) links to the task's page, in pages, tables and Feed messages. A
+  sync creates new tasks' rows first, so that every page can link to them.
 - `opsci notify` has a `notion` back end, and onboarding offers Notion first (recommended),
   then Slack, then files. Choosing Notion leads straight into a step-by-step setup (the
   integration, `secret_file.sh notion` for the token, a shared parent page, a test
