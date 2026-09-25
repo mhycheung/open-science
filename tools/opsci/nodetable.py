@@ -28,10 +28,11 @@ ROWS = (
     ("depends_on", "depends on"),
     ("supersedes", "supersedes"),
     ("related", "related"),
+    ("verifies", "verifies"),
     ("tags", "tags"),
     ("summary", "summary"),
 )
-CODE_KEYS = {"short_name", "evidence", "hold_at", "depends_on", "supersedes", "related"}
+CODE_KEYS = {"short_name", "evidence", "hold_at", "depends_on", "supersedes", "related", "verifies"}
 
 
 def _cell(key: str, value) -> str:
@@ -44,7 +45,8 @@ def _cell(key: str, value) -> str:
 
 def render(header: dict) -> str:
     """The table block, markers included, ending in a newline."""
-    out = [START, "", f"| {header.get('type', 'node')} | `{header['id']}` |", "|---|---|"]
+    kind = "verification" if header.get("type") == "task" and header.get("verifies") else header.get("type", "node")
+    out = [START, "", f"| {kind} | `{header['id']}` |", "|---|---|"]
     for key, label in ROWS:
         value = header.get(key)
         if value is None or value == [] or value == "":

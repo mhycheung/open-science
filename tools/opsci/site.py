@@ -24,7 +24,7 @@ TABS = (  # (tab title, predicate on the page path)
     ("Results", lambda p: p.startswith(("results/", "paper/"))),
     ("Map", lambda p: p in ("map/README.md", "map/graph.md") or (p.startswith("map/") and p != "map/dead_ends.md")),
     ("Dead ends", lambda p: p == "map/dead_ends.md"),
-    ("Tasks", lambda p: p.startswith("tasks/")),
+    ("Tasks", lambda p: p.startswith(("tasks/", "verifications/"))),
     ("Citations", lambda p: p.startswith("citations/")),
     ("Context", lambda p: p == "context.md"),
     ("Log", lambda p: p.startswith("log/")),

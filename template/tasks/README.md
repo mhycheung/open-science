@@ -1,6 +1,7 @@
 # Tasks
 
-One directory per task, `tasks/<id>/`, created by the `open-science-project:new-task` skill:
+One directory per task, `tasks/<id>/`, created by the `open-science-project:new-task` skill
+(a verification task goes elsewhere; see "Verification tasks"):
 
     tasks/<id>/
       context.md     node header + the task's current state, at most 200 lines
@@ -10,6 +11,8 @@ One directory per task, `tasks/<id>/`, created by the `open-science-project:new-
       results/       the task's scientific results: one <result-id>.md each, and README.md
                      (generated: the results with their figures)
       subcontext/    per-subtask and per-subagent context documents
+      verifications/ verification tasks of this task's work, one <vid>/ each, laid out
+                     like a task
       <subtask>/     working files: scripts, plots, logs, small outputs
 
 Large data produced by a task goes in `data/<task-id>/`, not here.
@@ -48,13 +51,15 @@ evidence: tasks/t07-mode-fit-v2/provenance.yaml   # required unless unverified
 ---
 ```
 
+A verification task also has `verifies:` ("Verification tasks" below).
+
 A task's `context.md` and `plan.md` also show the header as a table under the title, between
 `opsci:node-table` comment markers, so that it reads well in a Markdown viewer. `opsci task new`
 writes it and `opsci map build` rewrites it from the front matter; never edit the table.
 
 Required: `id`, `title`, `type`, `status`, `summary`. A task may carry `short_name`; a plan
 header may also carry `autonomy` and `hold_at`; a result may carry `kind` and `milestone`
-(see "Results"); any node may carry `artifacts`, `code`, `uses` and `tags`. Any other key is
+(see "Results"); a verification task carries `verifies`; any node may carry `artifacts`, `code`, `uses` and `tags`. Any other key is
 an error, so a typo is caught. `verified` means a stated check was run against a provenance
 record, and `evidence` points to both. Only the user sets `human-verified`.
 
@@ -125,9 +130,38 @@ When a result fails or is superseded, change its `status` (and give the new resu
 live result that rests on it, directly or through other results; settle each one. It also
 warns when a committed artifact changed after the result file was last committed.
 
+## Verification tasks
+
+A verification task audits, checks, reproduces or adversely reviews work that is already
+done. It is a task like any other (the same files, the same header, a plan if it needs one),
+whose header names the nodes it checks:
+
+```yaml
+verifies: [t07-mode-fit-v2, r-mass-ratio]   # the tasks, results or datasets it checks
+```
+
+It lives inside the task whose work it checks, in `tasks/<id>/verifications/<vid>/`; when
+it checks the work of several tasks, in the project's `verifications/<vid>/`. Start its id
+with `v` and a number (`v01-audit-mode-fit`).
+
+    opsci task new v01-audit-mode-fit --title "Audit the mode fit" --verifies t07-mode-fit-v2
+
+puts it in the right place. Its privacy is by default the strictest privacy of the nodes it
+verifies; `--privacy` overrides that. The graphs draw it as a hexagon labelled
+`verification`, with a dotted arrow to each node it verifies. `opsci map build` reports a
+task in a `verifications/` directory without `verifies` and a task with `verifies` outside
+one, and warns when a verification task is in the wrong place or less private than what it
+verifies.
+
+What it finds goes in its own `results/`, like any task's. When it confirms a node, that
+node may be set `verification: verified` with `evidence:` pointing to the verification's
+result; when it refutes one, the node's `status` changes (`AGENTS.md` §3, rule 5).
+
 ## Privacy
 
 `privacy` grades the node: `public`, `soft-private` or `hard-private` (definitions in
 `AGENTS.md` §6). Only a public task's directory is exported. A soft- or hard-private task
 keeps its work inside its directory. `opsci task new <id> --title "..." --privacy <tier>`
-sets it; the default is `public`, and `soft-private` for a brainstorm task (`--root brainstorm`).
+sets it; the default is `public`, `soft-private` for a brainstorm task (`--root brainstorm`),
+and the strictest tier of the verified nodes for a verification task (`--verifies`). A
+verification task inside a task is exported only when both are public.

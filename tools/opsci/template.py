@@ -58,6 +58,7 @@ REQUIRED = (
     "docs/README.md", "private-docs/README.md",
     "brainstorm/README.md", "brainstorm/context.md", "brainstorm/tasks/README.md",
     "brainstorm/map/README.md", "brainstorm/log/README.md",
+    "verifications/README.md",
 )
 
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([A-Za-z_]+)\s*\}\}")

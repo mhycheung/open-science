@@ -360,3 +360,53 @@ def test_context_check_caps_brainstorm_files(project, rel, cap):
     # the brainstorm root checked on its own refuses it too
     r = run_opsci("context", "check", project / "brainstorm")
     assert r.returncode == 1 and rel.removeprefix("brainstorm/") in r.stderr
+
+
+# ---- verification tasks -----------------------------------------------------------------
+
+def test_verification_task_placement_privacy_and_graph(project):
+    for args in (("t01-fit", "--title", "Mode fit"),
+                 ("t02-noise", "--title", "Noise", "--privacy", "soft-private"),
+                 ("v01-audit", "--title", "Audit the fit", "--verifies", "t01-fit"),
+                 ("v02-review", "--title", "Review both", "--verifies", "t01-fit", "t02-noise")):
+        r = run_opsci("task", "new", *args, "--root", project)
+        assert r.returncode == 0, r.stderr
+    one = project / "tasks" / "t01-fit" / "verifications" / "v01-audit"
+    both = project / "verifications" / "v02-review"
+    for d in (one, both):
+        for f in ("context.md", "map.md", "log.md", "results/README.md", "subcontext/README.md"):
+            assert (d / f).is_file(), (d, f)
+    assert header(one / "context.md")["privacy"] == "public"
+    assert header(one / "context.md")["verifies"] == ["t01-fit"]
+    assert header(both / "context.md")["privacy"] == "soft-private"  # the stricter of the two
+    r = run_opsci("map", "build", project)
+    assert r.returncode == 0, r.stderr
+    assert "warning" not in r.stderr
+    graph = (project / "map" / "graph.md").read_text()
+    assert 'n_v02_review{{"v02-review: Review both<br/>verification · active"}}' in graph
+    assert "n_v02_review -.->|verifies| n_t02_noise" in graph
+    assert "| verification | active |" in graph
+    assert "| verification | `v01-audit` |" in (one / "context.md").read_text()
+    r = run_opsci("context", "check", "-v", project)
+    assert "verifications/v02-review/context.md" in r.stdout
+
+
+def test_verification_task_misplaced_or_unmarked(project):
+    for args in (("t01-fit", "--title", "Mode fit"), ("t02-noise", "--title", "Noise", "--privacy", "hard-private")):
+        assert run_opsci("task", "new", *args, "--root", project).returncode == 0
+    assert run_opsci("task", "new", "v01", "--title", "x", "--verifies", "nope", "--root", project).returncode == 1
+    assert not (project / "verifications" / "v01").exists()  # nothing half-made
+    r = run_opsci("task", "new", "v02", "--title", "Check both", "--verifies", "t01-fit", "t02-noise",
+                  "--privacy", "public", "--root", project)
+    assert r.returncode == 0, r.stderr
+    moved = project / "tasks" / "t01-fit" / "verifications" / "v02"
+    moved.parent.mkdir()
+    (project / "verifications" / "v02").rename(moved)
+    r = run_opsci("map", "build", "--check", project)
+    assert "belongs in verifications/" in r.stderr
+    assert "privacy is public, but it verifies hard-private work" in r.stderr
+    # a task in a verifications/ directory must say what it verifies
+    ctx = moved / "context.md"
+    ctx.write_text(re.sub(r"verifies:\n(- .*\n)+", "", ctx.read_text()))
+    r = run_opsci("map", "build", "--check", project)
+    assert r.returncode != 0 and "name what it checks in `verifies`" in r.stderr

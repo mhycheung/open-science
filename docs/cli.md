@@ -56,7 +56,7 @@ See [Project template and layout](project-template.md).
 opsci task new ID --title TITLE [--summary SUMMARY] [--goal GOAL]
                [--depends-on [ID ...]] [--related [ID ...]] [--supersedes [ID ...]]
                [--plan] [--autonomy {autonomous,checkpoints,collaborative}]
-               [--hold-at [POINT ...]] [--root ROOT]
+               [--hold-at [POINT ...]] [--verifies ID [ID ...]] [--root ROOT]
 ```
 
 Creates `tasks/ID/` with `context.md` (node header), `map.md`, `results/README.md`, `log.md`, `subcontext/` and, with
@@ -65,6 +65,11 @@ Creates `tasks/ID/` with `context.md` (node header), `map.md`, `results/README.m
 `--autonomy checkpoints`. `--root` is the project root (default `.`). It refuses a directory
 that is not a project root, a bad or existing id, a title that is not one non-empty line,
 and an edge to a node that does not exist.
+
+`--verifies` makes a verification task (an audit, check or adverse review of finished work)
+of the named nodes. It goes in `tasks/<id>/verifications/ID/` when every named node lies in
+that one task, else in `verifications/ID/`, and its privacy defaults to the strictest privacy
+of the named nodes. See [Verification tasks](project-template.md#verification-tasks).
 
 ## `opsci map`
 
@@ -81,8 +86,10 @@ file. Brainstorm nodes are part of the
 project graph, drawn in a box of their own. ROOT may be the project or its `brainstorm/`
 directory; both build the same files. It also writes a starting `map.md` (the task's graph,
 one node) for any task that has none, and never rewrites an existing one. It reports header
-errors and writes nothing if there are any. `--check` writes nothing and fails if the
-generated files are out of date.
+errors and writes nothing if there are any. Verification tasks are drawn as hexagons labelled
+`verification`, with a dotted `verifies` arrow to each node they check; it warns when one is
+not where `opsci task new` would put it, or is less private than a node it verifies.
+`--check` writes nothing and fails if the generated files are out of date.
 
 ## `opsci context`
 
@@ -90,7 +97,7 @@ generated files are out of date.
 opsci context check [-v] [ROOT]
 ```
 
-Fails if the project `context.md` or a `tasks/*/context.md` is over 200 lines, or
+Fails if the project `context.md` or a task `context.md` (verification tasks included) is over 200 lines, or
 `map/README.md` over 150. `-v` prints every file with its line count.
 
 ## `opsci publish`

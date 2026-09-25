@@ -134,12 +134,13 @@ class TaskError(Exception):
 
 
 def _header(task_id, title, summary, depends_on, related, supersedes, privacy="public",
-            plan_extra=None, short_name=None) -> dict:
+            plan_extra=None, short_name=None, verifies=()) -> dict:
     h = {"id": task_id, "title": title}
     if short_name:
         h["short_name"] = short_name
     h.update({"type": "task", "status": "active"})
-    for k, v in (("depends_on", depends_on), ("supersedes", supersedes), ("related", related)):
+    for k, v in (("depends_on", depends_on), ("supersedes", supersedes), ("related", related),
+                 ("verifies", verifies)):
         if v:
             h[k] = list(v)
     h["privacy"] = privacy
@@ -157,12 +158,18 @@ def _front(header: dict) -> str:
 def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
              depends_on=(), related=(), supersedes=(), plan: bool = False,
              autonomy: str = "autonomous", hold_at=(), goal: str | None = None, privacy: str | None = None,
-             date: dt.date | None = None, short_name: str | None = None) -> Path:
+             date: dt.date | None = None, short_name: str | None = None, verifies=()) -> Path:
     """Create tasks/<id>/ in the project at root. Returns the task directory.
 
     ``root`` may be a sub-root (``brainstorm/``): the task goes in its ``tasks/``, its edges
     may name any node of the project graph, and its privacy defaults to soft-private
     instead of public.
+
+    With ``verifies`` (the ids of the nodes it checks) the task is a verification task: an
+    audit, check or adverse review of finished work. It goes in ``<task>/verifications/<id>/``
+    when every node it verifies lies in that one task, else in the ``verifications/``
+    directory of the project (of ``brainstorm/`` when every node lies there), and its privacy
+    defaults to the strictest privacy of those nodes.
 
     Refuses: a bad id, an id already used in the project graph, an existing task, a root that
     is not a project, edges to ids that are not nodes, an unknown autonomy level or privacy
@@ -170,8 +177,6 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
     """
     root = Path(root)
     graph, prefix = nodes.graph_root(root)
-    if privacy is None:
-        privacy = "soft-private" if prefix else "public"
     if not (root / "tasks").is_dir() or not (root / "context.md").is_file():
         raise TaskError(f"'{root}' is not a project root (needs context.md and tasks/)")
     if not ID_RE.fullmatch(task_id):
@@ -180,26 +185,38 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
         raise TaskError("title must be one non-empty line")
     if autonomy not in AUTONOMY:
         raise TaskError(f"autonomy must be one of {', '.join(AUTONOMY)}")
-    if privacy not in nodes.PRIVACY_TIERS:
+    if privacy is not None and privacy not in nodes.PRIVACY_TIERS:
         raise TaskError(f"privacy must be one of {', '.join(nodes.PRIVACY_TIERS)}")
     if hold_at and autonomy != "checkpoints":
         raise TaskError("hold_at is only used with autonomy 'checkpoints'")
-    tdir = root / "tasks" / task_id
-    if tdir.exists():
+    if not verifies and (graph / f"{prefix}tasks/{task_id}").exists():
         raise TaskError(f"tasks/{task_id} already exists")
 
     res = nodes.scan(graph)
     known = res.by_id()
     if task_id in known:
         raise TaskError(f"id '{task_id}' is already used by {known[task_id].path}")
-    missing = [t for t in (*depends_on, *related, *supersedes) if t not in known]
+    missing = [t for t in (*depends_on, *related, *supersedes, *verifies) if t not in known]
     if missing:
         raise TaskError("not nodes in this project: " + ", ".join(missing))
+    if verifies:
+        targets = [known[t] for t in verifies]
+        rel = f"{nodes.verification_home(targets)}/{task_id}"
+        if privacy is None:
+            default = nodes.default_privacy(graph)
+            privacy = nodes.strictest(t.get("privacy", default) for t in targets)
+    else:
+        rel = f"{prefix}tasks/{task_id}"
+    if privacy is None:
+        privacy = "soft-private" if prefix else "public"
+    tdir = graph / rel
+    if tdir.exists():
+        raise TaskError(f"{rel} already exists")
 
     date = date or dt.date.today()
     summary = summary or f"TODO: one sentence on what {task_id} established, or why it failed."
     header = _header(task_id, title, summary, depends_on, related, supersedes, privacy,
-                     short_name=short_name)
+                     short_name=short_name, verifies=verifies)
     validator = jsonschema.Draft202012Validator(nodes.load_schema())
     errs = [e.message for e in validator.iter_errors(header)]
     if errs:
@@ -207,6 +224,7 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
 
     pointers = POINTERS_PLAN if plan else POINTERS_NONE
     next_step = NEXT_STEP_PLAN if plan else NEXT_STEP_NONE
+    made = next(p for p in (tdir, *tdir.parents) if p.parent.exists())  # removed on failure
     tdir.mkdir(parents=True)
     try:
         (tdir / "context.md").write_text(nodetable.refresh(_front(header) + "\n" + CONTEXT_BODY.format(
@@ -214,23 +232,24 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
             next_step=next_step, pointers=pointers)), encoding="utf-8")
         (tdir / "map.md").write_text(MAP_BODY.format(title=title, id=task_id), encoding="utf-8")
         (tdir / "results").mkdir()
-        node = nodes.Node(f"{prefix}tasks/{task_id}/context.md", header)
+        node = nodes.Node(f"{rel}/context.md", header)
         (tdir / "results" / "README.md").write_text(results.render_task_results(node, [node]), encoding="utf-8")
         (tdir / "log.md").write_text(LOG_README.format(title=title, date=date.isoformat()), encoding="utf-8")
         (tdir / "subcontext").mkdir()
         (tdir / "subcontext" / "README.md").write_text(SUBCONTEXT_README, encoding="utf-8")
         if plan:
             ph = _header(task_id, title, summary, depends_on, related, supersedes, privacy,
-                         {"autonomy": autonomy, "hold_at": list(hold_at)}, short_name=short_name)
+                         {"autonomy": autonomy, "hold_at": list(hold_at)}, short_name=short_name,
+                         verifies=verifies)
             (tdir / "plan.md").write_text(
                 nodetable.refresh(_front(ph) + "\n" + PLAN_BODY.format(title=title, id=task_id)),
                 encoding="utf-8")
 
         after = nodes.scan(graph)
-        mine = [str(p) for p in after.errors if p.path.startswith(f"{prefix}tasks/{task_id}/")]
+        mine = [str(p) for p in after.errors if p.path.startswith(f"{rel}/")]
         if mine:
             raise TaskError("the new task fails the map scan: " + "; ".join(mine))
     except BaseException:
-        shutil.rmtree(tdir, ignore_errors=True)  # leave nothing half-made
+        shutil.rmtree(made, ignore_errors=True)  # leave nothing half-made
         raise
     return tdir

@@ -22,7 +22,8 @@ Commands:
   `plan.md` from the plan template (`--autonomy`, `--hold-at`). `--privacy` is `public`
   (default), `soft-private` or `hard-private`. Refuses a bad or existing id and edges to
   unknown nodes. `--root brainstorm` makes a brainstorm task; its edges can name only
-  brainstorm nodes.
+  brainstorm nodes. `--verifies ID...` makes a verification task of those nodes, in
+  `tasks/<id>/verifications/` or `verifications/`, with their strictest privacy.
 - `opsci context check [ROOT]` — fail if `context.md`, a `tasks/*/context.md` (200 lines) or
   `map/README.md` (150), or the same file under `brainstorm/`, is over its line cap.
 

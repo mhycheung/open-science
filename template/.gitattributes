@@ -3,3 +3,7 @@ log/*.md merge=union
 tasks/*/log.md merge=union
 brainstorm/log/*.md merge=union
 brainstorm/tasks/*/log.md merge=union
+verifications/*/log.md merge=union
+tasks/*/verifications/*/log.md merge=union
+brainstorm/verifications/*/log.md merge=union
+brainstorm/tasks/*/verifications/*/log.md merge=union
