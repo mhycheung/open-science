@@ -91,7 +91,7 @@ done
 # The plugins are cached apart once installed, so the names are listed here;
 # tests/test_onboard.py checks the list against the skill directories of the plugins.
 SKILL_NAMES="onboard publish zenodo-release new-project new-task context-files migrate-project
-update-from-template private-investigation context-management continue-context advise-with-context"
+update-from-template private-investigation notion context-management continue-context advise-with-context"
 same=""
 for n in $SKILL_NAMES; do
     [ -e "$CFG/skills/$n" ] && same="$same${same:+,}$n"
@@ -108,7 +108,7 @@ private_state() {  # $1 path, $2 wanted mode
     [ "$mode" = "$want" ] && echo ok || echo "mode-$mode"
 }
 kv secret_dir "$(private_state "$OPSCI_CFG" 700)"
-for f in slack.env zenodo-sandbox.token zenodo.token; do
+for f in slack.env zenodo-sandbox.token zenodo.token notion.env; do
     kv "secret_$f" "$(private_state "$OPSCI_CFG/$f" 600)"
 done
 if grep -q 'Read(~/.config/opsci' "$CFG/settings.json" 2>/dev/null; then

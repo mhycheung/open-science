@@ -234,11 +234,64 @@ decision. This is not only a convenience. An agent sometimes clears its own conv
 (this is what context management does), and anything it
 wrote to you in the chat disappears with it. The messages are kept in a separate place, so
 nothing meant for you is lost."
-- **Files (default)**: each message is saved as a small file in the project's `messages/`
-  folder. Nothing to set up.
+- **Notion (recommended)**: each project gets its own page in your Notion, kept up to date
+  as the agents work: the project's context, its log, its graph, and one page per task with
+  the task's plots and their captions. Messages arrive in the project's Feed, a page you
+  scroll like a chat, newest first, with plots inline; Notion notifies you (also on your
+  phone) when an agent needs you. Old messages are removed after a few days; results stay
+  in the task pages. You make a small Notion integration that can only see the one page you
+  share with it. About 10 minutes; I walk you through it, and you can also do it later.
 - **Slack**: messages arrive in a Slack channel. You create your own small Slack app that may
   only post messages and files, and nothing else, into one channel you choose. About 10
   minutes; I walk you through it step by step.
+- **Files**: each message is saved as a small file in the project's `messages/` folder.
+  Nothing to set up.
+
+## Notion setup (step by step, only if the user picked Notion)
+
+Give one step at a time. After each, wait until the user says it is done (or asks for help)
+before giving the next. Do not paste the whole list at once. Before step 1, ask: "Set up
+Notion now, or later? If later, the agents write messages to files until then, and new
+projects are already prepared for Notion; run onboarding again when you are ready." If
+later: stop here; step 8 of the procedure still records Notion as the choice.
+
+1. **Workspace.** "Which Notion workspace should your projects go in? You need to be able to
+   add integrations there (in a work workspace an administrator may have to allow it). A
+   personal workspace works; the free plan is enough."
+2. **Create the integration.** "Go to https://www.notion.so/profile/integrations and choose
+   New integration. Name it after this computer or yourself, for example `research agents`;
+   that name appears as the author of every message. Pick the workspace, type Internal, and
+   save. Then open Capabilities and tick: Read content, Update content, Insert content, Read
+   comments, Insert comments, and Read user information without email addresses. It can see
+   nothing until you share a page with it, in step 4."
+3. **Store the token.** "On the integration's page, under Internal Integration Secret, choose
+   Show and copy it; it starts with `ntn_`. Do not paste it here." Then as in "Tokens"
+   below, with `notion`: the file has one line to fill in, `NOTION_TOKEN=`.
+4. **One page for all your projects.** "In Notion, make a new page, for example `Research
+   projects`. Each project gets its own page inside it. Open its ••• menu (top right),
+   choose Connections, and add your integration. Then copy the page's link (••• → Copy
+   link) and paste it here. The link is not secret."
+5. **Check.** With the user's yes, write
+   `notify: {backend: notion, notion: {parent_page: <link>}}` into
+   `~/.config/opsci/config.yaml` (create it if absent; keep every other key), then run
+   `opsci notion check`. It prints the integration's name, the page's title, and the people
+   in the workspace (`owner_candidate=` lines). Ask which of them is the user, unless there
+   is only one, then add `owner: <id>` under `notion`. Run the check again; every line must
+   end in `ok`.
+6. **Test.** "I will now make a test page inside your projects page that mentions you. Did
+   Notion notify you?" Run `opsci notion check --send-test`, wait for the answer, then
+   `opsci notion check --remove-test <id>`. The notification can take a minute. If none
+   came: "Please check Settings → My notifications in Notion." The mention is written by the
+   integration, so it counts as someone else's.
+
+**If the user chose later:** with their yes, write `notify: {backend: notion}` into the config
+file anyway, so new projects are prepared for Notion; messages go to files until the setup is
+done. Put "finish the Notion setup: run open-science:onboard again" in the summary's list.
+
+**Either way, say:** "New projects get a Notion section in their `AGENTS.md` and sync to
+Notion by themselves when an agent finishes a turn. To mirror a project you already have,
+ask for the `open-science-project:notion` skill." Only projects of a user who chose Notion get
+these.
 
 ## Slack setup (step by step, only if the user picked Slack)
 

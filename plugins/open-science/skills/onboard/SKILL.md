@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: Set up the open-science framework for a user - check what this machine already has, ask which of the three components they want (project management, context management, publishing) and whether they want the optional extras (projects list, SLURM resurrection), install those plugins, set up tmux for context management (mouse settings, one pane per task, a tmux batch job on a SLURM cluster), and set up GitHub access, Zenodo and Slack tokens safely. Use when the user asks to onboard, install, set up or configure open-science, or to add a component later.
+description: Set up the open-science framework for a user - check what this machine already has, ask which of the three components they want (project management, context management, publishing) and whether they want the optional extras (projects list, SLURM resurrection), install those plugins, set up tmux for context management (mouse settings, one pane per task, a tmux batch job on a SLURM cluster), set up how agents reach the user (Notion, recommended, or Slack or files), and set up GitHub access and the Notion, Zenodo and Slack tokens safely. Use when the user asks to onboard, install, set up or configure open-science, or to add a component later.
 ---
 
 # Onboard
@@ -109,27 +109,31 @@ question also put the longer text in its `preview`. Do not shorten the texts int
      (the mode chosen in 4c: `acceptEdits`, `auto`, `bypassPermissions` or `manual`),
      and tell them it shows a warning the first time and registers the second time.
 
-8. **Notifications** (if any of project management, context management, publishing or SLURM
-   resurrection was chosen): Files or Slack. Files needs nothing. Slack: follow "Slack
-   setup" in `explanations.md`, one step at a time, waiting for the user after each (the
-   manifest is in `docs/notify.md` in the framework repo). Always ask which channel (step 2);
-   never pick one yourself. Its step 7 is step 9 below with `slack`. Its step 8: write
-   `notify: {backend: slack}` into `~/.config/opsci/config.yaml` after a yes, then send
-   `opsci notify "open-science onboarding: test message"` and ask whether it arrived in
-   the chosen channel. With
-   Slack and branch 4, the user may route resurrection notices there by typing
-   `/slurm-resurrect:resurrect set-notify <path to opsci> notify "$RR_MSG"` (no outer quotes;
-   `<path to opsci>` from `command -v opsci`, since the batch job's PATH may differ). Not with
-   Files: the message would land in whatever directory the resurrection runs in.
+8. **Notifications** (if any component or extra was chosen): one single-select question,
+   Notion (recommended, first), Slack or Files, texts in `explanations.md`. Files needs nothing.
+   - **Notion:** follow "Notion setup" in `explanations.md` (texts and commands), one step at
+     a time, waiting for the user after each; it can be deferred. Its token step is step 9.
+   - **Slack:** follow "Slack setup" in `explanations.md`, one step at a time, waiting for the
+     user after each (the manifest is in `docs/notify.md` in the framework repo). Always ask
+     which channel (step 2); never pick one yourself. Its step 7 is step 9 below with
+     `slack`. Its step 8: write `notify: {backend: slack}` into `~/.config/opsci/config.yaml`
+     after a yes, then send `opsci notify "open-science onboarding: test message"` and ask
+     whether it arrived in the chosen channel.
+   - With Slack and branch 4, the user may route resurrection notices there by typing
+     `/slurm-resurrect:resurrect set-notify <path to opsci> notify "$RR_MSG"` (no outer quotes;
+     `<path to opsci>` from `command -v opsci`, since the batch job's PATH may differ). Not
+     with Files or Notion: the message would land in whatever directory the resurrection runs in.
 
-9. **Tokens** (Slack, Zenodo sandbox, Zenodo production). Say the "Tokens" text first. Give
+9. **Tokens** (Notion, Slack, Zenodo sandbox, Zenodo production). Say the "Tokens" text first. Give
    the user this command to run **in a separate terminal of their own**, with the plugin path
    resolved to the real absolute path (print it; `echo "${CLAUDE_PLUGIN_ROOT}"`):
-   `bash <plugin dir>/scripts/secret_file.sh slack|zenodo-sandbox|zenodo`.
+   `bash <plugin dir>/scripts/secret_file.sh notion|slack|zenodo-sandbox|zenodo`.
    It refuses to run inside Claude Code. Wait until the user says it printed `ok`, then check:
    Zenodo sandbox `opsci zenodo check-token`, production `opsci zenodo check-token --production`
-   (a read-only request; prints ok or the error), Slack the test message of step 8.
-   Scopes: Zenodo `deposit:write` and `deposit:actions`; Slack `chat:write`, `files:write`.
+   (a read-only request; prints ok or the error), Notion `opsci notion check` (`token=ok`,
+   `integration=ok`), Slack the test message of step 8.
+   Scopes: Zenodo `deposit:write` and `deposit:actions`; Slack `chat:write`, `files:write`;
+   Notion the capabilities in step 2 of "Notion setup".
    - If `secret_dir` is `mode-*`: offer `chmod 700 ~/.config/opsci`. A `secret_*` file with
      `mode-*`: offer `chmod 600` on it. `symlink` or `not-owned`: explain; change nothing.
    - If `deny_rule=absent` and a token was set up: offer to add
@@ -143,4 +147,4 @@ question also put the longer text in its `preview`. Do not shorten the texts int
     new plugins load, anything they postponed). Name the skills they can now use, full
     names only: `open-science-project:new-project`, `open-science-project:migrate-project`,
     `open-science-publish:publish`, `open-science-publish:zenodo-release`,
-    `open-science-context:continue-context`. Running `open-science:onboard` again adds components.
+    `open-science-context:continue-context`, and with Notion `open-science-project:notion`. Running `open-science:onboard` again adds components.

@@ -6,6 +6,7 @@
 #   secret_file.sh slack            # ~/.config/opsci/slack.env    (SLACK_TOKEN, SLACK_CHANNEL)
 #   secret_file.sh zenodo-sandbox   # ~/.config/opsci/zenodo-sandbox.token
 #   secret_file.sh zenodo           # ~/.config/opsci/zenodo.token (production)
+#   secret_file.sh notion           # ~/.config/opsci/notion.env   (NOTION_TOKEN)
 #
 # The directory is made mode 700 and the file mode 600 (umask 077 from the start, so the file
 # is never readable by others, not even for a moment). The file opens in $VISUAL, $EDITOR,
@@ -26,7 +27,8 @@ case "$kind" in
     slack)          file="$dir/slack.env" ;;
     zenodo-sandbox) file="$dir/zenodo-sandbox.token" ;;
     zenodo)         file="$dir/zenodo.token" ;;
-    *) die "usage: secret_file.sh slack|zenodo-sandbox|zenodo" ;;
+    notion)         file="$dir/notion.env" ;;
+    *) die "usage: secret_file.sh slack|zenodo-sandbox|zenodo|notion" ;;
 esac
 
 mkdir -p "$dir"
@@ -46,6 +48,12 @@ else
 SLACK_TOKEN=
 # ID of the channel to post in (starts with C; the app must be invited to the channel):
 SLACK_CHANNEL=
+EOF
+    elif [ "$kind" = notion ]; then
+        cat > "$file" <<'EOF'
+# Notion credentials for opsci notion and opsci notify. Keep this file private (mode 600);
+# never commit it. Internal Integration Secret of your own Notion integration (starts ntn_):
+NOTION_TOKEN=
 EOF
     else
         : > "$file"   # the token only: no comments, no other text
@@ -70,6 +78,11 @@ if [ "$kind" = slack ]; then
     [ -z "$tok" ] || [[ "$tok" == xoxb-* ]] || problems+=("SLACK_TOKEN does not start with xoxb- (use the Bot User OAuth Token)")
     [[ "$chan" =~ ^[CG][A-Z0-9]{6,}$ ]] || problems+=("SLACK_CHANNEL is not a channel ID (C followed by letters and digits)")
     unset tok chan
+elif [ "$kind" = notion ]; then
+    tok=$(sed -n 's/^[[:space:]]*\(export[[:space:]]\+\)\?NOTION_TOKEN[[:space:]]*=[[:space:]]*//p' "$file" | tail -1 | tr -d "\"' \r")
+    [ -n "$tok" ] || problems+=("NOTION_TOKEN is empty")
+    [ -z "$tok" ] || [[ "$tok" =~ ^(ntn|secret)_[A-Za-z0-9]{20,}$ ]] || problems+=("NOTION_TOKEN does not look like an integration secret (ntn_ followed by letters and digits)")
+    unset tok
 else
     n=$(tr -s '[:space:]' '\n' < "$file" | grep -c . || true)
     len=$(tr -d '[:space:]' < "$file" | wc -c)
