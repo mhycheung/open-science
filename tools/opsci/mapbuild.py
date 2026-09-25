@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from . import nodetable
+from . import nodetable, tasks
 from .nodes import (DEAD_STATUSES, SUBROOTS, Node, Problem, ScanResult, graph_root, is_task_context,
                     is_task_plan, list_files, scan)
 
@@ -41,6 +41,19 @@ def _ref(n: Node, linked) -> str:
     if linked is not None and n.path not in linked:
         return f"{n.id} (not published)"
     return f"[{n.id}]({_link(n.path)})"
+
+
+def _task_map(n: Node) -> str | None:
+    """The path of a task's map.md, or None if the node is not a task context."""
+    return n.path.rsplit("/", 1)[0] + "/map.md" if is_task_context(n.path) else None
+
+
+def _map_ref(n: Node, linked) -> str:
+    """A link to the task's map, where the node is a task and the map is linked."""
+    m = _task_map(n)
+    if m is None or (linked is not None and m not in linked):
+        return ""
+    return f" · [map]({_link(m)})"
 
 
 def _cell(text) -> str:
@@ -99,7 +112,7 @@ def render_graph(nodes: list[Node], linked: set[str] | None = None) -> str:
     out += ["```", "", "## Nodes", "", "| id | type | status | verification | summary |", "|---|---|---|---|---|"]
     for n in nodes:
         out.append(
-            f"| {_ref(n, linked)} | {n.get('type')} | {n.get('status')} | "
+            f"| {_ref(n, linked)}{_map_ref(n, linked)} | {n.get('type')} | {n.get('status')} | "
             f"{n.get('verification', 'unverified')} | {_cell(n.get('summary'))} |"
         )
     out.append("")
@@ -207,15 +220,27 @@ def node_tables(root: Path) -> dict[str, str]:
     return out
 
 
+def task_maps(root: Path, res: ScanResult) -> dict[str, str]:
+    """A starting map.md for every task that has none. An existing map is never rewritten:
+    the main agent keeps it."""
+    out = {}
+    for n in res.nodes:
+        m = _task_map(n)
+        if m is not None and not (root / m).exists():
+            out[m] = tasks.MAP_BODY.format(title=n.get("title"), id=n.id)
+    return out
+
+
 def build(root: Path, check: bool = False) -> tuple[ScanResult, list[str]]:
     """Scan, check and (unless check) write. Returns the scan and the stale generated files:
-    the maps, and the task files whose node table is out of date. A sub-root (``brainstorm``)
-    builds the project around it: one graph covers both."""
+    the maps, the task files whose node table is out of date, and the missing task maps. A
+    sub-root (``brainstorm``) builds the project around it: one graph covers both."""
     root, _ = graph_root(Path(root))
     res = scan(root)
     check_manifest(root, res)
     files = outputs(res.nodes, lambda sub: (root / sub).is_dir())
     files.update(node_tables(root))
+    files.update(task_maps(root, res))
     stale = []
     for rel, text in files.items():
         p = root / rel

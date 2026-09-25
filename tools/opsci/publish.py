@@ -37,9 +37,10 @@ PUBLIC_ONLY = (".github",)
 # Markdown files that need no `status` header by default. The manifest's `status_exempt`
 # replaces this list.
 STATUS_EXEMPT = ("README.md", "**/README.md", "AGENTS.md", "CLAUDE.md", "PROJECT.md", "context.md",
-                 "log/**", "map/**", "citations/**", "rules/**", "tasks/*/log.md",
+                 "log/**", "map/**", "citations/**", "rules/**", "tasks/*/log.md", "tasks/*/map.md",
                  "tasks/*/subcontext/**", "docs/**", "brainstorm/context.md", "brainstorm/log/**",
-                 "brainstorm/map/**", "brainstorm/tasks/*/log.md", "brainstorm/tasks/*/subcontext/**")
+                 "brainstorm/map/**", "brainstorm/tasks/*/log.md",
+                 "brainstorm/tasks/*/map.md", "brainstorm/tasks/*/subcontext/**")
 MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo"}
 POLICY_KEYS = {"default_privacy", "collaborators_agreed"}
 PRIVACY_TIERS = nodes.PRIVACY_TIERS

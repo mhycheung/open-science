@@ -87,7 +87,8 @@ def test_export_follows_manifest_and_headers(proj):
     assert ex.excluded["tasks/t03-secret/context.md"] == "task t03-secret: hard-private"
     assert ex.excluded["tasks/t01-fit/draft.md"] == "node t01-draft: soft-private"
     assert {f for f in ex.hard if f.startswith("tasks/")} == {
-        "tasks/t03-secret/context.md", "tasks/t03-secret/log.md", "tasks/t03-secret/subcontext/README.md"}
+        "tasks/t03-secret/context.md", "tasks/t03-secret/log.md", "tasks/t03-secret/map.md",
+        "tasks/t03-secret/subcontext/README.md"}
     assert ex.excluded["rules/secret.md"] == "listed under never"
 
 

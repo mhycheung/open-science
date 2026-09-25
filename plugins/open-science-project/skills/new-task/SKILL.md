@@ -43,7 +43,8 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
        [--autonomy autonomous|checkpoints|collaborative] [--hold-at S2 ...]
    ```
 
-   It writes `context.md` with a validated node header, `log.md`, `subcontext/`, and
+   It writes `context.md` with a validated node header, `map.md` (the task's graph, one
+   node to start with), `log.md`, `subcontext/`, and
    `plan.md` from the plan template (the header repeated, plus `autonomy` and `hold_at`). It
    refuses a bad or existing id and an edge to a node that does not exist. Without `--plan`
    you get a task with no plan: right for small work and explorations.

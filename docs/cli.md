@@ -59,7 +59,7 @@ opsci task new ID --title TITLE [--summary SUMMARY] [--goal GOAL]
                [--hold-at [POINT ...]] [--root ROOT]
 ```
 
-Creates `tasks/ID/` with `context.md` (node header), `log.md`, `subcontext/` and, with
+Creates `tasks/ID/` with `context.md` (node header), `map.md`, `log.md`, `subcontext/` and, with
 `--plan`, `plan.md` from the plan template. `--summary` is the header's one-sentence summary
 (default a `TODO`); `--goal` fills the Goal section of `context.md`. `--hold-at` needs
 `--autonomy checkpoints`. `--root` is the project root (default `.`). It refuses a directory
@@ -75,7 +75,8 @@ opsci map build [--check] [ROOT]
 Reads every node header and writes `map/graph.md` and `map/dead_ends.md`, and the same two
 files in `brainstorm/map/` for the brainstorm nodes alone. Brainstorm nodes are part of the
 project graph, drawn in a box of their own. ROOT may be the project or its `brainstorm/`
-directory; both build the same files. It reports header
+directory; both build the same files. It also writes a starting `map.md` (the task's graph,
+one node) for any task that has none, and never rewrites an existing one. It reports header
 errors and writes nothing if there are any. `--check` writes nothing and fails if the
 generated files are out of date.
 

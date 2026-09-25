@@ -1,4 +1,4 @@
-"""`opsci task new`: create a task directory with its node header, log and (optional) plan."""
+"""`opsci task new`: create a task directory with its node header, map, log and (optional) plan."""
 
 from __future__ import annotations
 
@@ -89,6 +89,22 @@ never written into the plan), frozen files, and the rule ids that apply (R03, R0
 <Estimate per subtask and a ceiling; measured values are recorded in the task context.>
 """
 
+# The task map: every task has one, even a task with a single step.
+MAP_BODY = """\
+# Map: {title}
+
+<!-- The internal structure of this task, edited in place by the main agent after every
+finished subtask: one node per subtask or line of attack, arrows for what depends on what,
+and the status of each (active, done, failed, abandoned). A task with no internal structure
+keeps a single node. The project graph is map/graph.md; this map shows what is inside the
+task. -->
+
+```mermaid
+flowchart LR
+  task["{id}"]
+```
+"""
+
 LOG_README = "# Log: {title}\n\nAppend only, one line per entry, newest last.\n\n{date} — task created.\n"
 SUBCONTEXT_README = ("# Subcontext\n\nPer-subtask and per-subagent context documents for this task, "
                      "and old context documents moved here by a migration.\n")
@@ -107,7 +123,9 @@ def skeleton_texts() -> list[str]:
     blank = {"title": "", "date": "", "id": ""}
     out = [CONTEXT_BODY.format(**blank, goal=GOAL_NONE, next_step=n, pointers=p)
            for n, p in ((NEXT_STEP_NONE, POINTERS_NONE), (NEXT_STEP_PLAN, POINTERS_PLAN))]
-    return out + [PLAN_BODY.format(**blank), LOG_README.format(**blank), SUBCONTEXT_README]
+    table = nodetable.render({"id": "", "type": "task"})  # the table's marker comments
+    return out + [PLAN_BODY.format(**blank), MAP_BODY.format(**blank), LOG_README.format(**blank),
+                  SUBCONTEXT_README, table]
 
 
 class TaskError(Exception):
@@ -193,6 +211,7 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
         (tdir / "context.md").write_text(nodetable.refresh(_front(header) + "\n" + CONTEXT_BODY.format(
             title=title, date=date.isoformat(), goal=goal or GOAL_NONE,
             next_step=next_step, pointers=pointers)), encoding="utf-8")
+        (tdir / "map.md").write_text(MAP_BODY.format(title=title, id=task_id), encoding="utf-8")
         (tdir / "log.md").write_text(LOG_README.format(title=title, date=date.isoformat()), encoding="utf-8")
         (tdir / "subcontext").mkdir()
         (tdir / "subcontext" / "README.md").write_text(SUBCONTEXT_README, encoding="utf-8")

@@ -108,7 +108,8 @@ The same caps apply to `brainstorm/context.md` and `brainstorm/tasks/<id>/contex
 
 After every finished subtask the agent answers four questions (`contracts/main.md` §3):
 
-1. Did a task's status or edges change? Update its node header and run `opsci map build`.
+1. Did a task's status or edges change, or did a subtask start, finish, fail or branch?
+   Update its node header and its `map.md`, and run `opsci map build`.
 2. Does the next agent need to know? Update `context.md`.
 3. Was a source or package used or consulted? Update `citations/`.
 4. Append one line to the task log and one to `log/YYYY-MM.md`.

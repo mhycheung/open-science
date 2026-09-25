@@ -28,7 +28,7 @@ def test_task_new_creates_layout_and_map_builds(project):
     r = run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--root", project)
     assert r.returncode == 0, r.stderr
     t = project / "tasks" / "t01-noise"
-    for f in ("context.md", "log.md", "subcontext/README.md"):
+    for f in ("context.md", "map.md", "log.md", "subcontext/README.md"):
         assert (t / f).is_file(), f
     assert not (t / "plan.md").exists()
     h = header(t / "context.md")
@@ -88,6 +88,33 @@ def test_map_build_adds_node_table_to_older_task(project):
     assert run_opsci("map", "build", project).returncode == 0
     assert ctx.read_text() == fresh
 
+
+
+def test_every_task_has_a_map(project):
+    run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--root", project)
+    m = project / "tasks" / "t01-noise" / "map.md"
+    text = m.read_text()
+    assert text.startswith("# Map: Noise model\n")
+    assert '```mermaid\nflowchart LR\n  task["t01-noise"]\n```' in text
+    assert "no node header" not in run_opsci("map", "build", project).stderr
+    # the project graph links each task to its map
+    assert "[t01-noise](../tasks/t01-noise/context.md) · [map](../tasks/t01-noise/map.md)" in \
+        (project / "map" / "graph.md").read_text()
+
+
+def test_map_build_adds_missing_task_map_and_keeps_existing(project):
+    for tid in ("t01-noise", "t02-fit"):
+        run_opsci("task", "new", tid, "--title", tid, "--root", project)
+    fresh = (project / "tasks" / "t01-noise" / "map.md").read_text()
+    (project / "tasks" / "t01-noise" / "map.md").unlink()  # a task made before maps existed
+    own = project / "tasks" / "t02-fit" / "map.md"
+    own.write_text("# Map: t02-fit\n\nMy own graph.\n")
+    r = run_opsci("map", "build", "--check", project)
+    assert r.returncode != 0 and "tasks/t01-noise/map.md" in r.stdout + r.stderr
+    assert run_opsci("map", "build", project).returncode == 0
+    assert (project / "tasks" / "t01-noise" / "map.md").read_text() == fresh
+    assert own.read_text() == "# Map: t02-fit\n\nMy own graph.\n"
+    assert run_opsci("map", "build", "--check", project).returncode == 0
 
 
 def test_task_new_short_name(project):

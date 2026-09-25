@@ -40,6 +40,7 @@ never:
 #   - README.md               # replaces the default list: README.md, **/README.md,
 #                             # AGENTS.md, CLAUDE.md, PROJECT.md, context.md, log/**,
 #                             # map/**, citations/**, rules/**, tasks/*/log.md,
-#                             # tasks/*/subcontext/**, docs/**, brainstorm/context.md,
-#                             # brainstorm/log/**, brainstorm/map/**,
-#                             # brainstorm/tasks/*/log.md, brainstorm/tasks/*/subcontext/**
+#                             # tasks/*/map.md, tasks/*/subcontext/**, docs/**,
+#                             # brainstorm/context.md, brainstorm/log/**, brainstorm/map/**,
+#                             # brainstorm/tasks/*/log.md, brainstorm/tasks/*/map.md,
+#                             # brainstorm/tasks/*/subcontext/**

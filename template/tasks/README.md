@@ -6,7 +6,7 @@ One directory per task, `tasks/<id>/`, created by the `open-science-project:new-
       context.md     node header + the task's current state, at most 200 lines
       plan.md        the plan, if the task has one (it repeats the node header)
       log.md         append-only task log
-      map.md         task-level map, only if the task has internal structure
+      map.md         the task's graph: its subtasks and how they connect (every task has one)
       subcontext/    per-subtask and per-subagent context documents
       <subtask>/     working files: scripts, plots, logs, small outputs
 
@@ -18,6 +18,15 @@ Every task, result, paper, site page and published dataset is a node in the proj
 Its header is YAML front matter at the top of its main markdown file, or a `node.yaml`
 beside a non-markdown artifact (for example in `paper/`). `opsci map build` reads every
 header, writes `map/graph.md` and `map/dead_ends.md`, and reports bad headers.
+
+## Task map
+
+Every task has `map.md`: a Mermaid graph of what is inside the task, one node per subtask
+or line of attack, with its status and the arrows between them. `opsci task new` writes it
+with a single node, and `opsci map build` writes that starting map for any task that has
+none; neither ever rewrites an existing map. The main agent keeps it current after every
+finished subtask. A task with no internal structure keeps its single node. The project
+graph links each task to its map.
 
 ```yaml
 ---

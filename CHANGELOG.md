@@ -11,6 +11,17 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Every task has a graph, `tasks/<id>/map.md`: a Mermaid graph of its subtasks, their
+  status and the arrows between them. `opsci task new` writes it with a single node;
+  `opsci map build` writes that starting map for any task that has none and never rewrites
+  an existing one. The project graph's node table links each task to its map. The first of
+  the four questions after a finished subtask now includes the task map. Task maps need no
+  `status` header in the publish check.
+- The publish check's private-content comparison ignores the node-table marker text, which
+  every task context shares.
+- No project layout change. After updating, run `opsci map build`: it adds `map.md` to every
+  existing task.
+
 - A task's `context.md` and `plan.md` show the node header as a two-column table under the
   title, between `opsci:node-table` comment markers, so that it reads well in a Markdown
   viewer that hides front matter (VS Code, the project site). The YAML front matter stays the
