@@ -28,6 +28,16 @@ three minutes of reading.
 
 ## Install
 
+Add this repository as a Claude Code plugin marketplace, install the `open-science` plugin,
+and run its onboarding skill:
+
+```bash
+claude plugin marketplace add mhycheung/open-science   # or the path to a local checkout
+claude plugin install open-science@open-science
+```
+
+Then, in a new Claude Code session, type `/open-science:onboard`.
+
 The framework has three components. Use any combination; each works without the others,
 except context management, which needs project management.
 
@@ -41,20 +51,6 @@ There are also two [optional extras](#optional-extras).
 
 Context management needs Claude Code to run inside tmux; the
 [tmux guide](docs/tmux.md) shows how to set it up, including on a cluster's compute node.
-
-Add this repository as a Claude Code plugin marketplace, install the `open-science` plugin,
-and run its onboarding skill:
-
-```bash
-claude plugin marketplace add mhycheung/open-science   # or the path to a local checkout
-claude plugin install open-science@open-science
-```
-
-Then, in a new Claude Code session, type `/open-science:onboard`. It checks what your machine
-already has, asks which components you want (explaining each), installs their plugins and
-the `opsci` command (Python 3.11 or later), sets up tmux, GitHub access, notifications and
-tokens. It changes none of your settings without asking, and never asks you to paste a token
-into the chat.
 
 ## Updates
 
