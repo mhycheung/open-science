@@ -17,11 +17,15 @@ works after a jump with no file named:
 
 ```bash
 PC="${CLAUDE_PLUGIN_ROOT}/scripts/pane_context.sh"
-bash "$PC" set tasks/<id>/context.md    # when you start driving a task
+bash "$PC" set tasks/<id>/context.md    # when you start driving a task, or create one
 bash "$PC" get                          # prints the registered path, or exits 1
 ```
 
-Subagents never call `set`: they inherit the main agent's pane.
+Register again whenever the session moves to another task, including a task it has just
+created (brainstorm and verification tasks too), unless the user says to stay on the current
+one. A stale registration sends the next jump, `/clear` or resurrection back to the old task
+and keeps the old task in the session name. Subagents never call `set`: they inherit the
+main agent's pane.
 
 **Session names** (on when the user said yes in onboarding: `OPSCI_SESSION_NAMES=1` in the
 `env` block of the Claude `settings.json`). A hook names the session after the project

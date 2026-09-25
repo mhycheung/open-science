@@ -11,6 +11,11 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Agents switch the session to every task they create (planned, no plan, brainstorm,
+  verification) unless the user says to stay on the current one: they register the pane for
+  the new task, so jumps and `/clear` resume it and the session name shows its short name.
+  The new-task skill makes this its own step 6 and the brainstorm and verification sections
+  point to it; `opsci task new` prints a reminder when run inside tmux.
 - Verification tasks: audits, checks, reproductions and adverse reviews of work that is
   already done. A verification task is a task whose header names what it checks in the new
   field `verifies:`. It lives in `tasks/<id>/verifications/<vid>/` when it checks one task's

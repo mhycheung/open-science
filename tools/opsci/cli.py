@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import os
 import sys
 from pathlib import Path
 
@@ -157,6 +158,10 @@ def main(argv=None) -> int:
             base = nodes.graph_root(base)[0]
         made = sorted(p.relative_to(base).as_posix() for p in tdir.rglob("*") if p.is_file())
         print(f"created {tdir}: " + ", ".join(made))
+        if os.environ.get("TMUX_PANE"):
+            print(f"next: this session now drives the new task: register the pane for "
+                  f"{tdir / 'context.md'} (open-science-context:context-management), unless the "
+                  f"user said to stay on the current task")
         return 0
 
     tk = sub.add_parser("task", help="tasks").add_subparsers(dest="cmd", required=True)

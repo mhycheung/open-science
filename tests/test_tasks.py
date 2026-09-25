@@ -38,6 +38,17 @@ def test_task_new_creates_layout_and_map_builds(project):
     assert "t01-noise" in (project / "map" / "graph.md").read_text()
 
 
+def test_task_new_reminds_to_register_the_pane_in_tmux(project, monkeypatch):
+    monkeypatch.setenv("TMUX_PANE", "%3")
+    r = run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--root", project)
+    assert r.returncode == 0, r.stderr
+    assert "register the pane for" in r.stdout and "t01-noise/context.md" in r.stdout
+    monkeypatch.delenv("TMUX_PANE")
+    r = run_opsci("task", "new", "t02-other", "--title", "Other", "--root", project)
+    assert r.returncode == 0, r.stderr
+    assert "register the pane" not in r.stdout
+
+
 # ---- node table -------------------------------------------------------------------------
 
 TABLE_START = "<!-- opsci:node-table"

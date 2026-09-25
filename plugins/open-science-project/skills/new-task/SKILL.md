@@ -66,9 +66,15 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
    and this task's `context.md` alone? Anything it would have to ask belongs in one of them.
    Run `opsci map build` and `opsci context check`.
 
-6. If the `open-science-context` plugin is installed, **register the pane** for
-   `tasks/<id>/context.md` (`open-science-context:context-management`, "Pane registration").
-   Commit, and **report the plan to the user and stop.** Execution starts when the user
+6. **Switch the session to the new task**, right after `opsci task new`, for every kind of
+   task (planned, no plan, brainstorm, verification), unless the user says to stay on the
+   current one. With the `open-science-context` plugin installed, register the pane for the
+   new task's `context.md` (`open-science-context:context-management`, "Pane registration"):
+   this replaces the previous task's registration, so a jump or `/clear` resumes the new task,
+   and with session names on the session is renamed `<project> · <short name>` at the
+   user's next prompt. Say in one line that the session now drives the new task.
+
+7. Commit, and **report the plan to the user and stop.** Execution starts when the user
    approves it.
 
 ## Privacy tier
@@ -113,8 +119,8 @@ the project one.
 A brainstorm task needs no plan and no approval. Make it as soon as the user says
 "brainstorm" or starts exploring an idea: skip step 1's questions, create it without
 `--plan`, record the question and what has been found so far in its `context.md` and in
-the brainstorm `context.md` table, commit, and carry on with the conversation. Step 6's
-stop does not apply. Keep its `context.md` current as the discussion goes on.
+the brainstorm `context.md` table, switch the session to it (step 6), commit, and carry on
+with the conversation. Step 7's stop does not apply. Keep its `context.md` current as the discussion goes on.
 
 A side question about existing work, not a new idea, is a private investigation instead
 (`open-science-project:private-investigation`).
@@ -135,7 +141,8 @@ start one to recheck your own work (`AGENTS.md` §2). Same procedure, with
 `tasks/<id>/verifications/` when every verified node lies in that task, else in
 `verifications/`; its privacy is the strictest of the verified nodes (do not ask). Its
 findings are results in its own `results/`; a confirmed node gets `verification: verified`
-with `evidence:` there, a refuted one a new `status` (`tasks/README.md`).
+with `evidence:` there, a refuted one a new `status` (`tasks/README.md`). Step 6 applies:
+the session switches to the verification task.
 
 ## Autonomy (plan header)
 
