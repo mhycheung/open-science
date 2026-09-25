@@ -88,7 +88,7 @@ def test_export_follows_manifest_and_headers(proj):
     assert ex.excluded["tasks/t01-fit/draft.md"] == "node t01-draft: soft-private"
     assert {f for f in ex.hard if f.startswith("tasks/")} == {
         "tasks/t03-secret/context.md", "tasks/t03-secret/log.md", "tasks/t03-secret/map.md",
-        "tasks/t03-secret/subcontext/README.md"}
+        "tasks/t03-secret/results/README.md", "tasks/t03-secret/subcontext/README.md"}
     assert ex.excluded["rules/secret.md"] == "listed under never"
 
 
@@ -132,7 +132,7 @@ def test_site_identifier_and_private_policy_are_refused(proj):
 
 
 def test_document_without_status_is_refused(proj):
-    (proj / "results").mkdir()
+    (proj / "results").mkdir(exist_ok=True)  # map build writes results/README.md
     (proj / "results/fit.md").write_text("# Fit result\n\nNo header.\n")
     m = proj / "publish/manifest.yaml"
     m.write_text(m.read_text().replace("  - path: tasks\n", "  - path: tasks\n  - path: results\n"))

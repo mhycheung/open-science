@@ -47,7 +47,12 @@ def test_exported_map_leaves_out_private_nodes(proj):
     assert "open-work" in graph and "t01-fit" in graph
     for leak in ("secret-collab", "secret_collab", "Rivendell", "Unpublished joint analysis"):
         assert leak not in graph, leak
-    assert ex.rebuilt_map == ["map/graph.md", "map/dead_ends.md"]
+    assert ex.rebuilt_map[:3] == ["map/graph.md", "map/dead_ends.md", "map/claims.md"]
+    assert "results/README.md" in ex.rebuilt_map and "tasks/open-work/results/README.md" in ex.rebuilt_map
+    for rel in ex.rebuilt_map:  # the claims graph and the results pages leave it out too
+        text = (ex.tree / rel).read_text()
+        for leak in ("secret-collab", "secret_collab", "Rivendell", "Unpublished joint analysis"):
+            assert leak not in text, (rel, leak)
     assert "tasks/secret-collab/context.md" not in ex.files
     # the published task still names its hard-private dependency in its header: refused twice
     assert of(probs, "references") == [

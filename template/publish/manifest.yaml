@@ -16,6 +16,7 @@ include:
   - path: LICENSE-docs
   - path: context.md
   - path: map
+  - path: results
   - path: log
   - path: citations
   - path: rules

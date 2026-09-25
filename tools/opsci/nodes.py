@@ -24,8 +24,8 @@ SUBROOTS = ("brainstorm",)
 # Directories whose subdirectories are tasks.
 TASK_ROOTS = ("tasks",) + tuple(f"{s}/tasks" for s in SUBROOTS)
 # Files map build writes itself.
-GENERATED = ("map/graph.md", "map/dead_ends.md") + tuple(
-    f"{s}/map/{f}" for s in SUBROOTS for f in ("graph.md", "dead_ends.md"))
+GENERATED = ("map/graph.md", "map/dead_ends.md", "map/claims.md", "results/README.md") + tuple(
+    f"{s}/map/{f}" for s in SUBROOTS for f in ("graph.md", "dead_ends.md", "claims.md"))
 DEAD_STATUSES = ("failed", "superseded", "abandoned")
 PRIVACY_TIERS = ("public", "soft-private", "hard-private")
 EDGE_FIELDS = ("depends_on", "supersedes", "related")

@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from . import leakscan, mapbuild, nodes, secretscan
+from . import leakscan, mapbuild, nodes, results, secretscan
 
 MANIFEST = "publish/manifest.yaml"
 LAST_PUBLISHED = "publish/LAST_PUBLISHED"
@@ -354,7 +354,8 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
         map_nodes, mprobs = _map_nodes(snap, hard, exported_nodes)
         map_nodes, oprobs, map_private = apply_map_overrides(map_nodes, set(files), snap / MAP_OVERRIDES)
         rprobs += mprobs + oprobs
-        texts = mapbuild.outputs(map_nodes, lambda sub: f"{sub}/map/graph.md" in files, set(files))
+        texts = mapbuild.outputs(map_nodes, lambda sub: f"{sub}/map/graph.md" in files, set(files),
+                                 results.read_bib(snap))
         for rel, text in texts.items():
             if rel in files:
                 (tree / rel).write_text(text, encoding="utf-8")
@@ -801,6 +802,14 @@ def _boilerplate(n: int) -> tuple[set[str], str]:
         for linked in (None, set()):
             texts += [mapbuild.render_graph(blank, linked), mapbuild.render_dead_ends(blank, linked)]
         texts.append(mapbuild.render_graph([]))
+        texts.append(results.render_claims([]))
+        with_result = [nodes.Node(f"{d}tasks/x/context.md", {"id": "x", "title": "", "type": "task",
+                                                             "status": status, "summary": ""})
+                       for d in ("", "brainstorm/")] + [
+            nodes.Node("tasks/x/results/y.md", {"id": "y", "title": "", "type": "result", "status": status,
+                                                "summary": "", "depends_on": ["x"]})]
+        for g in ([], with_result):
+            texts += list(results.outputs(g, lambda sub: True, None).values())
     tdir = template.default_template_dir()
     if tdir is not None:
         for p in sorted(tdir.rglob("*")):

@@ -45,7 +45,10 @@ skills, so they update for every project at once. This file holds the project's 
 ## 3. After every finished subtask (the four questions)
 
 1. Did a task's status or edges change, or did a subtask start, finish, fail or branch? →
-   update its node header and `tasks/<id>/map.md`, run `opsci map build`.
+   update its node header and `tasks/<id>/map.md`. Did a scientific result land, change or
+   fail? → write or update its file in `tasks/<id>/results/` (a debugging plot is not a
+   result). Run `opsci map build`, and settle every result it reports as resting on failed
+   or superseded work.
 2. Does the next agent need to know? → update `context.md`.
 3. Was a source or package used or consulted? → `citations/used.bib` or `consulted.md`.
 4. Append one line to `log/YYYY-MM.md` pointing at the task log.

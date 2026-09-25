@@ -30,7 +30,8 @@ def cmd_map_build(args) -> int:
     root, _ = nodes.graph_root(Path(args.root))
     subs = [f"{d}/map/" for d in nodes.SUBROOTS if (root / d).is_dir()]
     tables = [s for s in stale if nodes.is_task_context(s) or nodes.is_task_plan(s)]
-    print(f"map build: {len(res.nodes)} nodes; wrote map/graph.md and map/dead_ends.md"
+    print(f"map build: {len(res.nodes)} nodes; wrote map/graph.md, map/dead_ends.md, map/claims.md "
+          "and the results pages"
           + (f", and the same in {', '.join(subs)}" if subs else "")
           + (f"; rewrote the node table in {', '.join(tables)}" if tables else "") + ".")
     return 0
@@ -65,7 +66,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="group", required=True)
 
     m = sub.add_parser("map", help="project graph").add_subparsers(dest="cmd", required=True)
-    b = m.add_parser("build", help="write map/graph.md and map/dead_ends.md from node headers")
+    b = m.add_parser("build", help="write map/graph.md, map/dead_ends.md, map/claims.md and the results pages from node headers")
     b.add_argument("root", nargs="?", default=".")
     b.add_argument("--check", action="store_true", help="report only; fail if the generated files are stale")
     b.set_defaults(func=cmd_map_build)

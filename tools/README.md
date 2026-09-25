@@ -8,8 +8,9 @@ pip install "git+<framework repo URL>@<tag>#subdirectory=tools"
 
 Commands:
 
-- `opsci map build [ROOT]` — read every node header in a project, write `map/graph.md` and
-  `map/dead_ends.md`, and report bad headers. `--check` reports without writing and fails
+- `opsci map build [ROOT]` — read every node header in a project, write `map/graph.md`,
+  `map/dead_ends.md`, `map/claims.md` (the claims graph) and the results pages
+  (`results/README.md`, `tasks/<id>/results/README.md`), and report bad headers. `--check` reports without writing and fails
   if the generated files are out of date. The project graph includes the `brainstorm/`
   nodes, in a box of their own, and leaves out `private-docs/` (and `data/`, `lit_cache/`);
   it also writes `brainstorm/map/` with the brainstorm nodes alone. `opsci map build
@@ -17,7 +18,7 @@ Commands:
 - `opsci template instantiate DEST --name ... --title ... --author ...` — copy the project
   template into `DEST` and fill its placeholders.
 - `opsci task new ID --title ... [--plan] [--privacy TIER] [--depends-on ID...]` — create
-  `tasks/ID/` with `context.md` (node header), `map.md`, `log.md`, `subcontext/` and, with `--plan`,
+  `tasks/ID/` with `context.md` (node header), `map.md`, `results/README.md`, `log.md`, `subcontext/` and, with `--plan`,
   `plan.md` from the plan template (`--autonomy`, `--hold-at`). `--privacy` is `public`
   (default), `soft-private` or `hard-private`. Refuses a bad or existing id and edges to
   unknown nodes. `--root brainstorm` makes a brainstorm task; its edges can name only

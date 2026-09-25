@@ -1,4 +1,5 @@
-"""`opsci task new`: create a task directory with its node header, map, log and (optional) plan."""
+"""`opsci task new`: create a task directory with its node header, map, results page, log and
+(optional) plan."""
 
 from __future__ import annotations
 
@@ -10,7 +11,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from . import nodes, nodetable
+from . import nodes, nodetable, results
 
 ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
 AUTONOMY = ("autonomous", "checkpoints", "collaborative")
@@ -212,6 +213,9 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
             title=title, date=date.isoformat(), goal=goal or GOAL_NONE,
             next_step=next_step, pointers=pointers)), encoding="utf-8")
         (tdir / "map.md").write_text(MAP_BODY.format(title=title, id=task_id), encoding="utf-8")
+        (tdir / "results").mkdir()
+        node = nodes.Node(f"{prefix}tasks/{task_id}/context.md", header)
+        (tdir / "results" / "README.md").write_text(results.render_task_results(node, [node]), encoding="utf-8")
         (tdir / "log.md").write_text(LOG_README.format(title=title, date=date.isoformat()), encoding="utf-8")
         (tdir / "subcontext").mkdir()
         (tdir / "subcontext" / "README.md").write_text(SUBCONTEXT_README, encoding="utf-8")

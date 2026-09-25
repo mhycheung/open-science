@@ -34,7 +34,7 @@ if [ "$n" -gt "$cap" ]; then
   exit 2
 fi
 if [ "$base" = context.md ] && [ "$grand" = tasks ]; then
-    msg="open-science-project: task context saved ($n/$cap lines). If a subtask just finished, check: (1) did a status or edge change, or a subtask start, finish, fail or branch? update the header and the task map.md; (2) does the next agent need it? update the project context.md; (3) did you use or consult a source or package? update citations/; (4) one line in the task log.md."
+    msg="open-science-project: task context saved ($n/$cap lines). If a subtask just finished, check: (1) did a status or edge change, or a subtask start, finish, fail or branch? update the header and the task map.md; did a scientific result land, change or fail? update its file in the task's results/; run opsci map build; (2) does the next agent need it? update the project context.md; (3) did you use or consult a source or package? update citations/; (4) one line in the task log.md."
     jq -n --arg m "$msg" '{hookSpecificOutput:{hookEventName:"PostToolUse", additionalContext:$m}}'
 fi
 exit 0

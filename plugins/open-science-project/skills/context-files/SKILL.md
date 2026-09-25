@@ -40,8 +40,10 @@ before ending a turn with work unfinished.
 
 **After every finished subtask, the four questions** (`contracts/main.md` §3):
 1. Did a status or edge change, or did a subtask start, finish, fail or branch? Update the
-   node header and the task's `map.md`; run `opsci map build`, which also
-   rewrites the header table under the title.
+   node header and the task's `map.md`. Did a scientific result land, change or fail?
+   Write or update its file in `tasks/<id>/results/` (`tasks/README.md`, "Results"). Run
+   `opsci map build`, which also rewrites the header table under the title and the results
+   pages, and settle every result it reports as resting on failed or superseded work.
 2. Does the next agent need it? Update the project `context.md`.
 3. Was a source or package used or consulted? Update `citations/`.
 4. One line in `tasks/<id>/log.md` and one in `log/YYYY-MM.md`.

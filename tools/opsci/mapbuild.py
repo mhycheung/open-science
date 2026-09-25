@@ -7,7 +7,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from . import nodetable, tasks
+from . import nodetable, results, tasks
 from .nodes import (DEAD_STATUSES, SUBROOTS, Node, Problem, ScanResult, graph_root, is_task_context,
                     is_task_plan, list_files, scan)
 
@@ -69,8 +69,10 @@ def render_graph(nodes: list[Node], linked: set[str] | None = None) -> str:
     """The graph of ``nodes``. Edges to ids outside ``nodes`` are left out, so a graph of a
     subset (the published nodes) names nothing outside it. Nodes under a sub-root
     (``brainstorm/``) are drawn in a box of their own. With ``linked`` (a set of paths), only
-    those nodes link to their files; the others are named without a link."""
-    nodes = sorted(nodes, key=lambda n: n.id)
+    those nodes link to their files; the others are named without a link. Results in a
+    results directory are left out: the claims graph (``results.render_claims``) draws them."""
+    in_claims = [n for n in nodes if n.get("type") == "result" and results.results_dir(n.path)]
+    nodes = sorted((n for n in nodes if n not in in_claims), key=lambda n: n.id)
     ids = {n.id for n in nodes}
     out = [BANNER, "", "# Project graph", ""]
     if not nodes:
@@ -84,6 +86,9 @@ def render_graph(nodes: list[Node], linked: set[str] | None = None) -> str:
     if boxes:
         out.append("The nodes in the " + ", ".join(f"`{b}`" for b in boxes) +
                    " box are ideas under that directory, not yet project work.")
+    if in_claims:
+        out.append(f"The {len(in_claims)} results in `results/` directories, and what they rest on, are in "
+                   "[the claims graph](claims.md).")
     out += ["", "```mermaid", "flowchart LR"]
     for box in [None] + boxes:
         if box:
@@ -139,9 +144,12 @@ def render_dead_ends(nodes: list[Node], linked: set[str] | None = None) -> str:
     return "\n".join(out)
 
 
-def outputs(all_nodes: list[Node], root_has, linked: set[str] | None = None) -> dict[str, str]:
+def outputs(all_nodes: list[Node], root_has, linked: set[str] | None = None,
+            bib: dict[str, str] | None = None) -> dict[str, str]:
     """The generated map files: the project map of every node, and for each sub-root that
-    exists (``root_has(name)``) a map of its nodes alone, with paths relative to it."""
+    exists (``root_has(name)``) a map of its nodes alone, with paths relative to it; then the
+    claims graph and the results pages (``results.outputs``). ``bib``: the titles of the
+    keys in citations/used.bib."""
     out = {"map/graph.md": render_graph(all_nodes, linked),
            "map/dead_ends.md": render_dead_ends(all_nodes, linked)}
     for sub in SUBROOTS:
@@ -152,6 +160,7 @@ def outputs(all_nodes: list[Node], root_has, linked: set[str] | None = None) -> 
         sub_linked = None if linked is None else {p[len(pre):] for p in linked if p.startswith(pre)}
         out[f"{sub}/map/graph.md"] = render_graph(mine, sub_linked)
         out[f"{sub}/map/dead_ends.md"] = render_dead_ends(mine, sub_linked)
+    out.update(results.outputs(all_nodes, root_has, linked, bib))
     return out
 
 
@@ -233,12 +242,14 @@ def task_maps(root: Path, res: ScanResult) -> dict[str, str]:
 
 def build(root: Path, check: bool = False) -> tuple[ScanResult, list[str]]:
     """Scan, check and (unless check) write. Returns the scan and the stale generated files:
-    the maps, the task files whose node table is out of date, and the missing task maps. A
+    the maps, the claims graph and results pages, the task files whose node table is out of
+    date, and the missing task maps. A
     sub-root (``brainstorm``) builds the project around it: one graph covers both."""
     root, _ = graph_root(Path(root))
     res = scan(root)
     check_manifest(root, res)
-    files = outputs(res.nodes, lambda sub: (root / sub).is_dir())
+    results.check(root, res)
+    files = outputs(res.nodes, lambda sub: (root / sub).is_dir(), bib=results.read_bib(root))
     files.update(node_tables(root))
     files.update(task_maps(root, res))
     stale = []

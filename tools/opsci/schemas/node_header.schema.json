@@ -42,6 +42,28 @@
       "type": "string",
       "minLength": 1
     },
+    "kind": {
+      "description": "A result's kind: figure, table, value, statement, concept, or assumption (taken as given, not established here).",
+      "enum": ["figure", "table", "value", "statement", "concept", "assumption"]
+    },
+    "milestone": {
+      "description": "A result the project reports as a main result (one a paper would report); listed in results/README.md.",
+      "type": "boolean"
+    },
+    "artifacts": {
+      "description": "Paths, relative to the project root, where the result is stored: figures, tables, data files.",
+      "$ref": "#/$defs/pathlist"
+    },
+    "code": {
+      "description": "Paths, relative to the project root, of the code that produced the result.",
+      "$ref": "#/$defs/pathlist"
+    },
+    "uses": {
+      "description": "Keys in citations/used.bib of the external works (papers, software, data) the node relies on.",
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
     "tags": {"type": "array", "items": {"type": "string"}},
     "autonomy": {"type": "string"},
     "hold_at": {"type": "array", "items": {"type": "string"}}
@@ -52,6 +74,11 @@
   },
   "then": {"required": ["evidence"]},
   "$defs": {
+    "pathlist": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[^/~]", "minLength": 1},
+      "uniqueItems": true
+    },
     "idlist": {
       "type": "array",
       "items": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
