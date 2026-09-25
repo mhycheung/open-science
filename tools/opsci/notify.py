@@ -449,3 +449,7 @@ def add_parser(sub) -> None:
     p.add_argument("text", help="message text")
     p.add_argument("file", nargs="?", help="file to attach")
     p.set_defaults(func=cmd_notify)
+
+
+# The notion back end lives in its own package; importing it registers it.
+from .notion import backend as _notion_backend  # noqa: E402,F401

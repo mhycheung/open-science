@@ -8,6 +8,8 @@
 /.opsci/
 # Site settings and secrets
 /config/site.local.yaml
+# Notion page ids and sync state of this checkout (opsci notion)
+/config/notion.local.yaml
 .env
 *.env
 # Environments and build products

@@ -8,6 +8,8 @@ copied_on: "{{DATE}}"
 layout_version: 2
 # Uses the context-management component (plugin open-science-context): session jumps.
 context_management: {{CONTEXT_MANAGEMENT}}
+# Mirrored to Notion (opsci notion; AGENTS.md section 10).
+notion: {{NOTION}}
 # Files this project changed on purpose; an update must keep these changes.
 local_divergence: []
 #  - file: AGENTS.md

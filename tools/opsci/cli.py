@@ -42,11 +42,14 @@ def cmd_template_instantiate(args) -> int:
         dest = template.instantiate(Path(args.dest), args.name, args.title, args.author,
                                     template=args.template, date=date,
                                     framework_repo=args.framework_repo,
-                                    context_management=not args.no_context_management)
+                                    context_management=not args.no_context_management,
+                                    notion=args.notion)
     except template.TemplateError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"created project '{args.name}' in {dest}")
+    if args.notion:
+        print("next: in the new project, run `opsci notion init` to create its Notion pages")
     return 0
 
 
@@ -81,12 +84,18 @@ def main(argv=None) -> int:
     i.add_argument("--framework-repo", help="framework repo URL to record")
     i.add_argument("--no-context-management", action="store_true",
                    help="leave out the context-management component (plugin open-science-context)")
+    i.add_argument("--notion", action="store_true",
+                   help="mirror the project to Notion: AGENTS.md section 10 and the auto-sync hook "
+                        "(then run opsci notion init)")
     i.set_defaults(func=cmd_template_instantiate)
     c = t.add_parser("check", help="check a project made from the template")
     c.add_argument("root", nargs="?", default=".")
     c.set_defaults(func=cmd_template_check)
 
     notify.add_parser(sub)
+
+    from . import notion  # `opsci notion ...`
+    notion.add_parser(sub)
 
     from . import zenodo_cli  # S5: `opsci zenodo ...`
     zenodo_cli.add_parser(sub)
