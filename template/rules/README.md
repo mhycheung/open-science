@@ -2,7 +2,7 @@
 
 One line per rule: its id, the rule, and when it applies. Context files and dispatches cite
 rules by id ("R01, R04 apply"); agents open a rule's detail file only when it is cited.
-Rules too long for one line get a detail file `rules/R<nn>-<name>.md`. The owner and agents
+Rules too long for one line get a detail file `rules/R<nn>-<name>.md`. The user and agents
 add rules; a rule is added when a real incident or decision paid for it. The rules that must
 never be broken are in `AGENTS.md` §0, not here.
 

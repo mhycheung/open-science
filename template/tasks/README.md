@@ -52,7 +52,7 @@ writes it and `opsci map build` rewrites it from the front matter; never edit th
 Required: `id`, `title`, `type`, `status`, `summary`. A task may carry `short_name`; a plan
 header may also carry `autonomy` and `hold_at`; any node may carry `tags`. Any other key is
 an error, so a typo is caught. `verified` means a stated check was run against a provenance
-record, and `evidence` points to both. Only the owner sets `human-verified`.
+record, and `evidence` points to both. Only the user sets `human-verified`.
 
 `privacy` grades the node: `public`, `soft-private` or `hard-private` (definitions in
 `AGENTS.md` §6). Only a public task's directory is exported. A soft- or hard-private task

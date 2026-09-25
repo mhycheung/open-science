@@ -260,10 +260,10 @@ or a git-ignored `.env`. The filter is the last line of defence, not the first.
 
 ### Policy decisions the framework cannot make for you
 
-These go in the template as explicit fields the project owner fills in:
+These go in the template as explicit fields the user fills in:
 
 - **Embargo.** Publishing active tasks and failed routes before a paper exposes the idea
-  early. The `publish: embargo` header handles it per task; the owner decides the default.
+  early. The `publish: embargo` header handles it per task; the user decides the default.
 - **Collaborators.** Co-authors should agree before shared work is made public. Content from
   others (unpublished data, emails, referee reports) is excluded by default.
 - **Data under agreements.** Some data cannot be public (for example collaboration-internal
@@ -534,7 +534,7 @@ Answers to the gaps raised after the first review.
    - A `pull-public` step brings public-side changes (merged outside pull requests, issue
      fixes) back into the private repo. It diffs the public repo against the last
      published snapshot and applies the changes to the private repo on a branch, for the
-     owner to review and merge. The next publish then includes them, so the two sides stay
+     user to review and merge. The next publish then includes them, so the two sides stay
      the same.
    - This is part of the `publish` skill, or a small `sync-public` skill.
 9. **No "user rulings" section; rules only.** Anything that used to be a user ruling is
@@ -699,7 +699,7 @@ template and the other skills already define the target, so this skill only stat
 get there.
 
 1. **Work on a branch in a worktree** of the existing repo, so the original stays untouched
-   until the owner merges. If the project is not a git repo, `git init` it and commit the
+   until the user merges. If the project is not a git repo, `git init` it and commit the
    current state first. If jobs or subagents are running, record their ids in the new
    project context; do not wait for them.
 2. **Add the scaffolding** from the template without overwriting any existing file, and

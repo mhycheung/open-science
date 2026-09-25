@@ -193,7 +193,7 @@ def scan(root: Path) -> ScanResult:
             # Layout 1 used `publish: yes|no|embargo` (CHANGELOG 0.3.0, Project migration).
             res.errors.append(Problem(rel, "`publish` was replaced by `privacy: public | soft-private | "
                                       "hard-private` (yes -> public; no or embargo -> soft-private or "
-                                      "hard-private, the owner decides)"))
+                                      "hard-private, the user decides)"))
             if isinstance(header.get("id"), str):
                 res.bad_ids.add(header["id"])
             continue

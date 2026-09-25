@@ -11,6 +11,12 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- "Owner" is now "user" everywhere in the framework: skills, hooks, the template, the docs
+  and messages (for example the project `context.md` section "Waiting on the user"). The
+  meaning is unchanged: the person the project belongs to.
+- No project layout change. `open-science-project:update-from-template` takes the new
+  wording like any other template change.
+
 - Every task has a graph, `tasks/<id>/map.md`: a Mermaid graph of its subtasks, their
   status and the arrows between them. `opsci task new` writes it with a single node;
   `opsci map build` writes that starting map for any task that has none and never rewrites
@@ -56,7 +62,7 @@ layout 1) and the framework's, in order, before it applies the other template ch
   or gives one a more general title and summary in the published map; the new check
   `map-overrides` validates it. The publish report lists how each unpublished node appears,
   and the `open-science-publish:publish` skill judges which ones are too specific and asks
-  the owner.
+  the user.
 - No project layout change. After updating, run `opsci map build`: the committed map now
   includes the brainstorm nodes, and the publish check reports it out of date until it is
   rebuilt. Brainstorm tasks made before this release say `privacy: public`; if `brainstorm`
@@ -74,7 +80,7 @@ layout 1) and the framework's, in order, before it applies the other template ch
 - README, documentation and user guide lead with doing research in the open; agents are
   optional. README and Get started describe how to use `opsci` without Claude Code.
 - Template `AGENTS.md` §2: "Record the work": a request for project work gets a task
-  without asking (a brainstorm task when the owner says "brainstorm"); for a request that
+  without asking (a brainstorm task when the user says "brainstorm"); for a request that
   may not be work, the agent answers first and asks at the end whether to record it.
   "Literature": sources read in full go to `lit_cache/` and the citation files, and when
   more than one paper is consulted, subagents read the full texts. The `new-task` skill
@@ -86,7 +92,7 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 - Three new project directories. `brainstorm/`: ideas before they become project work, with
   its own `context.md`, `tasks/`, `map/` and `log/` (`opsci task new <id> --root
-  brainstorm`, `opsci map build brainstorm`); not published unless the owner adds it to the
+  brainstorm`, `opsci map build brainstorm`); not published unless the user adds it to the
   manifest. `docs/`: documentation, published. `private-docs/`: private notes, committed but
   never exported. Both are soft-private: nothing outside them may link to them.
 - `opsci map build` and `opsci task new` ignore `brainstorm/` and `private-docs/` in the
@@ -97,7 +103,7 @@ layout 1) and the framework's, in order, before it applies the other template ch
   `references` and `private-content`, refuse an export that links to material that is not
   published or names or copies hard-private material (see the privacy tiers below). The
   review also compares the export with the excluded files. `docs/` and the brainstorm skeleton files need no `status:` header. When
-  the owner publishes `brainstorm/`, its task headers decide what is exported, as in `tasks/`.
+  the user publishes `brainstorm/`, its task headers decide what is exported, as in `tasks/`.
 - **Three privacy tiers.** The node header field `privacy: public | soft-private |
   hard-private` replaces `publish: yes | no | embargo`; `embargo` is gone, and a header that
   still has `publish:` fails `opsci map build` with a message naming `privacy`. `public`: may
@@ -112,7 +118,7 @@ layout 1) and the framework's, in order, before it applies the other template ch
   redaction marker in a private file, `<!-- redact: <reason> -->text<!-- /redact -->`, is
   replaced by `[redacted (<reason>)]` in the export; the new check `redaction` refuses an
   unclosed marker or an empty reason. `open-science-publish:publish` lists every
-  hard-private mention to the owner, who decides for each whether to change, remove or
+  hard-private mention to the user, who decides for each whether to change, remove or
   redact it. `open-science-project:new-task` asks for the tier, with both private tiers
   defined in the question, when a task obviously looks private.
 - `open-science-project:update-from-template` works from an installed plugin (it clones the
@@ -124,11 +130,11 @@ layout 1) and the framework's, in order, before it applies the other template ch
 Run from the project root, on a branch, with `FW` a framework checkout at this release.
 
 1. If the project already has a `brainstorm/` or `private-docs/` directory, stop and ask the
-   owner how to proceed: their files would drop out of the project graph and, for
+   user how to proceed: their files would drop out of the project graph and, for
    `private-docs/`, out of every publish.
 2. Make the three directories from the template, without overwriting anything:
    ```bash
-   opsci template instantiate <scratch>/fresh --name <slug> --title "<title>" --author "<owner>" \
+   opsci template instantiate <scratch>/fresh --name <slug> --title "<title>" --author "<user>" \
        --template "$FW/template"
    for d in brainstorm docs private-docs; do mkdir -p "$d" && cp -rn "<scratch>/fresh/$d/." "$d/"; done
    ```
@@ -142,21 +148,21 @@ Run from the project root, on a branch, with `FW` a framework checkout at this r
    `never`, and after the `include` entries the two comment lines
    `# - path: brainstorm   # private by default; add this line to publish the brainstorm` and
    `#                      # directory. It is soft-private: it may be named, not linked.`
-   If `docs/` existed before step 2, ask the owner whether everything in it may be public
+   If `docs/` existed before step 2, ask the user whether everything in it may be public
    before you add the `include` entry.
-5. Ask the owner which existing notes are private (meeting notes, correspondence, drafts,
+5. Ask the user which existing notes are private (meeting notes, correspondence, drafts,
    remarks about people). Move each one with `git mv <file> private-docs/`. Then search the
    rest of the project for the old paths (`git grep -n '<old path>'`) and remove each
    reference or restate its content in public form.
 6. Privacy tiers. In every node header (every `context.md`, `plan.md` and other file with a
    node header, and every `node.yaml`, under `tasks/`, `brainstorm/` and elsewhere; find
    them with `git grep -n '^publish:'`), replace `publish: yes` with `privacy: public`. For
-   each node with `publish: no` or `publish: embargo`, ask the owner whether it is
+   each node with `publish: no` or `publish: embargo`, ask the user whether it is
    `soft-private` (not released, not in the public map, may be mentioned by name) or
    `hard-private` (must not appear anywhere in the release, not even by name), and write
    `privacy: <tier>`; with no answer, write `hard-private`. In `publish/manifest.yaml`,
    replace `embargo_default: "<v>"` with `default_privacy: <tier>`: `yes` becomes `public`;
-   for `no` or `embargo` ask the owner as above (`hard-private` with no answer).
+   for `no` or `embargo` ask the user as above (`hard-private` with no answer).
 7. In `config/framework.yaml`, after `copied_on`, add:
    ```yaml
    # The project layout this project follows. CHANGELOG.md in the framework repo says how to

@@ -209,7 +209,7 @@ def test_threshold_blocks_only_once_per_stop(env, tmp_path):
 
 
 def test_threshold_repeats_only_after_growth(env, tmp_path):
-    # a session waiting for the owner must not be blocked at every reply above the threshold
+    # a session waiting for the user must not be blocked at every reply above the threshold
     assert stop(env, payload(transcript=transcript(tmp_path, 300_000)))["decision"] == "block"
     assert stop(env, payload(transcript=transcript(tmp_path, 330_000))) is None
     assert stop(env, payload(transcript=transcript(tmp_path, 350_000)))["decision"] == "block"

@@ -13,7 +13,7 @@ files carry what is true now. History goes in the logs, detail in `subcontext/`.
 
 | file | holds | cap |
 |---|---|---|
-| `context.md` (project) | goal, task table, in flight, next step, waiting on the owner, open questions | 200 lines |
+| `context.md` (project) | goal, task table, in flight, next step, waiting on the user, open questions | 200 lines |
 | `tasks/<id>/context.md` | node header + the task's goal, current state, in flight, next step, pointers | 200 lines |
 | `tasks/<id>/subcontext/*.md` | one subtask or subagent each: how a result was reached, what was ruled out | none |
 | `tasks/<id>/log.md`, `log/YYYY-MM.md` | append-only history, one line per entry | none |
@@ -34,7 +34,7 @@ labelled MEASURED or ESTIMATED, commands are copy-pasteable.
 ## When to update
 
 Update the task context in the same turn as each of these, before the next action:
-a subtask finished; a result, decision or owner ruling landed; just before dispatching a
+a subtask finished; a result, decision or user ruling landed; just before dispatching a
 subagent or submitting a long job (record the id, where output lands, how to check it);
 before ending a turn with work unfinished.
 
@@ -55,7 +55,7 @@ dispatch prompt names its path. On conclusion, fold what is still needed into th
 
 ## Amending a context file or plan
 
-When the owner changes what the work should be: edit exactly what the discussion changed,
+When the user changes what the work should be: edit exactly what the discussion changed,
 keep the structure, keep the plan and the context consistent with each other, say plainly
 what you removed, and end with the path of the file you changed. Do not execute the plan
 as part of the edit.

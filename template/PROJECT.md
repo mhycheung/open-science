@@ -1,9 +1,9 @@
 # {{PROJECT_TITLE}}: what this project is about
 
-The owner's description of the project. `open-science-project:new-project` asks the owner what the
-project is about and writes the answer here, in substance. A section the owner has not
+The user's description of the project. `open-science-project:new-project` asks the user what the
+project is about and writes the answer here, in substance. A section the user has not
 answered keeps its `TODO:` line. Agents read this file and do not change what it says
-without the owner. `AGENTS.md` §1 holds a short summary of it.
+without the user. `AGENTS.md` §1 holds a short summary of it.
 
 ## The question
 
@@ -17,7 +17,7 @@ TODO:
 
 ## Approach
 
-<!-- The methods, data and tools the owner plans to use. -->
+<!-- The methods, data and tools the user plans to use. -->
 TODO:
 
 ## What counts as success

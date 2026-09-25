@@ -9,14 +9,14 @@ import pytest
 from conftest import TEMPLATE, git
 from opsci import mapbuild, publish, tasks, template
 
-OWNER = ["-c", "user.name=Owner", "-c", "user.email=owner@example.org"]
+USER = ["-c", "user.name=User", "-c", "user.email=user@example.org"]
 AGENT_TRAILER = "\n\nClaude-Session: https://claude.ai/code/session_x"
 
 
 def commit(root, msg="change", agent=False):
     mapbuild.build(root)
     git(root, "add", "-A")
-    git(root, *OWNER, "commit", "-qm", msg + (AGENT_TRAILER if agent else ""), "--allow-empty")
+    git(root, *USER, "commit", "-qm", msg + (AGENT_TRAILER if agent else ""), "--allow-empty")
 
 
 def set_header(path, key, value):
@@ -32,8 +32,8 @@ def set_header(path, key, value):
 def proj(tmp_path):
     root = template.instantiate(tmp_path / "proj", "demo", "Demo project", "A. Person", template=TEMPLATE)
     git(root, "init", "-q", "-b", "main")
-    git(root, "config", "user.name", "Owner")
-    git(root, "config", "user.email", "owner@example.org")
+    git(root, "config", "user.name", "User")
+    git(root, "config", "user.email", "user@example.org")
     tasks.new_task(root, "t01-fit", "Fit the model", summary="Fits the model.")
     with open(root / "tasks/t01-fit/context.md", "a") as f:
         f.write("\nThe fit follows [@smith2020].\n")
@@ -178,11 +178,11 @@ def test_human_verified_by_agent_commit_is_refused(proj):
     set_header(ctx, "verification", "human-verified")
     commit(proj, "agent sets it", agent=True)
     assert checks_of(proj) == ["human-verified"]
-    # the owner setting it, in a commit of their own, passes
+    # the user setting it, in a commit of their own, passes
     set_header(ctx, "verification", "verified")
     commit(proj, "agent", agent=True)
     set_header(ctx, "verification", "human-verified")
-    commit(proj, "owner checked the fit")
+    commit(proj, "user checked the fit")
     probs, _ = problems(proj)
     assert probs == []
 
@@ -191,12 +191,12 @@ def test_policy_and_stale_map_are_refused(proj):
     m = proj / "publish/manifest.yaml"
     m.write_text(m.read_text().replace("collaborators_agreed: true", "collaborators_agreed: false"))
     git(proj, "add", "-A")
-    git(proj, *OWNER, "commit", "-qm", "x")
+    git(proj, *USER, "commit", "-qm", "x")
     assert checks_of(proj) == ["policy"]
     git(proj, "reset", "-q", "--hard", "HEAD~1")
     set_header(proj / "tasks/t01-fit/context.md", "status", "done")
     git(proj, "add", "-A")
-    git(proj, *OWNER, "commit", "-qm", "no map build")
+    git(proj, *USER, "commit", "-qm", "no map build")
     assert checks_of(proj) == ["map"]
 
 
@@ -237,7 +237,7 @@ def test_push_records_and_status_passes_on_identical_pair(proj, public):
     private, pub = publish_now(proj, public)
     last = publish.read_last(proj)
     assert last["private"] == private and last["public"] == pub
-    # LAST_PUBLISHED is committed; only the new review report is left for the owner to commit
+    # LAST_PUBLISHED is committed; only the new review report is left for the user to commit
     assert git(proj, "status", "--porcelain").stdout.strip() == "?? publish/reports/"
     files = set(git(public, "ls-tree", "-r", "--name-only", "main").stdout.split())
     assert "tasks/t01-fit/context.md" in files and publish.SITE_WORKFLOW in files
@@ -291,8 +291,8 @@ def test_pull_public_carries_edit_into_a_branch(proj, public, tmp_path):
     changed = git(proj, "diff", "--name-only", f"main...{branch}").stdout.split()
     assert changed == ["tasks/t01-fit/log.md"]
     assert git(proj, "show", f"{branch}:contracts/main.md").stdout == private_only
-    # after the owner merges it, the next publish goes through
-    git(proj, *OWNER, "merge", "-q", "--no-edit", branch)
+    # after the user merges it, the next publish goes through
+    git(proj, *USER, "merge", "-q", "--no-edit", branch)
     assert publish.status(proj, str(public))[0] == []
     with open(proj / "tasks/t01-fit/context.md", "a") as f:
         f.write("more work\n")
@@ -341,7 +341,7 @@ REFUSED = [
 @pytest.mark.parametrize("tool,tool_input", REFUSED)
 def test_guard_refuses_an_agent_setting_human_verified(tproj, tool, tool_input):
     r = guard(tool, tool_input, tproj)
-    assert r.returncode == 2 and "only the project owner" in r.stderr
+    assert r.returncode == 2 and "only the user" in r.stderr
 
 
 @pytest.mark.parametrize("tool,tool_input", REFUSED)

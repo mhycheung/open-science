@@ -46,7 +46,7 @@ POLICY_KEYS = {"default_privacy", "collaborators_agreed"}
 PRIVACY_TIERS = nodes.PRIVACY_TIERS
 # How unpublished nodes appear in the published map: groups that replace several nodes with
 # one less specific node, and new titles and summaries for single nodes. Written by the
-# publish skill, approved by the owner; never exported (it is under publish/).
+# publish skill, approved by the user; never exported (it is under publish/).
 MAP_OVERRIDES = "publish/map_overrides.yaml"
 OVERRIDE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
 # Redaction marker, written in the private file; the export replaces the span with
@@ -674,7 +674,7 @@ def check_verification(root: Path, ex: Export) -> tuple[list[Problem], list[str]
             if sha:
                 probs.append(Problem("human-verified", n.path,
                                      f"`verification: human-verified` was set in agent commit {sha}; "
-                                     "only the owner sets it, in a commit of their own"))
+                                     "only the user sets it, in a commit of their own"))
     return probs, levels
 
 
@@ -1233,7 +1233,7 @@ def push(root: Path, export_id_expected: str, public_repo: str | None = None, co
 
 
 def _identity(root: Path) -> list[str]:
-    """-c options repeating the private repo's commit identity (the public commit is the owner's)."""
+    """-c options repeating the private repo's commit identity (the public commit is the user's)."""
     out = []
     for key in ("user.name", "user.email"):
         v = _git(root, "config", key, check=False).stdout.strip()

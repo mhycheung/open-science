@@ -12,13 +12,13 @@ one-line `TODO:` and goes in your report.
 ## Procedure
 
 1. **Ask only for what you cannot read off the environment:** the directory, a short slug
-   (lower case, digits, hyphens), a one-line title, and the owner's name (default
+   (lower case, digits, hyphens), a one-line title, and the user's name (default
    `git config user.name`).
 
    **Always also ask what the project is about**, as one open question in the same message.
    Name the points `PROJECT.md` has room for: the question, why it matters, the approach,
-   what counts as success, the scope, and the key sources. Tell the owner that a short
-   answer is fine and that any part can be left for later. Do not block on it: if the owner
+   what counts as success, the scope, and the key sources. Tell the user that a short
+   answer is fine and that any part can be left for later. Do not block on it: if the user
    skips it, create the project anyway and leave the `TODO:` lines.
 
 2. **Find the template.** The plugin ships inside the framework repo:
@@ -39,7 +39,7 @@ one-line `TODO:` and goes in your report.
    opsci template instantiate <dir> --name <slug> --title "<title>" --author "<name>" --template "$TPL"
    ```
 
-   Add `--no-context-management` unless the owner uses session jumps (the
+   Add `--no-context-management` unless the user uses session jumps (the
    `open-science-context` plugin is installed, or onboarding recorded component 3): it drops
    the template's lines about jumps and records `context_management: false`.
    It refuses a non-empty directory, fills every placeholder, records the framework commit in
@@ -49,7 +49,7 @@ one-line `TODO:` and goes in your report.
 4. **Make it a git repo** and commit everything:
    `git -C <dir> init -q && git -C <dir> add -A && git -C <dir> commit -qm "Create project from the open-science template"`.
 
-5. **Fill what you were given.** `PROJECT.md`: put the owner's answer under the matching
+5. **Fill what you were given.** `PROJECT.md`: put the user's answer under the matching
    headings, in their substance and close to their words. Do not add goals, methods or
    sources they did not state, and leave `TODO:` under every heading they did not answer.
    `AGENTS.md` §1: a 3–8 line summary of `PROJECT.md`, or `TODO:`. `README.md`: its opening
@@ -58,13 +58,13 @@ one-line `TODO:` and goes in your report.
    `config/site.local.yaml` (git-ignored) and fill those fields only. Commit.
 
 6. **Not automatic, only on request:**
-   - A public repo is created only when the owner asks, and nothing is pushed to it except
+   - A public repo is created only when the user asks, and nothing is pushed to it except
      through `open-science-publish:publish`.
-   - An entry on the owner's personal projects page (`projects.yaml` in their page
+   - An entry on the user's personal projects page (`projects.yaml` in their page
      directory): add it only if they keep one and ask.
 
 7. **Report:** the directory, the framework commit recorded, what you filled, every `TODO:`
-   left (the unanswered `PROJECT.md` sections by name). Tell the owner about the three
+   left (the unanswered `PROJECT.md` sections by name). Tell the user about the three
    directories they may not expect: `docs/` (documentation, published), `private-docs/`
    (private notes, committed but never exported) and `brainstorm/` (ideas before they become
    tasks, with its own context and graph; not published unless added to the manifest). The

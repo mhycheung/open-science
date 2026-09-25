@@ -40,7 +40,7 @@ BANNERS = {
 VERIFICATION = {
     "unverified": "Not verified.",
     "verified": "Verified: a stated check was run against a provenance record.",
-    "human-verified": "Human-verified: the project owner checked this result.",
+    "human-verified": "Human-verified: the user checked this result.",
 }
 MKDOCS_PINS = "mkdocs==1.6.1 mkdocs-material==9.7.7"
 

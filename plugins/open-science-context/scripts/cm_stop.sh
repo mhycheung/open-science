@@ -12,7 +12,7 @@
 #      pending -> block the stop once with an instruction to do an active jump.
 #      After a block, the same session is blocked again only once its context has
 #      grown by $OPSCI_JUMP_REPEAT tokens (default 50000), so a session that is
-#      waiting for the owner is not stopped at every reply.
+#      waiting for the user is not stopped at every reply.
 #
 # Steps 2 and 3 run only for the session that registered this pane with
 # pane_context.sh set (the skill does it when it starts driving a task; jump.sh
@@ -89,7 +89,7 @@ if [ "$ACTIVE" != true ]; then
         exit 0
       fi
       mkdir -p "$OS_STATE/size" && printf '%s %s\n' "$SID" "$tokens" > "$NF"
-      block "open-science: context is ${tokens} tokens, above ${THRESHOLD}. Do an active jump now (skill open-science-context:context-management): save the state to the context file, then run jump.sh active <context file>. If you are about to wait on running work, do a wait jump instead. If this turn ends waiting for the owner (a question, a decision, something only the owner can do), do not jump: say so in one line and stop."
+      block "open-science: context is ${tokens} tokens, above ${THRESHOLD}. Do an active jump now (skill open-science-context:context-management): save the state to the context file, then run jump.sh active <context file>. If you are about to wait on running work, do a wait jump instead. If this turn ends waiting for the user (a question, a decision, something only the user can do), do not jump: say so in one line and stop."
     fi
   fi
 fi

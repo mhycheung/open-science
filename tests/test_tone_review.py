@@ -2,7 +2,7 @@
 
 Runs Claude once over tests/fixtures/tone_review/labelled.yaml with the publish skill's
 rubric, and reports accuracy. It does not gate on accuracy (plan, S4): the LLM review writes
-a report for the owner; it never blocks a publish by itself.
+a report for the user; it never blocks a publish by itself.
 
     OS_CLAUDE_CMD="claude" tests/run_all --run-manual -k tone_review -s
 """

@@ -43,17 +43,17 @@ reload; not jumping costs the whole conversation re-read on every turn. Three ki
 
 **An active jump needs a next step you will run yourself.** The fresh session starts by
 running `open-science-context:continue-context` and then carries on with the next step in the context file. If
-this turn ends waiting for the owner (a question, a decision, a hold point, something only
-the owner can do), do not jump, whatever the context size: save the state, ask, and end the
+this turn ends waiting for the user (a question, a decision, a hold point, something only
+the user can do), do not jump, whatever the context size: save the state, ask, and end the
 turn. The Stop hook's size notice does not apply to such a turn; reply to it in one line
-and stop. Jump after the owner answers, if the answer leaves work for you to do.
+and stop. Jump after the user answers, if the answer leaves work for you to do.
 
 **Before either command, in the same turn, write the jump's record:**
 1. The task `context.md`: state, in flight (agent/job ids, output paths, how to check), and
    the exact next step. Summarize what this conversation established that is not yet on disk.
 2. The project `context.md`, if the task table, in-flight list or open questions changed.
 3. One line in `tasks/<id>/log.md`.
-4. `opsci notify "<text>" [file]` for anything the owner would otherwise miss (with no
+4. `opsci notify "<text>" [file]` for anything the user would otherwise miss (with no
    notification setup, it writes a file in `messages/`).
 
 Then run `jump.sh` as the last tool call of the turn and end the turn with one line saying

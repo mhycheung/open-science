@@ -27,7 +27,7 @@ this itself; the judgement is per hunk.
    git -C "$FW" rev-parse -q --verify "refs/tags/v$V" && git -C "$FW" checkout -q "v$V"
    ```
 
-   The owner of the framework creates the tag `v<version>` when a release is made. Without
+   The framework maintainer creates the tag `v<version>` when a release is made. Without
    a tag `v$V`, stay on the default branch and say so in the report.
 
 3. **Read `$FW/CHANGELOG.md`** from the release after the project's up to the target, and
@@ -46,7 +46,7 @@ this itself; the judgement is per hunk.
    Empty: the project is current. Say so and stop. A commit ending `-dirty` or `unknown`
    cannot be diffed: see "No usable commit".
 
-5. **Classify every hunk before editing**, and show the owner the table:
+5. **Classify every hunk before editing**, and show the user the table:
 
    | the hunk is | do |
    |---|---|
@@ -73,7 +73,7 @@ this itself; the judgement is per hunk.
 ## No usable commit
 
 Run the migrations (step 3) first. Then compare the current template with the project file
-by file, classify the differences as in step 5, apply what the owner approves, and record
+by file, classify the differences as in step 5, apply what the user approves, and record
 the framework's current commit as `copied_at_commit`, with `local_divergence` filled in from
 what you found.
 
@@ -83,7 +83,7 @@ committed there, not only in this project.
 ## Updating the code
 
 This skill updates the project's files. The plugins and `opsci` are updated separately, by
-the owner or with their approval: `claude plugin marketplace update open-science`, then
+the user or with their approval: `claude plugin marketplace update open-science`, then
 `claude plugin update <plugin>@open-science` for each installed plugin (restart Claude
 Code to load it), and
 `pip install -U "git+<framework_repo>@v<version>#subdirectory=tools"` (or `pip install -e

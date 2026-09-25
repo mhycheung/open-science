@@ -5,10 +5,10 @@ description: Record a side investigation in its own private context file under p
 
 # Private investigation
 
-An investigation is a question the owner asks on the side: why a plot looks the way it
+An investigation is a question the user asks on the side: why a plot looks the way it
 does, how a library handles a case, whether an old result still holds. Answering it takes
 work that has to survive compaction, but the work does not advance the project, and the
-owner may not want the question or the answer released. It gets its own context file in
+user may not want the question or the answer released. It gets its own context file in
 `private-docs/`, which is never exported (`publish/manifest.yaml` lists it under `never`).
 
 ## When to use it
@@ -28,8 +28,8 @@ owner may not want the question or the answer released. It gets its own context 
 `soft-private` (default): the file is not released, and a public document may name it in
 passing, in backticks. Use `hard-private` when the question or the answer concerns what
 `AGENTS.md` §6 lists as hard-private (proprietary data, collaborators' unpublished work,
-unpublished ideas, private information about people), or when the owner asks. Ask only when
-the question obviously looks hard-private and the owner did not say, with both definitions:
+unpublished ideas, private information about people), or when the user asks. Ask only when
+the question obviously looks hard-private and the user did not say, with both definitions:
 
 > This investigation looks like it may be hard-private. Which tier should it have?
 > - `soft-private` (default): not released, but the task's context may name the file.
@@ -65,7 +65,7 @@ few lower-case words joined by hyphens. For a hard-private investigation it is n
 - pointer in: <path of the public file that names this investigation, or "none">
 
 ## Question
-<what the owner asked, in their words where possible, and what would count as an answer>
+<what the user asked, in their words where possible, and what would count as an answer>
 
 ## State
 <what has been done, what was found (MEASURED / ESTIMATED), what was ruled out, next step>
@@ -84,7 +84,7 @@ few lower-case words joined by hyphens. For a hard-private investigation it is n
 
    ```markdown
    - Side investigation, private: `private-docs/investigations/<dir>/context.md`. Read only
-     if the owner asks about it.
+     if the user asks about it.
    ```
 
    Keep the pointer neutral. It names the file and when to read it; it does not state the
@@ -97,11 +97,11 @@ few lower-case words joined by hyphens. For a hard-private investigation it is n
    directory, since a public task's directory is exported. Update `context.md` after each
    step that produced a result or ruled something out, and before a session jump. The
    context-file hook caps it at 200 lines; move old detail to a `notes.md` beside it.
-4. **Answer the owner** in the chat, with the evidence. Then write the answer into
+4. **Answer the user** in the chat, with the evidence. Then write the answer into
    `## Answer`, set `status: answered` (or `abandoned`, with the reason) and update the
    `README.md` line.
 5. **If the answer changes the project** (a bug in shared code, a result that no longer
-   holds), say so to the owner. What the task needs is restated in public form in the task's
+   holds), say so to the user. What the task needs is restated in public form in the task's
    own files; it does not quote or link the investigation. For a hard-private investigation,
    the restatement must not reveal the private material.
 6. **Commit** the investigation directory, the index and the task pointer line.

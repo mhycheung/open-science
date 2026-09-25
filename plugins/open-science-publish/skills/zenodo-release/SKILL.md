@@ -1,6 +1,6 @@
 ---
 name: zenodo-release
-description: Release a project's data to Zenodo as a new versioned record - dry run, sandbox release, then a production release only after the owner explicitly confirms, with the DOI written back to data/MANIFEST.yaml and CITATION.cff. Use when the user asks to release, archive or publish data on Zenodo or to get a DOI for a dataset.
+description: Release a project's data to Zenodo as a new versioned record - dry run, sandbox release, then a production release only after the user explicitly confirms, with the DOI written back to data/MANIFEST.yaml and CITATION.cff. Use when the user asks to release, archive or publish data on Zenodo or to get a DOI for a dataset.
 ---
 
 # Zenodo release
@@ -32,9 +32,9 @@ full reference is `docs/zenodo.md` in the framework repo.
    opsci zenodo release --version <label>
    ```
 
-   Show the owner the sandbox record link and the file list it printed.
+   Show the user the sandbox record link and the file list it printed.
 
-4. **Production: only after the owner confirms, in this conversation, this version label
+4. **Production: only after the user confirms, in this conversation, this version label
    and this file list.** A general "go ahead" given earlier does not cover it. Then:
 
    ```bash
@@ -45,7 +45,7 @@ full reference is `docs/zenodo.md` in the framework repo.
    concept DOI to `data/MANIFEST.yaml` and `CITATION.cff`.
 
 5. **Record it:** commit the manifest and `CITATION.cff`, add one line to the log, update
-   the dataset node's header if it has one, and report the DOIs to the owner.
+   the dataset node's header if it has one, and report the DOIs to the user.
 
 ## Rules
 

@@ -23,7 +23,7 @@ Nothing.
 
 Start the first task with the `open-science-project:new-task` skill.
 
-## Waiting on the owner
+## Waiting on the user
 
 Nothing.
 

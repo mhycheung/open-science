@@ -2,7 +2,7 @@
 
 Notes that are never shared with the public: meeting notes, correspondence, drafts of
 things not yet agreed with collaborators, remarks about people, reviews, anything under a
-confidentiality agreement. Side investigations, questions the owner asks that need
+confidentiality agreement. Side investigations, questions the user asks that need
 recorded work but do not drive the project, go in `investigations/`, one directory each
 (`open-science-project:private-investigation`).
 

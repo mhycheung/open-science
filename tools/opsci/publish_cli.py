@@ -106,7 +106,7 @@ def add_parser(sub) -> None:
     c.add_argument("--commit", default="HEAD")
     c.set_defaults(func=cmd_check)
 
-    p = pb.add_parser("push", help="after the owner approves the report: push the export to the public repo")
+    p = pb.add_parser("push", help="after the user approves the report: push the export to the public repo")
     p.add_argument("root", nargs="?", default=".")
     p.add_argument("--export-id", required=True, help="the export id printed in the approved report")
     p.add_argument("--public-repo", help="URL or path of the public repo (default: public_repo in the manifest)")

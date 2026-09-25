@@ -64,9 +64,9 @@ and `opsci context check` print a warning on standard error that names
 
 The migration from layout 1 to 2 is the "Project migration" section of `CHANGELOG.md`. In
 outline: create the three directories from the template, add `docs` to `include` and
-`private-docs` to `never` in `publish/manifest.yaml`, ask the owner which existing notes are
+`private-docs` to `never` in `publish/manifest.yaml`, ask the user which existing notes are
 private and move them to `private-docs/` with `git mv`, replace `publish:` with `privacy:` in
-every node header and `embargo_default` with `default_privacy` in the manifest (the owner
+every node header and `embargo_default` with `default_privacy` in the manifest (the user
 chooses soft- or hard-private for each node that was not `publish: yes`), set
 `layout_version: 2`, run `opsci map build`, and commit.
 

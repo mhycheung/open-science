@@ -11,16 +11,16 @@ project). This skill only says how to get there safely.
 ## Procedure
 
 1. **Branch and inventory.** Work in a worktree on a new branch, so the original stays
-   untouched until the owner merges. If the project is not a git repo, `git init` it.
+   untouched until the user merges. If the project is not a git repo, `git init` it.
    Before the first commit, write a `.gitignore` for large and generated files (data,
-   chains, outputs, caches), and ask the owner where to draw the line. Then commit the rest.
+   chains, outputs, caches), and ask the user where to draw the line. Then commit the rest.
    A worktree holds only committed files, so commit any untracked file worth keeping
    before you branch.
 
    Files git ignores are not in the worktree and not in the inventory. List them with
    `git -C <project> status --ignored --short` and include them in the mapping in step 3.
    Do not move them during the migration: write the moves as a list of `mv` commands for
-   the owner to run in the original checkout after merging. List each dataset that ends up
+   the user to run in the original checkout after merging. List each dataset that ends up
    under `data/` in `data/MANIFEST.yaml`. Nothing ignored is deleted.
 
    Record every file before anything moves, keeping the inventory outside the project:
@@ -38,22 +38,22 @@ project). This skill only says how to get there safely.
    then copy over only the files the project does not have (`cp -rn`). Keep the
    `config/framework.yaml` it wrote: it records the framework commit.
 
-3. **Propose a mapping and get the owner's approval before moving anything.** Ask the owner
+3. **Propose a mapping and get the user's approval before moving anything.** Ask the user
    first whether the project lives in more than one place (a code repo, data on scratch, a
    paper on Overleaf or in another repo). Migrate one repo. Other pieces either move into
    it or stay where they are with a pointer: data in `data/MANIFEST.yaml` (`source:`), a
    paper in a line in `PROJECT.md`. Before bringing in another git repo together with its
-   history, ask the owner how.
+   history, ask the user how.
 
    The mapping says which existing
    directories become `tasks/<id>/`; what goes to `src/`, `data/` (plus `data/MANIFEST.yaml`),
    `paper/`, `citations/`; what stays where it is. Old context documents and plans move into
    their task's `subcontext/` unchanged. A pitfalls or rules file becomes `rules/`. Ask the
-   owner which notes are private (meeting notes, correspondence, drafts, remarks about
+   user which notes are private (meeting notes, correspondence, drafts, remarks about
    people): they go to `private-docs/`, which is committed but never exported
    (soft-private: other files may name them in passing, but not link to them). Documentation for readers goes to `docs/`, which is
    published, so nothing private may stay in an existing `docs/`. Ideas not yet started as
-   work may go to `brainstorm/`. What fits nowhere goes to `archive/`. Ask the owner the
+   work may go to `brainstorm/`. What fits nowhere goes to `archive/`. Ask the user the
    privacy tier of each task (`public`, `soft-private` or `hard-private`; definitions in
    `open-science-project:new-task`, "Privacy tier"); hard-private material outside a task
    goes under `hard_private:` in `publish/manifest.yaml`. Then move with
@@ -65,11 +65,11 @@ project). This skill only says how to get there safely.
    every reference you could not check.
 
 4. **Write the new documents from what is there:** a node header per task (`opsci task new`
-   for the directory skeleton where it helps, with `--privacy` as the owner chose; status
-   from the old context documents if there are any, otherwise from the owner:
+   for the directory skeleton where it helps, with `--privacy` as the user chose; status
+   from the old context documents if there are any, otherwise from the user:
    finished work `done`, abandoned routes `failed` or `abandoned`), the project
    `context.md`, `PROJECT.md` (from the project's own descriptions: README, proposal, plans;
-   `TODO:` where they say nothing, and ask the owner to check it), and one log line: `<date> — migrated into the open-science layout, from
+   `TODO:` where they say nothing, and ask the user to check it), and one log line: `<date> — migrated into the open-science layout, from
    commit <sha>.` Do not back-fill logs; git history has them. If the project's history or
    roadmap cannot be worked out from what is there, write the current state and stop: the
    aim is that the project follows the framework from now on, not a reconstructed past.
@@ -84,7 +84,7 @@ project). This skill only says how to get there safely.
 
    A moved file counts as kept; a file whose content is found nowhere is lost and must be
    recovered before you report. Then apply the freshness test to the project context and
-   report the mapping, the compare summary, and every `TODO:` left. The owner merges.
+   report the mapping, the compare summary, and every `TODO:` left. The user merges.
 
 ## A completed project
 

@@ -121,7 +121,7 @@ items:
     expect: none
   - id: n05
     header: {status: done, verification: human-verified, evidence: tasks/t11/provenance.yaml}
-    text: "The mass ratio is 1.8 +/- 0.1; the owner checked the fit against the independent code (provenance.yaml)."
+    text: "The mass ratio is 1.8 +/- 0.1; the user checked the fit against the independent code (provenance.yaml)."
     expect: none
   - id: n06
     header: {status: done, verification: verified, evidence: tasks/t12/provenance.yaml}

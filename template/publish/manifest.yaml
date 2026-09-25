@@ -3,7 +3,7 @@
 # `privacy: public`. Entries with a `type` are results, papers, pages or datasets: each must be
 # covered by a node of that type (checked by `opsci map build`).
 #
-# Owner decisions (fill in before the first publish):
+# User decisions (fill in before the first publish):
 policy:
   default_privacy: public     # tier of a node with no `privacy` field: public | soft-private | hard-private
   collaborators_agreed: false # co-authors have agreed that shared work may be public

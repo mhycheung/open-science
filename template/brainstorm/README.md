@@ -30,7 +30,7 @@ it, so no file in it is released. A brainstorm task is soft-private by default
 each soft-private brainstorm node, without a link; at publish time the agent groups or
 rewords the ones whose title or summary give too much away.
 
-To publish some ideas, the owner adds `- path: brainstorm` under `include` and sets
+To publish some ideas, the user adds `- path: brainstorm` under `include` and sets
 `privacy: public` in the header of each task to publish. The other tasks stay private.
 
 So that the public project has no broken links, **nothing outside `brainstorm/` links to a

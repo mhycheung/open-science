@@ -16,7 +16,7 @@ from .leakscan import ABS_PATH_ALLOWED, ABS_PATH_EXEMPT_FILES, ABS_PATH_RE, PLAN
 PLACEHOLDERS = (
     "PROJECT_NAME",      # short slug, e.g. ringdown-tests
     "PROJECT_TITLE",     # one-line human title
-    "AUTHOR",            # the project owner's name
+    "AUTHOR",            # the user's name
     "YEAR",              # YYYY, for licences
     "DATE",              # YYYY-MM-DD, the day the project was created
     "MONTH",             # YYYY-MM, names the first log file

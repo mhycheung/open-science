@@ -54,7 +54,7 @@ def test_project_description_is_created_unfilled(tmp_path):
     heads = re.findall(r"^## (.+)$", text, re.M)
     assert heads == ["The question", "Why it matters", "Approach", "What counts as success",
                      "Scope", "Key sources"]
-    assert text.count("\nTODO:\n") == len(heads)  # every section waits for the owner
+    assert text.count("\nTODO:\n") == len(heads)  # every section waits for the user
     for f in ("AGENTS.md", "README.md"):
         assert "PROJECT.md" in (proj / f).read_text(), f
 

@@ -103,7 +103,7 @@ opsci publish pull-public [--public-repo PUBLIC_REPO] [ROOT]
   unpublished changes.
 - `check`: export, run every check, write the review report and diff under
   `publish/reports/`. Prints the report path and the export id.
-- `push`: after the owner approves the report, push the export with that id to the public
+- `push`: after the user approves the report, push the export with that id to the public
   repository. `--public-repo` defaults to `public_repo` in the manifest.
 - `export`: write the files the manifest allows, from one commit, into the empty directory
   `OUT`.

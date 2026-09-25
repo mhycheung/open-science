@@ -1,6 +1,6 @@
 ---
 name: new-task
-description: Start a new task in an open-science project - settle the design with the user, write tasks/<id>/plan.md from the plan template, and create the task's context, log and subcontext. Use when the user asks to start a task, plan a piece of work, start a campaign, or track a piece of work that will outlive one session. Also for small tasks and explorations that need no plan, and, without asking, when the owner says "brainstorm" or asks to explore an idea or question in the project (a brainstorm task).
+description: Start a new task in an open-science project - settle the design with the user, write tasks/<id>/plan.md from the plan template, and create the task's context, log and subcontext. Use when the user asks to start a task, plan a piece of work, start a campaign, or track a piece of work that will outlive one session. Also for small tasks and explorations that need no plan, and, without asking, when the user says "brainstorm" or asks to explore an idea or question in the project (a brainstorm task).
 ---
 
 # New task
@@ -16,18 +16,18 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
 - No "verify each step", no self-review or second-agent review. A control case (an input
   that must fail) goes inside the subtask's own check.
 - Gates only where a mistake is expensive or irreversible: deleting or overwriting data,
-  large compute, a claim reaching the owner or the public repo.
+  large compute, a claim reaching the user or the public repo.
 - No hedging and no numbered micro-steps for routine mechanics. A step states the outcome,
   the artifact and the acceptance criterion.
 - Every subtask has a tier and a cost estimate with a ±2× band. Only parallel tracks are
   dispatched, at `med-effort` by default. Sequential work and open-ended debugging stay with
   the main agent.
-- **Run to completion.** Once the owner approves the plan, the main agent does not stop
+- **Run to completion.** Once the user approves the plan, the main agent does not stop
   until it is done, except at a hold point or on something fatal (`contracts/main.md` §4).
 
 ## Procedure
 
-1. **Settle the design.** Ask the owner only the decisions that are theirs: goal, what counts
+1. **Settle the design.** Ask the user only the decisions that are theirs: goal, what counts
    as done, constraints, budget, autonomy level. Propose one recommended approach and name
    the alternatives in a line each. The design goes into the plan; there are no spec files.
    Settle the privacy tier too ("Privacy tier" below), and a short name: a few words, lower
@@ -67,13 +67,13 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
 
 6. If the `open-science-context` plugin is installed, **register the pane** for
    `tasks/<id>/context.md` (`open-science-context:context-management`, "Pane registration").
-   Commit, and **report the plan to the owner and stop.** Execution starts when the owner
+   Commit, and **report the plan to the user and stop.** Execution starts when the user
    approves it.
 
 ## Privacy tier
 
 A task is `public` by default (`--privacy` omitted); a brainstorm task is `soft-private`. Do not ask about the tier when nothing
-points the other way. If what the owner described obviously looks soft- or hard-private
+points the other way. If what the user described obviously looks soft- or hard-private
 (private notes, work too messy to release; proprietary data, unpublished ideas,
 collaborators' unpublished work, private information about people), ask before creating the
 task, with both definitions in the question:
@@ -94,7 +94,7 @@ soft-private material at most in passing and never mentions hard-private materia
 leaves out hard-private nodes and names soft-private ones without a link; at publish time
 the publish skill groups or rewords a soft-private node whose title or summary gives too much
 away, so a private task's header needs no rewording now. The project `context.md` and `log/` are published: a line there that
-names a hard-private task is flagged at the next publish, and the owner decides then how to
+names a hard-private task is flagged at the next publish, and the user decides then how to
 handle it (`open-science-publish:publish`).
 
 ## Brainstorm tasks
@@ -105,11 +105,11 @@ root: `opsci task new b01-<slug> --title "<title>" --root brainstorm`, `opsci ma
 `opsci context check brainstorm`. Ids start with `b`. Edges may join brainstorm and project
 nodes in either direction: add one when the idea builds on project work or project work
 comes from the idea. A brainstorm task is soft-private by default; give `--privacy public`
-only when the owner asks for the idea to be published, and `--privacy hard-private` for a
+only when the user asks for the idea to be published, and `--privacy hard-private` for a
 hard-private idea. The idea goes in the brainstorm `context.md` table, not
 the project one.
 
-A brainstorm task needs no plan and no approval. Make it as soon as the owner says
+A brainstorm task needs no plan and no approval. Make it as soon as the user says
 "brainstorm" or starts exploring an idea: skip step 1's questions, create it without
 `--plan`, record the question and what has been found so far in its `context.md` and in
 the brainstorm `context.md` table, commit, and carry on with the conversation. Step 6's

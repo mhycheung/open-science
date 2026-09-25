@@ -3,7 +3,7 @@
 The deterministic checks have already passed. This review reads the diff since the last
 publish (`publish/reports/<stem>.diff`) as a stranger would, and reports three kinds of
 passages. It **writes a report; it never edits files and never blocks the publish by
-itself**. The owner decides.
+itself**. The user decides.
 
 Read only added lines (`+` in the diff). Quote each flagged passage exactly, with its file
 and the line in the new file.
@@ -57,7 +57,7 @@ list, open the excluded files whose topic touches the added lines (private tasks
   passage that restates the content of soft-private material, or depends on it to be
   understood.
 
-A hard-private finding goes to the owner with the choice to change the wording, remove it,
+A hard-private finding goes to the user with the choice to change the wording, remove it,
 or redact it (skill step 3).
 
 ## Output

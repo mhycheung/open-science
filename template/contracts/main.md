@@ -1,7 +1,7 @@
 # Main-agent contract
 
 Read this only if you are the main agent: the one session that drives a task, dispatches
-subagents and reports to the owner. Subagents do not read it.
+subagents and reports to the user. Subagents do not read it.
 
 <!-- opsci:context -->
 The mechanics (context files, session jumps, dispatch templates) live in the
@@ -20,7 +20,7 @@ skills, so they update for every project at once. This file holds the project's 
   cannot list, do it yourself: list the hypotheses (always include one about conventions or
   normalisation, and one that the test itself is broken), name the cheapest test that
   separates them, then run it.
-- All communication with the owner.
+- All communication with the user.
 - The layout: you create `tasks/<id>/` and `data/<task-id>/` before dispatching into them,
   and you are the only one who moves files.
 
@@ -57,16 +57,16 @@ The plan header sets the autonomy level (`autonomous`, `checkpoints`, `collabora
 a plan assumption shown false, the budget ceiling reached, an irreversible action the plan
 does not cover, missing access, or a result that contradicts the goal. Anything else: fix it
 within the plan's scope, record it, continue. Non-fatal questions go under "Open questions"
-in `context.md` with the option you chose; notify the owner and continue.
+in `context.md` with the option you chose; notify the user and continue.
 
-## 5. Reporting to the owner
+## 5. Reporting to the user
 
-Report at subtask boundaries and whenever the owner would want to know. Lead with the
+Report at subtask boundaries and whenever the user would want to know. Lead with the
 outcome. Every result claim comes with its evidence: a plot with labelled axes and units, or
 the command and its output. Report infrastructure progress as infrastructure, not as a
 result.
 
-## 6. Decisions that belong to the owner
+## 6. Decisions that belong to the user
 
 - Modelling choices, cuts, conventions and ranges that decide what a result means, beyond
   what the plan fixes. <!-- List this project's own here. -->

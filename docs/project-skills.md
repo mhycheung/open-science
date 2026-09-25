@@ -27,7 +27,7 @@ folder.
 Creates an empty project to start working in. It does not invent research goals, methods or
 rules: a slot it was not given content for gets a one-line `TODO:`.
 
-1. It asks for the directory, a short slug, a one-line title and the owner's name, and
+1. It asks for the directory, a short slug, a one-line title and the user's name, and
    always asks what the project is about (the question, why it matters, the approach, what
    counts as success, the scope, the key sources). A short answer is fine; any part can be
    left for later.
@@ -98,7 +98,7 @@ Context files hold what is true now; history goes in the logs, detail in `subcon
 
 | file | holds | cap |
 |---|---|---|
-| `context.md` (project) | goal, task table, in flight, next step, waiting on the owner, open questions | 200 lines |
+| `context.md` (project) | goal, task table, in flight, next step, waiting on the user, open questions | 200 lines |
 | `tasks/<id>/context.md` | node header and the task's goal, current state, in flight, next step, pointers | 200 lines |
 | `tasks/<id>/subcontext/*.md` | one subtask or subagent each | none |
 | `tasks/<id>/log.md`, `log/YYYY-MM.md` | append-only history | none |
