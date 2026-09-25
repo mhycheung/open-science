@@ -23,20 +23,23 @@ PLACEHOLDERS = (
     "FRAMEWORK_REPO",    # where the framework came from (URL), or "local copy"
     "FRAMEWORK_COMMIT",  # framework commit the template was copied at
     "CONTEXT_MANAGEMENT",  # "true" if the project uses the open-science-context plugin
+    "NOTION",            # "true" if the project is mirrored to Notion (opsci notion)
 )
 
-# Template text that depends on whether the project uses the context-management component
-# (plugin open-science-context). A block runs from its opening marker line to its closing
-# marker line; `context` blocks are kept only with the component, `no-context` blocks only
-# without it. The marker lines themselves are always removed.
-BLOCK_RE = re.compile(r"^[ \t]*<!-- opsci:(no-context|context) -->[ \t]*\n(.*?)^[ \t]*<!-- /opsci:\1 -->[ \t]*\n",
+# Template text that depends on the optional components. A block runs from its opening marker
+# line to its closing marker line and is kept only when its condition holds: `context` with
+# the context-management component (plugin open-science-context), `no-context` without it,
+# `notion` when the project is mirrored to Notion, `no-notion` when not. The marker lines
+# themselves are always removed.
+COMPONENTS = ("no-context", "context", "no-notion", "notion")
+BLOCK_RE = re.compile(r"^[ \t]*<!-- opsci:(no-context|context|no-notion|notion) -->[ \t]*\n(.*?)^[ \t]*<!-- /opsci:\1 -->[ \t]*\n",
                       re.M | re.S)
-MARKER_RE = re.compile(r"<!-- /?opsci:(?:no-context|context) -->")
+MARKER_RE = re.compile(r"<!-- /?opsci:(?:no-context|context|no-notion|notion) -->")
 
 
-def apply_components(text: str, context_management: bool) -> str:
-    keep = "context" if context_management else "no-context"
-    return BLOCK_RE.sub(lambda m: m.group(2) if m.group(1) == keep else "", text)
+def apply_components(text: str, context_management: bool, notion: bool = False) -> str:
+    keep = {"context" if context_management else "no-context", "notion" if notion else "no-notion"}
+    return BLOCK_RE.sub(lambda m: m.group(2) if m.group(1) in keep else "", text)
 
 # Files a fresh project must have.
 REQUIRED = (
@@ -100,7 +103,7 @@ def text_files(root: Path):
 
 def instantiate(dest: Path, name: str, title: str, author: str, template: Path | None = None,
                 date: dt.date | None = None, framework_repo: str | None = None,
-                context_management: bool = True) -> Path:
+                context_management: bool = True, notion: bool = False) -> Path:
     template = Path(template) if template else default_template_dir()
     if template is None or not (template / "AGENTS.md").exists():
         raise TemplateError("template directory not found; pass --template <framework>/template")
@@ -114,7 +117,7 @@ def instantiate(dest: Path, name: str, title: str, author: str, template: Path |
         raise TemplateError(f"destination '{dest}' exists and is not empty")
     created = not dest.exists()
     try:
-        return _fill(dest, template, name, title, author, date, framework_repo, context_management)
+        return _fill(dest, template, name, title, author, date, framework_repo, context_management, notion)
     except BaseException:
         # Leave nothing half-made behind.
         if created:
@@ -125,7 +128,8 @@ def instantiate(dest: Path, name: str, title: str, author: str, template: Path |
         raise
 
 
-def _fill(dest, template, name, title, author, date, framework_repo, context_management=True) -> Path:
+def _fill(dest, template, name, title, author, date, framework_repo, context_management=True,
+          notion=False) -> Path:
     date = date or dt.date.today()
     repo, commit = framework_origin(template)
     values = {
@@ -133,6 +137,7 @@ def _fill(dest, template, name, title, author, date, framework_repo, context_man
         "YEAR": f"{date.year:04d}", "DATE": date.isoformat(), "MONTH": date.strftime("%Y-%m"),
         "FRAMEWORK_REPO": framework_repo or repo, "FRAMEWORK_COMMIT": commit,
         "CONTEXT_MANAGEMENT": "true" if context_management else "false",
+        "NOTION": "true" if notion else "false",
     }
     shutil.copytree(template, dest, dirs_exist_ok=True)
 
@@ -144,11 +149,15 @@ def _fill(dest, template, name, title, author, date, framework_repo, context_man
                 unknown.append(f"{p.relative_to(dest)}: {{{{{key}}}}}")
                 return m.group(0)
             return values[key]
-        new = PLACEHOLDER_RE.sub(sub, apply_components(text, context_management))
+        new = PLACEHOLDER_RE.sub(sub, apply_components(text, context_management, notion))
         if new != text:
             p.write_text(new, encoding="utf-8")
     if unknown:
         raise TemplateError("unknown placeholders in template: " + "; ".join(unknown))
+
+    if notion:  # the auto-sync hook; JSON has no comments, so it is added here, not by markers
+        from .notion.setup import add_hook
+        add_hook(dest / ".claude" / "settings.json")
 
     log = dest / "log" / f"{values['MONTH']}.md"
     log.write_text(
@@ -194,6 +203,7 @@ GITIGNORE_EXPECT = (
     ("data/MANIFEST.yaml", False),
     ("config/site.local.yaml", True),
     ("config/site.example.yaml", False),
+    ("config/notion.local.yaml", True),
     (".env", True),
     ("messages/2026-01-01_120000_run-finished.md", True),
     ("messages/README.md", False),

@@ -53,6 +53,7 @@ nav:
       - Publishing and the filter: publishing.md
       - Zenodo releases: zenodo.md
   - Notifications: notify.md
+  - Notion mirror and Feed: notion.md
   - The opsci command: cli.md
   - Updating a project: updating.md
   - Troubleshooting: faq.md

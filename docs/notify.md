@@ -5,11 +5,12 @@ opsci notify [--backend NAME] [--project-root PATH] TEXT [FILE]
 ```
 
 Sends a message, and optionally one file, to the project's user. Agents call it before a
-session ends or hands over, and when something needs the user. Two back ends ship:
+session ends or hands over, and when something needs the user. Three back ends ship:
 
 | back end | what it does | setup |
 |---|---|---|
 | `file` (default) | writes each message as its own document in `messages/` | none |
+| `notion` (recommended) | posts to the project's Feed in Notion and @mentions you | [Notion](notion.md) |
 | `slack` | posts to a Slack channel through your own Slack app | this page |
 
 Exit status: `0` sent; `2` misconfiguration or bad input (a missing attachment, an unknown
@@ -51,7 +52,7 @@ by key:
 
 ```yaml
 notify:
-  backend: slack                                   # file | slack; default file
+  backend: slack                                   # file | slack | notion; default file
   slack:
     credentials_file: ~/.config/opsci/slack.env    # this is the default
     channel: C0123456789                           # optional; overrides SLACK_CHANNEL

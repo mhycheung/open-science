@@ -42,12 +42,19 @@ one-line `TODO:` and goes in your report.
    Add `--no-context-management` unless the user uses session jumps (the
    `open-science-context` plugin is installed, or onboarding recorded component 3): it drops
    the template's lines about jumps and records `context_management: false`.
+   Add `--notion` if `opsci notion check` prints `backend=notion` (the user chose Notion in
+   onboarding, even if its setup is not finished): it adds the Notion section to `AGENTS.md`
+   and the auto-sync hook, and records `notion: true`.
    It refuses a non-empty directory, fills every placeholder, records the framework commit in
    `config/framework.yaml`, writes the first log entry, builds the map and checks the result.
    A non-zero exit leaves nothing behind; report its message.
 
 4. **Make it a git repo** and commit everything:
    `git -C <dir> init -q && git -C <dir> add -A && git -C <dir> commit -qm "Create project from the open-science template"`.
+   With `--notion`: if `opsci notion check` printed no `problem` and no `missing`, run
+   `opsci notion init` in `<dir>`, which creates the project's pages under the user's
+   Notion page, and report the link it prints. Otherwise tell the user that messages go to
+   files until they finish the Notion setup (`open-science:onboard`); then `opsci notion init`.
 
 5. **Fill what you were given.** `PROJECT.md`: put the user's answer under the matching
    headings, in their substance and close to their words. Do not add goals, methods or

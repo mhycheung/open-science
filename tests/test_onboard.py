@@ -98,7 +98,7 @@ def test_check_configured_machine_and_never_prints_secrets(tmp_path):
     assert kv["open_science_context"] == "installed" and kv["open_science_project"] == "not-installed"
     assert kv["deny_rule"] == "present" and kv["secret_dir"] == "ok"
     assert kv["secret_slack.env"] == "ok" and kv["secret_zenodo.token"] == "mode-644"
-    assert kv["secret_zenodo-sandbox.token"] == "missing"
+    assert kv["secret_zenodo-sandbox.token"] == "missing" and kv["secret_notion.env"] == "missing"
     assert SLACK_TOKEN not in out and ZENODO_TOKEN not in out
 
 
@@ -204,6 +204,25 @@ def test_secret_slack_refuses_bad_shape(tmp_path, content, msg):
     r, _ = run_secret(tmp_path, "slack", content)
     assert r.returncode == 1 and msg in r.stderr
     assert "xox" "p-user-token-FAKE" not in r.stderr and SLACK_TOKEN not in r.stderr
+
+
+NOTION_TOKEN = "ntn_FAKEnotionTOKEN0123456789abcdefFAKE"
+
+
+def test_secret_notion_ok(tmp_path):
+    r, d = run_secret(tmp_path, "notion", f"NOTION_TOKEN={NOTION_TOKEN}\n")
+    assert r.returncode == 0, r.stderr
+    assert mode(d / "notion.env") == 0o600 and NOTION_TOKEN not in r.stdout + r.stderr
+
+
+@pytest.mark.parametrize("content,msg", [
+    ("NOTION_TOKEN=\n", "NOTION_TOKEN is empty"),
+    (f"NOTION_TOKEN={SLACK_TOKEN}\n", "does not look like an integration secret"),
+])
+def test_secret_notion_refuses_bad_shape(tmp_path, content, msg):
+    r, _ = run_secret(tmp_path, "notion", content)
+    assert r.returncode == 1 and msg in r.stderr
+    assert SLACK_TOKEN not in r.stderr
 
 
 def test_secret_refuses_inside_claude(tmp_path):

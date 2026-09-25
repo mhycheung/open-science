@@ -105,6 +105,7 @@ Both are in `extras/`, and nothing in the three components depends on them.
 | `opsci site` | build the project site |
 | `opsci zenodo` | release data to Zenodo (sandbox by default); see `docs/zenodo.md` |
 | `opsci notify` | send a message, and optionally a file, to the user; see `docs/notify.md` |
+| `opsci notion` | mirror a project into Notion and post to its Feed; see `docs/notion.md` |
 | `opsci projects-page` | check the personal projects page |
 | `opsci migrate` | check that a migration lost no file |
 | `opsci guide check` | check that the user guide is short and names only things that exist |

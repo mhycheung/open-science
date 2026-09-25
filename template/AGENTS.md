@@ -54,6 +54,15 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
   state down honestly and re-plan.
 - **Language.** Write plain, direct English: one idea per sentence, active voice, the
   outcome first. Say what you mean; avoid metaphor where a literal phrase exists.
+- **Mathematics in LaTeX.** Write every symbol, equation and formula in LaTeX, in every
+  file and message: inline `$\iota_Q(t)$`, displayed `$$ ... $$` on lines of their own. This
+  holds for context files, plans, logs, node summaries, captions, reports and messages.
+  Plain names such as `iota_Q` are for code identifiers only.
+- **Plot captions.** Every plot saved in the project has a caption file beside it, with the
+  plot's stem and `.caption.md` (`bands_2026-09-25.caption.md`). The caption stands on its
+  own: what is plotted; each axis with units; every line, band, marker and colour; the data
+  and their size; and the background a reader needs (the question the plot answers, and what
+  to see in it). A remade plot gets a new caption file with its new name.
 
 ## 3. Scientific rigour
 
@@ -168,3 +177,23 @@ disk. If the notification needs action, read this file, the project `context.md`
 <!-- /opsci:no-context -->
 If it repeats something already handled, do not reload; check that a wake-up is still
 armed, then wait.
+<!-- opsci:notion -->
+
+## 10. Notion
+
+This project is mirrored to Notion, where the user reads it (skill
+`open-science-project:notion`). `opsci notify` posts to the project's Feed in Notion.
+
+- **Sync after every change.** After you change project files, run `opsci notion sync`. A
+  hook also runs it when a turn ends. `opsci notion diff` then prints `in sync` and names
+  no plot without a caption.
+- **Plots.** Only plots under `tasks/<id>/` appear in the task's page, each with its caption
+  file (section 2). A remade plot gets a new dated name; it replaces the old one in place.
+- **Feed.** Post with `opsci notion post --kind KIND [--task ID] [--mention] [--file PLOT]
+  "text"`: a finished subtask as `result` with its key plot and `--mention`; a question or
+  blocker for the user as `question` or `blocker` with `--mention`; a long job submitted
+  or finished as `status`. While work runs, post a `status` at least once per session. Do
+  not post routine steps.
+- **Messages expire.** Feed messages are removed after a few days. Anything that must last
+  goes in the project files, which the task pages show.
+<!-- /opsci:notion -->
