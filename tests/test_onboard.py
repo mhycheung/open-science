@@ -8,6 +8,7 @@ import re
 import shutil
 import stat
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -150,8 +151,13 @@ def test_check_flags_open_secret_dir(tmp_path):
 
 # ------------------------------------------------------------------- secret_file.sh
 
-def run_secret(tmp_path, kind, content, **extra):
-    """Run the helper with an 'editor' that writes CONTENT into the file."""
+def run_secret(tmp_path, kind, content, parent=None, **extra):
+    """Run the helper with an 'editor' that writes CONTENT into the file.
+
+    The helper refuses to run when a `claude` process is among its ancestors, which is the
+    case when this test suite itself runs under Claude Code. So it is started detached
+    (`setsid -f`), with no ancestor but the shell that runs it; `parent` names an executable
+    to use as that shell instead (a copy of bash called `claude`, to test the refusal)."""
     b = tmp_path / "ebin"
     b.mkdir(exist_ok=True)
     ed = b / "fake-editor"
@@ -160,7 +166,18 @@ def run_secret(tmp_path, kind, content, **extra):
     env = {"HOME": str(tmp_path), "XDG_CONFIG_HOME": str(tmp_path / "cfg"),
            "PATH": os.environ["PATH"], "EDITOR": str(ed), "CONTENT": content}
     env.update(extra)
-    r = subprocess.run(["bash", str(SECRET), kind], env=env, capture_output=True, text=True)
+    out, err, rc = (tmp_path / f"secret.{x}" for x in ("out", "err", "rc"))
+    for f in (out, err, rc):
+        f.unlink(missing_ok=True)
+    inner = f'bash "$0" "$1" >"{out}" 2>"{err}"; echo $? >"{rc}.tmp"; mv "{rc}.tmp" "{rc}"'
+    subprocess.run(["setsid", "-f", str(parent or "bash"), "-c", inner, str(SECRET), kind],
+                   env=env, check=True)
+    for _ in range(300):
+        if rc.exists():
+            break
+        time.sleep(0.1)
+    r = subprocess.CompletedProcess([str(SECRET), kind], int(rc.read_text()),
+                                    out.read_text(), err.read_text())
     return r, tmp_path / "cfg" / "opsci"
 
 
@@ -226,9 +243,20 @@ def test_secret_notion_refuses_bad_shape(tmp_path, content, msg):
 
 
 def test_secret_refuses_inside_claude(tmp_path):
-    r, d = run_secret(tmp_path, "zenodo", ZENODO_TOKEN, CLAUDECODE="1")
+    claude = tmp_path / "bin" / "claude"          # a process named claude, as Claude Code's is
+    claude.parent.mkdir()
+    shutil.copy(shutil.which("bash"), claude)
+    r, d = run_secret(tmp_path, "zenodo", ZENODO_TOKEN, parent=claude)
     assert r.returncode == 1 and "own terminal" in r.stderr
     assert not d.exists()
+
+
+def test_secret_runs_with_inherited_claudecode(tmp_path):
+    # tmux passes CLAUDECODE on to the user's own panes if a Claude session started its server
+    r, d = run_secret(tmp_path, "zenodo", ZENODO_TOKEN, CLAUDECODE="1")
+    assert r.returncode == 0, r.stderr
+    assert "no Claude Code process started it" in r.stderr
+    assert mode(d / "zenodo.token") == 0o600
 
 
 def test_secret_refuses_symlinked_file(tmp_path):

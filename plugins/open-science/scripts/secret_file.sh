@@ -17,8 +17,25 @@ umask 077
 
 die() { echo "secret_file: $*" >&2; exit 1; }
 
-if [ -n "${CLAUDECODE:-}" ]; then
+# Refuse to run under Claude Code: look for a claude process among this script's ancestors.
+# CLAUDECODE alone is not enough: a tmux server started from a Claude session passes it on
+# to every new pane, including the user's own terminals.
+under_claude() {
+    local pid=$PPID comm args
+    while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+        comm=$(ps -o comm= -p "$pid" 2>/dev/null) || return 1
+        args=$(ps -o args= -p "$pid" 2>/dev/null | awk '{print $1}')
+        case "$(basename -- "$comm")" in claude|claude.exe) return 0 ;; esac
+        case "$(basename -- "$args")" in claude|claude.exe) return 0 ;; esac
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    done
+    return 1
+}
+if under_claude; then
     die "this was started from inside Claude Code. Run it in your own terminal, so the token never passes through the agent."
+fi
+if [ -n "${CLAUDECODE:-}" ]; then
+    echo "secret_file: note: CLAUDECODE is set in this shell, but no Claude Code process started it (tmux passes on the environment of the session that started its server). Continuing." >&2
 fi
 
 kind=${1:-}
