@@ -11,10 +11,19 @@ project). This skill only says how to get there safely.
 ## Procedure
 
 1. **Branch and inventory.** Work in a worktree on a new branch, so the original stays
-   untouched until the owner merges. If the project is not a git repo, `git init` it and
-   commit its current state first. A worktree holds only committed files, so commit any
-   untracked file worth keeping before you branch. Record every file before anything moves, keeping the
-   inventory outside the project:
+   untouched until the owner merges. If the project is not a git repo, `git init` it.
+   Before the first commit, write a `.gitignore` for large and generated files (data,
+   chains, outputs, caches), and ask the owner where to draw the line. Then commit the rest.
+   A worktree holds only committed files, so commit any untracked file worth keeping
+   before you branch.
+
+   Files git ignores are not in the worktree and not in the inventory. List them with
+   `git -C <project> status --ignored --short` and include them in the mapping in step 3.
+   Do not move them during the migration: write the moves as a list of `mv` commands for
+   the owner to run in the original checkout after merging. List each dataset that ends up
+   under `data/` in `data/MANIFEST.yaml`. Nothing ignored is deleted.
+
+   Record every file before anything moves, keeping the inventory outside the project:
 
    ```bash
    git -C <project> worktree add ../<project>-migrate -b migrate-open-science
@@ -29,7 +38,14 @@ project). This skill only says how to get there safely.
    then copy over only the files the project does not have (`cp -rn`). Keep the
    `config/framework.yaml` it wrote: it records the framework commit.
 
-3. **Propose a mapping and get the owner's approval before moving anything:** which existing
+3. **Propose a mapping and get the owner's approval before moving anything.** Ask the owner
+   first whether the project lives in more than one place (a code repo, data on scratch, a
+   paper on Overleaf or in another repo). Migrate one repo. Other pieces either move into
+   it or stay where they are with a pointer: data in `data/MANIFEST.yaml` (`source:`), a
+   paper in a line in `PROJECT.md`. Before bringing in another git repo together with its
+   history, ask the owner how.
+
+   The mapping says which existing
    directories become `tasks/<id>/`; what goes to `src/`, `data/` (plus `data/MANIFEST.yaml`),
    `paper/`, `citations/`; what stays where it is. Old context documents and plans move into
    their task's `subcontext/` unchanged. A pitfalls or rules file becomes `rules/`. Ask the
@@ -43,13 +59,21 @@ project). This skill only says how to get there safely.
    goes under `hard_private:` in `publish/manifest.yaml`. Then move with
    `git mv`, so history follows the files.
 
+   Moving files breaks references to them. After the moves, search the code, scripts,
+   notebooks, configs and job scripts for the old paths and for imports of moved modules,
+   and fix them. Run the project's tests, or one short script, if there are any. Report
+   every reference you could not check.
+
 4. **Write the new documents from what is there:** a node header per task (`opsci task new`
    for the directory skeleton where it helps, with `--privacy` as the owner chose; status
-   from the old context documents:
+   from the old context documents if there are any, otherwise from the owner:
    finished work `done`, abandoned routes `failed` or `abandoned`), the project
    `context.md`, `PROJECT.md` (from the project's own descriptions: README, proposal, plans;
    `TODO:` where they say nothing, and ask the owner to check it), and one log line: `<date> — migrated into the open-science layout, from
-   commit <sha>.` Do not back-fill logs; git history has them. Run `opsci map build`.
+   commit <sha>.` Do not back-fill logs; git history has them. If the project's history or
+   roadmap cannot be worked out from what is there, write the current state and stop: the
+   aim is that the project follows the framework from now on, not a reconstructed past.
+   Run `opsci map build`.
 
 5. **Check and report:**
 
