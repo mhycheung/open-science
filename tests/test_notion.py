@@ -607,6 +607,7 @@ def _notion_block(text: str) -> str:
 
 def test_template_notion_block_equals_agents_section():
     assert _notion_block((TEMPLATE / "AGENTS.md").read_text()).strip("\n") == NS.AGENTS_SECTION.strip("\n")
+    assert _notion_block((TEMPLATE / "CLAUDE.md").read_text()) == NS.CLAUDE_LINE
 
 
 def _hooks(proj):
@@ -619,6 +620,8 @@ def test_project_with_and_without_notion(S):
     off = make_project(S, notion=False, name="off")
     assert NS.AGENTS_SECTION in (on / "AGENTS.md").read_text()
     assert "## 10. Notion" not in (off / "AGENTS.md").read_text()
+    assert NS.CLAUDE_LINE in (on / "CLAUDE.md").read_text()
+    assert "open-science-project:notion" not in (off / "CLAUDE.md").read_text()
     data, cmds = _hooks(on)
     assert cmds == [NS.HOOK_COMMAND] and NS.HOOK_COMMAND.endswith("|| true")
     data, cmds = _hooks(off)
@@ -634,8 +637,11 @@ def test_enable_existing_project_idempotent(S):
     gi = proj / ".gitignore"          # an older project: no Notion line in .gitignore
     gi.write_text("".join(l for l in gi.read_text().splitlines(True) if "notion" not in l))
     r = run(S, "notion", "enable", "--project-root", proj)
-    assert r.stdout.count("added:") == 4, r.stdout
+    assert r.stdout.count("added:") == 5, r.stdout
     assert NS.AGENTS_SECTION in (proj / "AGENTS.md").read_text()
+    claude = (proj / "CLAUDE.md").read_text()
+    skills = claude[claude.index("## Skills"):claude.index("## ", claude.index("## Skills") + 3)]
+    assert NS.CLAUDE_LINE in skills          # in the skill list, not at the end of the file
     _, cmds = _hooks(proj)
     assert cmds == [NS.HOOK_COMMAND] and cmds[0].endswith("|| true")
     assert re.search(r"^notion: true$", (proj / "config" / "framework.yaml").read_text(), re.M)
@@ -644,10 +650,11 @@ def test_enable_existing_project_idempotent(S):
     # the permissions in settings.json are kept
     data, _ = _hooks(proj)
     assert "Bash(git:*)" in data["permissions"]["allow"]
-    files = [gi, proj / "AGENTS.md", proj / ".claude" / "settings.json", proj / "config" / "framework.yaml"]
+    files = [gi, proj / "AGENTS.md", proj / "CLAUDE.md", proj / ".claude" / "settings.json",
+             proj / "config" / "framework.yaml"]
     snap = [f.read_text() for f in files]
     r = run(S, "notion", "enable", "--project-root", proj)
-    assert r.stdout.count("already there:") == 4, r.stdout
+    assert r.stdout.count("already there:") == 5, r.stdout
     assert [f.read_text() for f in files] == snap
 
 

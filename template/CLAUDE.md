@@ -22,6 +22,10 @@ otherwise be chosen instead.
 <!-- /opsci:context -->
 - Publishing: `open-science-publish:publish`; data releases: `open-science-publish:zenodo-release`
   (plugin `open-science-publish`, if installed).
+<!-- opsci:notion -->
+- Notion (this project is mirrored there, `AGENTS.md` section 10):
+  `open-science-project:notion`. Main agents load it at session start.
+<!-- /opsci:notion -->
 
 ## Dispatch tiers
 

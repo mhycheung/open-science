@@ -191,6 +191,28 @@ def add_agents_section(agents: Path) -> bool:
     return True
 
 
+CLAUDE_LINE = """- Notion (this project is mirrored there, `AGENTS.md` section 10):
+  `open-science-project:notion`. Main agents load it at session start.
+"""
+
+
+def add_claude_skill_line(claude_md: Path) -> bool:
+    """Name the notion skill in CLAUDE.md's skill list (template: the opsci:notion block)."""
+    if not claude_md.exists():
+        return False
+    text = claude_md.read_text(encoding="utf-8")
+    if "open-science-project:notion" in text:
+        return False
+    m = re.search(r"^## Skills\n.*?(?=^## |\Z)", text, re.M | re.S)
+    if m:
+        block = m.group(0).rstrip("\n") + "\n" + CLAUDE_LINE
+        text = text[:m.start()] + block + ("\n" if text[m.end():] else "") + text[m.end():]
+    else:
+        text = text.rstrip("\n") + "\n\n## Skills\n\n" + CLAUDE_LINE
+    claude_md.write_text(text, encoding="utf-8")
+    return True
+
+
 def set_framework_flag(framework: Path) -> bool:
     if not framework.exists():
         return False
@@ -220,6 +242,7 @@ def enable(project_root: str | None = None, log=print) -> None:
     root = proj.root
     for label, done in ((f".gitignore: {STATE_FILE}", add_gitignore(root / ".gitignore")),
                         ("AGENTS.md: section 10 (Notion)", add_agents_section(root / "AGENTS.md")),
+                        ("CLAUDE.md: the notion skill", add_claude_skill_line(root / "CLAUDE.md")),
                         (".claude/settings.json: Stop hook", add_hook(root / ".claude" / "settings.json")),
                         ("config/framework.yaml: notion: true", set_framework_flag(root / "config" / "framework.yaml"))):
         log(f"{'added' if done else 'already there'}: {label}")

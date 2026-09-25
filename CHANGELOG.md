@@ -62,7 +62,8 @@ layout 1) and the framework's, in order, before it applies the other template ch
   integration, `secret_file.sh notion` for the token, a shared parent page, a test
   notification), which can be deferred; until it is done, messages go to files.
 - Template: `opsci template instantiate --notion` keeps a new `<!-- opsci:notion -->` block,
-  `AGENTS.md` section 10 (rules for agents in a mirrored project), adds a Claude Code Stop
+  `AGENTS.md` section 10 (rules for agents in a mirrored project) and a line in `CLAUDE.md`'s
+  skill list that main agents load `open-science-project:notion` at session start, adds a Claude Code Stop
   hook that syncs the mirror when a turn ends (`opsci notion sync --hook || true`, never
   blocking), and records `notion: true|false` in `config/framework.yaml`. Only projects of a
   user who chose Notion get the section and the hook. `.gitignore` ignores
