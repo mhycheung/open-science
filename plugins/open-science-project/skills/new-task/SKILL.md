@@ -1,6 +1,6 @@
 ---
 name: new-task
-description: Start a new task in an open-science project - settle the design with the user, write tasks/<id>/plan.md from the plan template, and create the task's context, log and subcontext. Use when the user asks to start a task, plan a piece of work, start a campaign, or track a piece of work that will outlive one session. Also for small tasks and explorations that need no plan.
+description: Start a new task in an open-science project - settle the design with the user, write tasks/<id>/plan.md from the plan template, and create the task's context, log and subcontext. Use when the user asks to start a task, plan a piece of work, start a campaign, or track a piece of work that will outlive one session. Also for small tasks and explorations that need no plan, and, without asking, when the owner says "brainstorm" or asks to explore an idea or question in the project (a brainstorm task).
 ---
 
 # New task
@@ -100,6 +100,12 @@ and graph, not published by default). Same procedure, with `brainstorm` as the r
 name only brainstorm nodes. `brainstorm/` is soft-private as a whole; a hard-private idea
 still gets `--privacy hard-private`. The idea goes in the brainstorm `context.md` table, not
 the project one.
+
+A brainstorm task needs no plan and no approval. Make it as soon as the owner says
+"brainstorm" or starts exploring an idea: skip step 1's questions, create it without
+`--plan`, record the question and what has been found so far in its `context.md` and in
+the brainstorm `context.md` table, commit, and carry on with the conversation. Step 6's
+stop does not apply. Keep its `context.md` current as the discussion goes on.
 
 **Graduating an idea** is a new project task (no `--root`) whose `context.md` or `plan.md`
 restates the idea: the question, what was found, the evidence, copied or rewritten so that

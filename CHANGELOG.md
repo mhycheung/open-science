@@ -22,6 +22,13 @@ layout 1) and the framework's, in order, before it applies the other template ch
   Onboarding asks about the extras in a separate question.
 - README, documentation and user guide lead with doing research in the open; agents are
   optional. README and Get started describe how to use `opsci` without Claude Code.
+- Template `AGENTS.md` §2: "Record the work": a request for project work gets a task
+  without asking (a brainstorm task when the owner says "brainstorm"); for a request that
+  may not be work, the agent answers first and asks at the end whether to record it.
+  "Literature": sources read in full go to `lit_cache/` and the citation files, and when
+  more than one paper is consulted, subagents read the full texts. The `new-task` skill
+  makes brainstorm tasks without a plan or an approval stop; the `literature` agent saves
+  what it fetches in `lit_cache/`.
 - No project layout change.
 
 ## 0.3.0 - 2026-09-24

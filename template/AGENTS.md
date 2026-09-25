@@ -33,6 +33,17 @@ generated `map/graph.md`. Rules: `rules/README.md`.
 
 - **Scope.** Deliver what was asked, at the scope asked. Make routine judgement calls
   yourself. If a request looks mistaken, say so in one sentence and continue as asked.
+- **Record the work.** A request for work in this project (an idea to explore, a question to
+  investigate, a derivation, a computation) belongs to a task. If it fits an existing task,
+  work there. Otherwise make one with `open-science-project:new-task` without asking whether
+  to: a brainstorm task when the owner says "brainstorm" or the idea is exploratory, a
+  project task for planned project work. When a request may not be work (a quick question,
+  a question about the tools), answer it, then ask at the end whether to start a task that
+  records it. Never make the owner say "task" or "not a task" before they get an answer.
+- **Literature.** Every source read in full is saved in `lit_cache/`, named by its
+  identifier, and listed in `citations/consulted.md` or `citations/used.bib`. When more
+  than one paper is consulted, subagents read the full texts (the `literature` tier in
+  Claude Code); the main agent works from their reports.
 - **Proportionality.** Match a check's tightness to what the result decides.
 - **No self-verification rounds.** Put a control case (an input that must fail) inside the
   original check. Do not re-run finished work to confirm it.
@@ -61,7 +72,7 @@ generated `map/graph.md`. Rules: `rules/README.md`.
 |---|---|---|
 | main agent | driving a task: planning, dispatching, debugging, reporting | `contracts/main.md`, `context.md`, your task's `tasks/<id>/context.md` |
 | subagent | dispatched with a spec | your spec; `contracts/subagent.md` if your tier says so |
-| side quest | a one-off request with no task to drive | nothing more |
+| side quest | a one-off request that is not project work (§2, "Record the work") | nothing more |
 
 Do not read more than your role's list. Rules in `rules/` are opened when a context file or
 a dispatch names their id, not before.
