@@ -72,14 +72,13 @@ def copy_site_sources(dest: Path) -> Path:
     return dest
 
 
-def mermaid_blocks(text: str) -> list[str]:
-    return [body for lang, body in FENCE_RE.findall(text) if lang == "mermaid"]
+FIGURE = "figures/project_flow.svg"
 
 
 def get_started_problems(text: str) -> list[str]:
     probs = []
-    if not mermaid_blocks(text):
-        probs.append("no ```mermaid block")
+    if FIGURE not in text:
+        probs.append(f"does not show {FIGURE}")
     if "open-science:onboard" not in text:
         probs.append("does not name open-science:onboard")
     return probs
@@ -165,30 +164,29 @@ def test_nav_check_ignores_design_records(tmp_path):
 
 # --------------------------------------------------------------------------- Get started
 
-def test_get_started_has_chart_and_onboarding():
+def test_get_started_has_figure_and_onboarding():
     assert get_started_problems((DOCS / "index.md").read_text(encoding="utf-8")) == []
+    assert (DOCS / FIGURE).is_file()
 
 
 def test_get_started_check_refuses_page_without_them():
     text = (DOCS / "index.md").read_text(encoding="utf-8")
-    no_chart = FENCE_RE.sub(lambda m: "" if m.group(1) == "mermaid" else m.group(0), text)
-    assert get_started_problems(no_chart) == ["no ```mermaid block"]
+    assert get_started_problems(text.replace(FIGURE, "figures/other.svg")) == [f"does not show {FIGURE}"]
     no_onboard = text.replace("open-science:onboard", "the onboarding skill")
     assert get_started_problems(no_onboard) == ["does not name open-science:onboard"]
 
 
-def test_chart_names_every_publish_check():
+def test_publishing_page_names_every_publish_check():
     names = publish_check_names()
     assert {"leak", "secret", "policy"} <= names  # the regex still finds the checks
-    (chart,) = mermaid_blocks((DOCS / "index.md").read_text(encoding="utf-8"))
-    assert checks_missing(chart, names) == set()
     table = (DOCS / "publishing.md").read_text(encoding="utf-8")
     assert checks_missing(table, {f"`{n}`" for n in names}) == set()
 
 
-def test_chart_check_finds_missing_check():
-    (chart,) = mermaid_blocks((DOCS / "index.md").read_text(encoding="utf-8"))
-    assert checks_missing(chart.replace("human-verified", "human"), publish_check_names()) == {"human-verified"}
+def test_check_names_finds_missing_check():
+    table = (DOCS / "publishing.md").read_text(encoding="utf-8")
+    names = {f"`{n}`" for n in publish_check_names()}
+    assert checks_missing(table.replace("`human-verified`", "`human`"), names) == {"`human-verified`"}
 
 
 # --------------------------------------------------------------------------- names in the pages

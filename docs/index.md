@@ -1,5 +1,7 @@
 # Get started
 
+![How a project is organised and published](figures/project_flow.svg)
+
 The way we do science is changing rapidly, but it is more important than ever to keep
 science open.
 
@@ -82,71 +84,7 @@ Code sessions in a new batch job when the current one reaches its time limit.
 
 ## How a project is laid out and published
 
-The chart shows a project made from the template, the filter that decides what leaves the
-private repository, and where the public outputs go. Grey boxes stay private.
-
-```mermaid
-flowchart LR
-  subgraph PRIV["Private project repository"]
-    direction TB
-    subgraph INC["Exported: the default include list"]
-      direction TB
-      I1["README.md · PROJECT.md · AGENTS.md<br/>CITATION.cff · LICENSE · LICENSE-docs"]
-      I2["context.md · log/ · rules/ · citations/"]
-      I3["map/: README.md, graph.md, dead_ends.md"]
-      I4["tasks/: each task with privacy: public"]
-      I5["docs/: project documentation"]
-    end
-    subgraph OPT["Private unless the owner opts in"]
-      direction TB
-      O1["brainstorm/: its own context.md,<br/>map/, tasks/, log/"]
-      O2["tasks with privacy: soft-private<br/>or hard-private"]
-      O3["src/ · contracts/ · config/ · archive/<br/>CLAUDE.md · .claude/ · paper/"]
-    end
-    subgraph NEV["Never exported"]
-      direction TB
-      N1["private-docs/: private notes"]
-      N2["publish/: manifest, PRIVATE_POLICY.md, reports"]
-      N3["lit_cache/ · messages/<br/>config/site.local.yaml"]
-      N4["data/: outputs; only<br/>data/MANIFEST.yaml is tracked"]
-    end
-  end
-
-  subgraph FIL["The filter: opsci publish"]
-    direction TB
-    F1["publish/manifest.yaml<br/>include · never · hard_private"]
-    F2["opsci publish export<br/>snapshot of one commit;<br/>map rebuilt from exported nodes;<br/>redaction markers applied"]
-    F3["opsci publish check<br/>policy · leak · secret · citation<br/>map · status · copyright<br/>evidence · human-verified<br/>references · private-content<br/>redaction"]
-    F4["report and diff in publish/reports/<br/>optional agent review: tone,<br/>claims, paraphrase of excluded files"]
-    F5{"owner approves<br/>this export id"}
-    F1 --> F2 --> F3 --> F4 --> F5
-  end
-
-  subgraph OUT["Public outputs"]
-    direction TB
-    P1["public GitHub repository<br/>opsci publish push --export-id"]
-    P2["project website on GitHub Pages<br/>workflow runs opsci site build"]
-    P3["Zenodo record with a DOI<br/>opsci zenodo release"]
-    P4["optional extra: personal projects page<br/>USERNAME.github.io/projects/"]
-  end
-
-  INC --> F1
-  F5 -- "yes" --> P1
-  P1 --> P2
-  N4 -. "owner confirms<br/>the release" .-> P3
-  P1 -. "links in projects.yaml" .-> P4
-  P2 -.-> P4
-  P3 -.-> P4
-
-  classDef private fill:#e5e7eb,stroke:#4b5563,color:#111827
-  classDef public fill:#dcfce7,stroke:#15803d,color:#111827
-  classDef filter fill:#dbeafe,stroke:#1d4ed8,color:#111827
-  class O1,O2,O3,N1,N2,N3,N4 private
-  class I1,I2,I3,I4,I5,P1,P2,P3,P4 public
-  class F1,F2,F3,F4,F5 filter
-```
-
-How to read it:
+How to read the figure at the top of this page:
 
 - **Private project repository.** Everything is committed here, including drafts, private
   notes and failed routes. Only files listed under `include` in `publish/manifest.yaml` can

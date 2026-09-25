@@ -20,6 +20,8 @@ open-science is a framework for doing research in the open:
   reduces usage. The same files let collaborators and other researchers pick up an ongoing
   project straight away.
 
+![How a project is organised and published](docs/figures/project_flow.svg)
+
 **Start with the [user guide](USER_GUIDE.md)**: what you do and what you will see, in about
 three minutes of reading.
 

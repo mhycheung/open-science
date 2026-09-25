@@ -8,10 +8,12 @@ site_url: https://mhycheung.github.io/open-science/
 repo_url: https://github.com/mhycheung/open-science
 docs_dir: docs
 # The build's design records (report, build plan, verification) are not user documentation;
-# context/ holds agent working files that git ignores, when a checkout has them.
+# context/ holds agent working files that git ignores, when a checkout has them; figures/*.py
+# are the scripts that draw the figures.
 exclude_docs: |
   design/
   context/
+  figures/*.py
 theme:
   name: material
   features:
