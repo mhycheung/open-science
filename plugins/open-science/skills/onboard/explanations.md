@@ -15,6 +15,13 @@ combination (one of them needs another, which I will explain), and two optional 
 will first check what this computer already has, so I only ask about what is missing.
 Nothing in your own settings changes unless you say yes to that change.
 
+What will happen:
+1. I check this computer (this changes nothing).
+2. You confirm the name and email your commits will carry.
+3. You pick the parts and extras you want.
+4. I install them and set up what they need, asking before each change.
+5. I end with a summary: what was set up, and what is left for you to do by hand.
+
 ## Q0 — commit identity
 
 Question: "Every change saved in your projects (a git commit) is signed with a name and an
@@ -55,8 +62,14 @@ ask: "add project management too" or "leave context management out".
 
 ## Q2 — optional extras (multi-select; ask in the same widget call as Q1)
 
-Question: "There are also two optional extras. Do you want either?" Offer the SLURM option
-only if the check found SLURM.
+Question: "There are also two optional extras. Do you want either?" The SLURM option
+depends on the check:
+- `batch_job` is a job number: offer it, and start its description with "You are running
+  inside a SLURM job now, so this probably applies to you."
+- `slurm=present` and `batch_job=no`: offer it as written (a cluster, outside a job).
+- `slurm=missing`: do not offer it. Instead add this line to the question: "(There is a
+  third extra, for surviving the time limits of SLURM jobs on computing clusters. This
+  computer does not seem to use SLURM, so it is left out. Tell me if that is wrong.)"
 - **List of your projects**: A single web page, on your personal GitHub site
   (<username>.github.io), that lists your projects with a short description, tags and links,
   and lets visitors filter and sort them. You keep the list in one small text file. Works on
@@ -133,6 +146,10 @@ a new job."
 
 ## Branch 2 — publishing
 
+Say this first: "Setting this up publishes nothing. Later, nothing goes public (a push to a
+public repository, a web page, a Zenodo release) until you have read the check report and
+said yes to that exact publication."
+
 **2b — how git reaches GitHub** (skip if the SSH check says ok)
 - **SSH key (recommended)**: A pair of files on this computer proves to GitHub that you are
   you. You add the public half to your GitHub account once. Nothing secret is typed or stored
@@ -145,24 +162,26 @@ a new job."
 **2c — who creates each public repository**
 - **I create it on github.com (recommended)**: about one minute per project, in the browser:
   New repository, public, empty. The agent then needs no right to create repositories.
+  Either way the repository stays empty until you approve the first publication.
 - **The agent creates it**: needs a token that may create repositories in your account. If
   that token leaked, someone could create or change repositories. Choose this only if you
   make many projects.
 
 **2d — where the private copy lives**
+- **A private GitHub repository (recommended)**: an off-site backup that only you (and
+  people you invite) can see. The agent pushes to it; the public copy stays separate.
 - **Only on this computer**: simplest. Back it up yourself.
-- **A private GitHub repository**: an off-site backup that only you (and people you invite)
-  can see. The agent pushes to it; the public copy stays separate.
 - **Another server**: a git server you already use.
 
 **2e — the web page** (no question): after the first publish, open the public repository on
 github.com → Settings → Pages → Source: "GitHub Actions". Then every publish rebuilds the page.
 
 **2f — Zenodo**: "Zenodo is a free archive run by CERN. It gives a dataset a DOI, a permanent
-link people can cite, and keeps it for decades. A release there can never be deleted. Do you
-want to be able to archive project data there?"
+link people can cite, and keeps it for decades. A release there can never be deleted, so the
+agent never makes one on its own: it shows you exactly what would be released and waits for
+your explicit yes. Do you want to be able to archive project data there?"
 - **Yes, test site first (recommended)**: you make a token on sandbox.zenodo.org, a practice
-  copy of Zenodo where nothing is permanent, and we run a test release there.
+  copy of Zenodo where nothing is permanent, and we run a test release there (after your yes).
 - **Yes, real site now**: a token from zenodo.org as well. The agent still never releases
   without your yes for that exact release.
 - **Not now**.
@@ -171,7 +190,8 @@ want to be able to archive project data there?"
 
 **3a — personal site**
 - **I have <username>.github.io**: give the folder where it is on this computer; the page is
-  added as one more page.
+  added as one more page. I commit it only after your yes and never push it: you push it
+  yourself when you want it online.
 - **I do not have one**: on github.com make a public repository named exactly
   <username>.github.io; GitHub serves it as your personal site.
 
@@ -180,6 +200,10 @@ want to be able to archive project data there?"
 **4c — permission mode of resumed sessions**
 - **Ask before edits (acceptEdits)**: the resumed agent may edit files but asks before
   running other commands. Safer, but it stops and waits when nobody is watching.
+- **Automatic checks (auto)**: before each action runs, a separate automatic check decides
+  whether it is safe. Ordinary work goes ahead without asking; actions that look risky are
+  blocked and the agent looks for another way. A middle ground for unattended work. It may
+  not be available on every Claude plan; if Claude Code refuses it, pick another mode.
 - **Run everything (bypassPermissions, the default)**: the resumed agent runs every command
   without asking, including deleting files. Needed for work that must continue unattended.
 - **Ask for everything (manual)**: safest, but an unattended session will mostly wait.
@@ -189,21 +213,52 @@ want to be able to archive project data there?"
   phone or another computer, logged in to your account.
 - **Off**: the resumed sessions can only be reached from the cluster.
 
-**4e — queueing**
-- **After the current job ends (default)**: the next job is queued to start when this one
-  ends. On some clusters it then waits a long time in the queue.
-- **Early start**: the next job may start up to about 4 hours before this one ends. When it
-  starts, it takes over and ends the old job. Less waiting in the queue, but the old job's
-  remaining time is given up.
+**4e — queueing** (no question): the next job is queued to start when the current one ends
+(the default, `queue_mode afterany`). Set nothing. List it in the summary with the way to
+change it: `/slurm-resurrect:resurrect set queue_mode early` lets the next job start up to
+about 4 hours before the current one ends and take over from it.
 
 ## Notifications
 
 "The agents send you short messages: a result is ready, a job finished, something needs your
-decision."
+decision. This is not only a convenience. An agent sometimes clears its own conversation
+(this is what context management does), and anything it
+wrote to you in the chat disappears with it. The messages are kept in a separate place, so
+nothing meant for you is lost."
 - **Files (default)**: each message is saved as a small file in the project's `messages/`
   folder. Nothing to set up.
 - **Slack**: messages arrive in a Slack channel. You create your own small Slack app that may
-  only post messages and files, and nothing else. About 10 minutes, steps in `docs/notify.md`.
+  only post messages and files, and nothing else, into one channel you choose. About 10
+  minutes; I walk you through it step by step.
+
+## Slack setup (step by step, only if the user picked Slack)
+
+Give one step at a time. After each, wait until the user says it is done (or asks for help)
+before giving the next. Do not paste the whole list at once.
+
+1. **Workspace.** "Which Slack workspace should the messages go to? You need to be allowed
+   to add apps there; some workplaces ask an administrator to approve each app."
+2. **Channel.** "Which channel should the messages go to? Everyone in that channel will see
+   them, and they can contain results, file paths and error messages from your work. I
+   recommend a new private channel with only you in it, for example `#<name>-agents`. Please
+   do not use a channel shared with other people unless you want them to see every
+   message." Wait for the channel name; if it sounds shared (`#general`, a team or project
+   channel), ask once more whether others should see the messages.
+3. **Create the app.** "Go to https://api.slack.com/apps, choose Create New App, then From a
+   manifest, pick the workspace, paste this, and create the app:" then show the manifest in
+   `docs/notify.md` (section 1). "It may only post messages and files, nothing else."
+4. **Install it.** "On the app's page, open OAuth & Permissions and choose Install to
+   Workspace, then Allow. It shows a Bot User OAuth Token starting with `xoxb-`. Leave that
+   page open; do not paste the token here. We store it in step 7."
+5. **Invite the app to your channel.** "In Slack, in `#<channel>`, type
+   `/invite @opsci-notify`. The app can only post in channels it has been invited to."
+6. **Channel ID.** "Click the channel name at the top of `#<channel>`; at the bottom of the
+   window that opens is the Channel ID, starting with C. Copy it. It is not secret; you can
+   paste it here if you like."
+7. **Store the token and channel ID**, as in "Tokens" below: the file has two lines to fill
+   in, `SLACK_TOKEN=` (the `xoxb-` token) and `SLACK_CHANNEL=` (the channel ID).
+8. **Test.** With the user's yes, set Slack as the way messages are sent, then send a test
+   message. "Did it arrive in `#<channel>`, and nowhere else?"
 
 ## Tokens (say this whenever a token is needed)
 

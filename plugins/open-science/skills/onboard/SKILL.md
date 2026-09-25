@@ -33,8 +33,8 @@ question also put the longer text in its `preview`. Do not shorten the texts int
    `git config --global user.name "<name>"` and `git config --global user.email "<email>"`.
 
 4. **Q1, components, and Q2, optional extras** (both multi-select, in one widget call; the
-   options and their order are in `explanations.md`). Offer the SLURM extra in Q2 only if
-   the check found `slurm=present`. Context management without project management: ask the
+   options and their order are in `explanations.md`). The SLURM extra in Q2 follows the
+   three cases in `explanations.md` (in a job, cluster outside a job, no SLURM). Context management without project management: ask the
    follow-up in `explanations.md`. Nothing chosen in either: stop here.
 
 5. **Install the chosen plugins.** Tell the user the commands, then run them:
@@ -76,7 +76,8 @@ question also put the longer text in its `preview`. Do not shorten the texts int
      - 1d, only if `same_name_skills` is not `none`: move the named directories to
        `<config>/skills-archive/` after a yes. Rename the archive folder if one is already
        there; never delete anything.
-   - **Branch 2, publishing.** 2a GitHub username: take it from `github_ssh=ok:<name>` if
+   - **Branch 2, publishing.** Say the branch's opening text (nothing goes public without an
+     explicit yes). 2a GitHub username: take it from `github_ssh=ok:<name>` if
      present, else ask. 2b only if `github_ssh` is not `ok`: SSH key (help make one with
      `ssh-keygen -t ed25519`, then the user adds `~/.ssh/id_ed25519.pub` on github.com →
      Settings → SSH keys; `fail:host-key-unknown` means the user must connect once by hand
@@ -98,18 +99,20 @@ question also put the longer text in its `preview`. Do not shorten the texts int
      anything else ask the user. 4a: Claude must run in tmux inside a batch job; if
      `batch_job=no` and 1c did not already write it, offer the job script of 1c (`sbatch` it
      only after a yes). 4b: ask how they start Claude; if not plain `claude`, they will run
-     `set launch_cmd <command>`. 4c, 4d, 4e with the texts. 4g: **you cannot register.**
+     `set launch_cmd <command>`. 4c, 4d with the texts; 4e is not a question. 4g: **you cannot register.**
      Give the user the exact line to type in a Claude pane of that tmux session, e.g.
-     `/slurm-resurrect:resurrect register --permission-mode acceptEdits --remote-control off`,
+     `/slurm-resurrect:resurrect register --permission-mode acceptEdits --remote-control off`
+     (the mode chosen in 4c: `acceptEdits`, `auto`, `bypassPermissions` or `manual`),
      and tell them it shows a warning the first time and registers the second time.
-     With 4e early: `/slurm-resurrect:resurrect set queue_mode early`.
 
 8. **Notifications** (if any of project management, context management, publishing or SLURM
-   resurrection was chosen): Files or Slack. Files needs nothing. Slack: walk the user
-   through `docs/notify.md` in the framework repo (their own app, `chat:write` and
-   `files:write`, invite it to the channel), then step 9 with `slack`, then write
+   resurrection was chosen): Files or Slack. Files needs nothing. Slack: follow "Slack
+   setup" in `explanations.md`, one step at a time, waiting for the user after each (the
+   manifest is in `docs/notify.md` in the framework repo). Always ask which channel (step 2);
+   never pick one yourself. Its step 7 is step 9 below with `slack`. Its step 8: write
    `notify: {backend: slack}` into `~/.config/opsci/config.yaml` after a yes, then send
-   `opsci notify "open-science onboarding: test message"` and ask whether it arrived. With
+   `opsci notify "open-science onboarding: test message"` and ask whether it arrived in
+   the chosen channel. With
    Slack and branch 4, the user may route resurrection notices there by typing
    `/slurm-resurrect:resurrect set-notify <path to opsci> notify "$RR_MSG"` (no outer quotes;
    `<path to opsci>` from `command -v opsci`, since the batch job's PATH may differ). Not with
