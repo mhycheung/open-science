@@ -36,6 +36,10 @@ evidence: tasks/t07-mode-fit-v2/provenance.yaml   # required unless unverified
 ---
 ```
 
+A task's `context.md` and `plan.md` also show the header as a table under the title, between
+`opsci:node-table` comment markers, so that it reads well in a Markdown viewer. `opsci task new`
+writes it and `opsci map build` rewrites it from the front matter; never edit the table.
+
 Required: `id`, `title`, `type`, `status`, `summary`. A task may carry `short_name`; a plan
 header may also carry `autonomy` and `hold_at`; any node may carry `tags`. Any other key is
 an error, so a typo is caught. `verified` means a stated check was run against a provenance

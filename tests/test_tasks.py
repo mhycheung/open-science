@@ -38,6 +38,57 @@ def test_task_new_creates_layout_and_map_builds(project):
     assert "t01-noise" in (project / "map" / "graph.md").read_text()
 
 
+# ---- node table -------------------------------------------------------------------------
+
+TABLE_START = "<!-- opsci:node-table"
+
+
+def test_task_new_writes_node_table_under_title(project):
+    r = run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--short-name", "noise",
+                  "--plan", "--root", project)
+    assert r.returncode == 0, r.stderr
+    for f in ("context.md", "plan.md"):
+        text = (project / "tasks" / "t01-noise" / f).read_text()
+        body = text.split("---\n", 2)[2]
+        assert body.lstrip().startswith("# ")
+        after_title = body.lstrip().split("\n", 2)[2]
+        assert after_title.startswith(TABLE_START), f
+        assert "| task | `t01-noise` |" in text
+        assert "| **short name** | `noise` |" in text
+        assert "| **status** | active |" in text
+    assert "| **autonomy** | autonomous |" in (project / "tasks" / "t01-noise" / "plan.md").read_text()
+    r = run_opsci("map", "build", "--check", project)
+    assert "out of date: map/graph.md\n" in r.stderr  # the map only, not the task files
+
+
+def test_map_build_refreshes_node_table(project):
+    run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--root", project)
+    ctx = project / "tasks" / "t01-noise" / "context.md"
+    text = ctx.read_text().replace("status: active", "status: done")
+    text = re.sub(r"summary: .*", "summary: 'Fit a | b; done.'", text)
+    ctx.write_text(text + "\nA line of my own.\n")
+    r = run_opsci("map", "build", "--check", project)
+    assert r.returncode == 1 and "tasks/t01-noise/context.md" in r.stderr
+    r = run_opsci("map", "build", project)
+    assert r.returncode == 0, r.stderr
+    new = ctx.read_text()
+    assert "| **status** | done |" in new and "| **status** | active |" not in new
+    assert "| **summary** | Fit a \\| b; done. |" in new
+    assert new.count(TABLE_START) == 1 and new.endswith("A line of my own.\n")
+    assert run_opsci("map", "build", "--check", project).returncode == 0
+
+
+def test_map_build_adds_node_table_to_older_task(project):
+    run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--root", project)
+    ctx = project / "tasks" / "t01-noise" / "context.md"
+    fresh = ctx.read_text()
+    old = re.sub(r"<!-- opsci:node-table.*?<!-- /opsci:node-table -->\n\n", "", fresh, flags=re.S)
+    assert TABLE_START not in old
+    ctx.write_text(old)
+    assert run_opsci("map", "build", project).returncode == 0
+    assert ctx.read_text() == fresh
+
+
 
 def test_task_new_short_name(project):
     r = run_opsci("task", "new", "t01-noise", "--title", "Noise model", "--short-name", "noise",

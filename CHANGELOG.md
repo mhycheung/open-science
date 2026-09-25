@@ -11,6 +11,15 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- A task's `context.md` and `plan.md` show the node header as a two-column table under the
+  title, between `opsci:node-table` comment markers, so that it reads well in a Markdown
+  viewer that hides front matter (VS Code, the project site). The YAML front matter stays the
+  source: `opsci task new` writes the table and `opsci map build` rewrites it; `opsci map build
+  --check` and the publish check report a table that is out of date. The table adds about 12
+  lines to each task context.
+- No project layout change. After updating, run `opsci map build`: it adds the table to every
+  existing task.
+
 - New skill `open-science-project:private-investigation`: a side question that needs
   recorded work but does not drive the project gets its own context file in
   `private-docs/investigations/<YYYY-MM-DD>-<slug>/`, soft-private by default. A public task

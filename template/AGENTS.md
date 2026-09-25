@@ -118,7 +118,8 @@ published files. An idea from `brainstorm/` becomes project work as a new task t
 Every task, result, paper, site page and published dataset carries a node header: YAML
 front matter at the top of its main document, or a `node.yaml` beside a non-markdown
 artifact. Fields and allowed values: `tasks/README.md`. After changing a header, run
-`opsci map build`. Nodes under `brainstorm/` are part of the project graph, drawn in a box of
+`opsci map build`; it also rewrites the header table under a task's title (never edit that
+table). Nodes under `brainstorm/` are part of the project graph, drawn in a box of
 their own, and edges may join them to project nodes; `opsci map build` also writes
 `brainstorm/map/` with the brainstorm nodes alone. A brainstorm task is soft-private unless
 its header says otherwise.

@@ -10,7 +10,7 @@ from pathlib import Path
 import jsonschema
 import yaml
 
-from . import nodes
+from . import nodes, nodetable
 
 ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
 AUTONOMY = ("autonomous", "checkpoints", "collaborative")
@@ -190,17 +190,18 @@ def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
     next_step = NEXT_STEP_PLAN if plan else NEXT_STEP_NONE
     tdir.mkdir(parents=True)
     try:
-        (tdir / "context.md").write_text(_front(header) + "\n" + CONTEXT_BODY.format(
+        (tdir / "context.md").write_text(nodetable.refresh(_front(header) + "\n" + CONTEXT_BODY.format(
             title=title, date=date.isoformat(), goal=goal or GOAL_NONE,
-            next_step=next_step, pointers=pointers), encoding="utf-8")
+            next_step=next_step, pointers=pointers)), encoding="utf-8")
         (tdir / "log.md").write_text(LOG_README.format(title=title, date=date.isoformat()), encoding="utf-8")
         (tdir / "subcontext").mkdir()
         (tdir / "subcontext" / "README.md").write_text(SUBCONTEXT_README, encoding="utf-8")
         if plan:
             ph = _header(task_id, title, summary, depends_on, related, supersedes, privacy,
                          {"autonomy": autonomy, "hold_at": list(hold_at)}, short_name=short_name)
-            (tdir / "plan.md").write_text(_front(ph) + "\n" + PLAN_BODY.format(title=title, id=task_id),
-                                          encoding="utf-8")
+            (tdir / "plan.md").write_text(
+                nodetable.refresh(_front(ph) + "\n" + PLAN_BODY.format(title=title, id=task_id)),
+                encoding="utf-8")
 
         after = nodes.scan(graph)
         mine = [str(p) for p in after.errors if p.path.startswith(f"{prefix}tasks/{task_id}/")]

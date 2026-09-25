@@ -39,7 +39,8 @@ subagent or submitting a long job (record the id, where output lands, how to che
 before ending a turn with work unfinished.
 
 **After every finished subtask, the four questions** (`contracts/main.md` §3):
-1. Did a status or edge change? Update the node header; run `opsci map build`.
+1. Did a status or edge change? Update the node header; run `opsci map build`, which also
+   rewrites the header table under the title.
 2. Does the next agent need it? Update the project `context.md`.
 3. Was a source or package used or consulted? Update `citations/`.
 4. One line in `tasks/<id>/log.md` and one in `log/YYYY-MM.md`.

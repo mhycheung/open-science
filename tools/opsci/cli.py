@@ -29,8 +29,10 @@ def cmd_map_build(args) -> int:
         return 0
     root, _ = nodes.graph_root(Path(args.root))
     subs = [f"{d}/map/" for d in nodes.SUBROOTS if (root / d).is_dir()]
+    tables = [s for s in stale if nodes.is_task_context(s) or nodes.is_task_plan(s)]
     print(f"map build: {len(res.nodes)} nodes; wrote map/graph.md and map/dead_ends.md"
-          + (f", and the same in {', '.join(subs)}" if subs else "") + ".")
+          + (f", and the same in {', '.join(subs)}" if subs else "")
+          + (f"; rewrote the node table in {', '.join(tables)}" if tables else "") + ".")
     return 0
 
 
