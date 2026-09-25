@@ -43,6 +43,7 @@ validation:
     unrecognized_links: warn
 nav:
   - Get started: index.md
+  - Tutorial: tutorial.md
   - 1. Project management:
       - Project template and layout: project-template.md
       - Project skills: project-skills.md
