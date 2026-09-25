@@ -7,7 +7,7 @@ supersedes: []
 related: []
 publish: no
 summary: Build the framework repo (template, skills plugin, tools, projects page, optional SLURM resurrection plugin), with tests, as designed in REPORT_framework_design.md.
-autonomy: maximal
+autonomy: autonomous
 hold_at: [github, public-push, zenodo-production, live-config]
 ---
 # Build `open-science`: template, skills, tools, projects page, with tests

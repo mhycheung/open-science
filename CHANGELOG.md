@@ -11,6 +11,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- The default autonomy level `maximal` is renamed `autonomous` (`opsci task new --autonomy
+  autonomous|checkpoints|collaborative`). Plans written before this release that say
+  `autonomy: maximal` mean `autonomous`; edit the header to the new name.
+
 - Brainstorm nodes are part of the project graph. `opsci map build` scans `brainstorm/`,
   draws its nodes in a box of their own in `map/graph.md`, and also writes `brainstorm/map/`
   with the brainstorm nodes alone (`opsci map build brainstorm` does the same). Edges may

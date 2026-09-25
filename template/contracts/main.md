@@ -51,7 +51,7 @@ skills, so they update for every project at once. This file holds the project's 
 
 ## 4. Autonomy and hold points
 
-The plan header sets the autonomy level (`maximal`, `checkpoints`, `collaborative`) and any
+The plan header sets the autonomy level (`autonomous`, `checkpoints`, `collaborative`) and any
 `hold_at` points. Re-read it at each subtask boundary. Only a fatal problem stops the work:
 a plan assumption shown false, the budget ceiling reached, an irreversible action the plan
 does not cover, missing access, or a result that contradicts the goal. Anything else: fix it

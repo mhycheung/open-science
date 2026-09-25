@@ -94,9 +94,9 @@ def test_task_new_privacy(project):
     assert not (project / "tasks" / "t03-c").exists()
 
 
-def test_task_new_default_autonomy_is_maximal(project):
+def test_task_new_default_autonomy_is_autonomous(project):
     run_opsci("task", "new", "t01-a", "--title", "A", "--plan", "--root", project)
-    assert header(project / "tasks" / "t01-a" / "plan.md")["autonomy"] == "maximal"
+    assert header(project / "tasks" / "t01-a" / "plan.md")["autonomy"] == "autonomous"
 
 
 @pytest.mark.parametrize("args,msg", [

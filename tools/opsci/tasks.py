@@ -13,7 +13,7 @@ import yaml
 from . import nodes
 
 ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
-AUTONOMY = ("maximal", "checkpoints", "collaborative")
+AUTONOMY = ("autonomous", "checkpoints", "collaborative")
 
 CONTEXT_BODY = """\
 # {title}
@@ -137,7 +137,7 @@ def _front(header: dict) -> str:
 
 def new_task(root: Path, task_id: str, title: str, summary: str | None = None,
              depends_on=(), related=(), supersedes=(), plan: bool = False,
-             autonomy: str = "maximal", hold_at=(), goal: str | None = None, privacy: str | None = None,
+             autonomy: str = "autonomous", hold_at=(), goal: str | None = None, privacy: str | None = None,
              date: dt.date | None = None, short_name: str | None = None) -> Path:
     """Create tasks/<id>/ in the project at root. Returns the task directory.
 

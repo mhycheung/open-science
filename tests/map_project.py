@@ -26,7 +26,7 @@ def valid_files() -> dict[str, str]:
         "tasks/t03-fit-v2/plan.md": header(
             id="t03-fit-v2", title="Fit with the corrected likelihood", type="task", status="active",
             depends_on=["t01-noise-model"], supersedes=["t02-fit-v1"], related=["t04-scan"],
-            summary="Refit with the normalised likelihood.", autonomy="maximal", hold_at=[]),
+            summary="Refit with the normalised likelihood.", autonomy="autonomous", hold_at=[]),
         "tasks/t04-scan/context.md": header(
             id="t04-scan", title="Start-time scan", type="task", status="failed",
             related=["t03-fit-v2"], summary="Scan unstable below 10 ms; route dropped."),

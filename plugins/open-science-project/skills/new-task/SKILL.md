@@ -40,7 +40,7 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
    opsci task new <id> --title "<title>" --short-name <short> --plan \
        [--privacy public|soft-private|hard-private] \
        [--depends-on <id>...] [--related <id>...] [--supersedes <id>...] \
-       [--autonomy maximal|checkpoints|collaborative] [--hold-at S2 ...]
+       [--autonomy autonomous|checkpoints|collaborative] [--hold-at S2 ...]
    ```
 
    It writes `context.md` with a validated node header, `log.md`, `subcontext/`, and
@@ -124,7 +124,7 @@ the task stands alone. It never links to `brainstorm/`; it may mention the idea 
 
 | `autonomy` | the main agent |
 |---|---|
-| `maximal` (default) | runs the whole plan and escalates only fatal problems |
+| `autonomous` (default) | runs the whole plan and escalates only fatal problems |
 | `checkpoints` | also stops at each point listed in `hold_at` |
 | `collaborative` | also asks whenever two readings of the plan would lead to materially different work |
 

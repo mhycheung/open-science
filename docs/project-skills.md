@@ -55,7 +55,7 @@ sequence number (`t07-mode-fit-v2`).
 
    ```bash
    opsci task new <id> --title "<title>" --plan [--depends-on <id>...] [--related <id>...] \
-       [--supersedes <id>...] [--autonomy maximal|checkpoints|collaborative] [--hold-at S2 ...]
+       [--supersedes <id>...] [--autonomy autonomous|checkpoints|collaborative] [--hold-at S2 ...]
    ```
 
    This writes `context.md` with a validated node header, `log.md`, `subcontext/` and, with
@@ -75,7 +75,7 @@ The plan header sets how much the agent does without asking:
 
 | `autonomy` | the main agent |
 |---|---|
-| `maximal` (default) | runs the whole plan and escalates only fatal problems |
+| `autonomous` (default) | runs the whole plan and escalates only fatal problems |
 | `checkpoints` | also stops at each point listed in `hold_at` |
 | `collaborative` | also asks whenever two readings of the plan would lead to materially different work |
 

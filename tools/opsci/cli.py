@@ -154,7 +154,7 @@ def main(argv=None) -> int:
     tn.add_argument("--related", nargs="*", default=[], metavar="ID")
     tn.add_argument("--supersedes", nargs="*", default=[], metavar="ID")
     tn.add_argument("--plan", action="store_true", help="also write plan.md from the plan template")
-    tn.add_argument("--autonomy", default="maximal", choices=tasks.AUTONOMY)
+    tn.add_argument("--autonomy", default="autonomous", choices=tasks.AUTONOMY)
     tn.add_argument("--hold-at", nargs="*", default=[], metavar="POINT", help="needs --autonomy checkpoints")
     tn.add_argument("--privacy", choices=nodes.PRIVACY_TIERS,
                     help="public, soft-private or hard-private (default: public; soft-private for a brainstorm task)")

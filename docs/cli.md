@@ -55,7 +55,7 @@ See [Project template and layout](project-template.md).
 ```
 opsci task new ID --title TITLE [--summary SUMMARY] [--goal GOAL]
                [--depends-on [ID ...]] [--related [ID ...]] [--supersedes [ID ...]]
-               [--plan] [--autonomy {maximal,checkpoints,collaborative}]
+               [--plan] [--autonomy {autonomous,checkpoints,collaborative}]
                [--hold-at [POINT ...]] [--root ROOT]
 ```
 

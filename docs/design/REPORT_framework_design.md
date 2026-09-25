@@ -625,7 +625,7 @@ itself. **No spec files anywhere in the framework** (user decision 2026-09-23: n
 ```markdown
 ---
 (node header: id, title, status, depends_on, supersedes, related, publish, summary)
-autonomy: maximal        # maximal | checkpoints | collaborative
+autonomy: autonomous     # autonomous | checkpoints | collaborative
 hold_at: []              # e.g. [S2, before-publish]; only used with "checkpoints"
 ---
 # <task title>: <one line on what gets built or measured>
@@ -659,12 +659,12 @@ Estimate per subtask and a ceiling; measured values are recorded in the task con
 ```
 
 **Autonomy.** The user sets how autonomous execution is, in the plan header. Default
-`maximal`. The value names how much autonomy the agent has, not how much it escalates.
+`autonomous`. The value names how much autonomy the agent has, not how much it escalates.
 
 | level | the main agent |
 |---|---|
-| `maximal` (default) | runs the whole plan without pausing and escalates only fatal problems |
-| `checkpoints` | as `maximal`, but also stops at the hold points listed in `hold_at` |
+| `autonomous` (default) | runs the whole plan without pausing and escalates only fatal problems |
+| `checkpoints` | as `autonomous`, but also stops at the hold points listed in `hold_at` |
 | `collaborative` | also asks whenever two readings of the plan would lead to materially different work |
 
 - **Fatal** means continuing would waste the budget or cause harm:
