@@ -20,8 +20,8 @@ open-science is a framework for doing research in the open:
 - **Context management for agentic work.** Agents keep a short context file for the project
   and for each task. They clear their conversation on their own and resume from that
   file, so a long session is not resent in full on every turn or after the prompt cache
-  expires, which reduces usage. The same files let collaborators and other researchers pick up an ongoing
-  project straight away.
+  expires, which reduces usage. The same files let collaborators and other researchers
+  pick up an ongoing project straight away.
 
 ![Two agents clearing their context and resuming on their own](figures/context_jumps.svg)
 
