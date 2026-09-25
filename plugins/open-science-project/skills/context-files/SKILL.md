@@ -40,12 +40,18 @@ before ending a turn with work unfinished.
 
 **After every finished subtask, the four questions** (`contracts/main.md` §3):
 1. Did a status or edge change, or did a subtask start, finish, fail or branch? Update the
-   node header and the task's `map.md`. Did a scientific result land, change or fail?
-   Write or update its file in `tasks/<id>/results/` (`tasks/README.md`, "Results"). Run
-   `opsci map build`, which also rewrites the header table under the title and the results
-   pages, and settle every result it reports as resting on failed or superseded work.
+   node header and the task's `map.md`. Did a result land, change or fail? Write or update
+   its file in `tasks/<id>/results/`. A result is something later work will rely on, or
+   something that answers part of the task's goal; a debugging finding goes only in the
+   task's `map.md`, unless it matters conceptually. Set `milestone: true` when the result
+   obviously answers part of the project's question; if unsure, ask the user
+   (`tasks/README.md`, "Results"). Run `opsci map build`, which also rewrites the header
+   table under the title and the results pages, and settle every result it reports as
+   resting on failed or superseded work.
 2. Does the next agent need it? Update the project `context.md`.
-3. Was a source or package used or consulted? Update `citations/`.
+3. Was a source or package used or consulted? Update `citations/`. If a result relies on
+   it, add its key to that result's `uses:`; an assumption taken from it is a result of
+   its own, `kind: assumption`.
 4. One line in `tasks/<id>/log.md` and one in `log/YYYY-MM.md`.
 
 ## Subagent documents

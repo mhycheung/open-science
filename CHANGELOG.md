@@ -11,6 +11,16 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- When something is a result: something later work will rely on, or that answers part of
+  the task's goal. Debugging findings go only in the task's `map.md`, unless they matter
+  conceptually. Agents set `milestone: true` when a result obviously answers part of the
+  project's question and ask the user when unsure. A result that relies on outside work
+  names it in `uses:` (added to `citations/used.bib` in the same step); an assumption taken
+  from outside is a result of its own, `kind: assumption`. In template `tasks/README.md`,
+  `AGENTS.md` rule 7, `contracts/main.md` §3 (questions 1 and 3), the context-files skill
+  and the task-context hook.
+- No project layout change.
+
 - Results. A scientific result (a figure, table, value, statement, concept, or an
   assumption taken as given; not a debugging plot) is a `type: result` node with its own
   file in `tasks/<id>/results/`, or in the project's `results/` when it combines several

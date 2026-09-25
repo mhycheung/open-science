@@ -109,11 +109,17 @@ The same caps apply to `brainstorm/context.md` and `brainstorm/tasks/<id>/contex
 After every finished subtask the agent answers four questions (`contracts/main.md` §3):
 
 1. Did a task's status or edges change, or did a subtask start, finish, fail or branch?
-   Update its node header and its `map.md`. Did a scientific result land, change or fail?
-   Write or update its file in `tasks/<id>/results/`. Run `opsci map build`, and settle
-   every result it reports as resting on failed or superseded work.
+   Update its node header and its `map.md`. Did a result land, change or fail? Write or
+   update its file in `tasks/<id>/results/`. A result is something later work will rely
+   on, or something that answers part of the task's goal; a debugging finding goes only
+   in the task's `map.md`, unless it matters conceptually. The agent sets `milestone: true`
+   when the result obviously answers part of the project's question, and asks you when
+   unsure. Run `opsci map build`, and settle every result it reports as resting on failed
+   or superseded work.
 2. Does the next agent need to know? Update `context.md`.
-3. Was a source or package used or consulted? Update `citations/`.
+3. Was a source or package used or consulted? Update `citations/`. If a result relies on
+   it, its key goes in that result's `uses:`; an assumption taken from it is a result of
+   its own (`kind: assumption`).
 4. Append one line to the task log and one to `log/YYYY-MM.md`.
 
 ## `open-science-project:private-investigation`

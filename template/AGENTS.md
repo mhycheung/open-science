@@ -78,9 +78,10 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
    Then settle every result that `opsci map build` reports as resting on it.
 6. Every published result has provenance: a `provenance.yaml` beside it with the `src`
    commit, the environment lock file, the command, and the input checksums.
-7. Every scientific result (not a debugging plot) has its own file in `tasks/<id>/results/`
-   with a `type: result` header that names where it is stored, the code, and what it rests
-   on (`tasks/README.md`, "Results").
+7. Every result (something later work relies on, or that answers part of a task's goal;
+   not a debugging finding) has its own file in `tasks/<id>/results/` with a `type: result`
+   header that names where it is stored, the code, what it rests on, and the outside work
+   it uses (`uses:`, keys in `citations/used.bib`). See `tasks/README.md`, "Results".
 
 ## 4. Your role, and what to read
 

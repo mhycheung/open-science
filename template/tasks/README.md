@@ -60,9 +60,29 @@ record, and `evidence` points to both. Only the user sets `human-verified`.
 
 ## Results
 
-A result is what the project would state in a paper: a figure, a table, a value, a statement
-or a concept that the work established, or an assumption it takes as given. The plots and
-numbers of debugging runs and checks are not results; they stay in the subtask directories.
+A result is a figure, a table, a value, a statement or a concept that the work established,
+or an assumption it takes as given. Record something as a result when either holds:
+
+- later work will rely on it: another task, another result or the paper takes it as input
+  or as a premise;
+- it answers part of the task's goal, as stated in `plan.md` or the task's `context.md`.
+
+Findings from debugging (a bug found and fixed, a check that passed, a tuning run) are not
+results. They go in the task's `map.md` as nodes, and their plots stay in the subtask
+directories. Such a finding becomes a result only if it matters conceptually: it changes
+what the project believes or how its results must be read (for example, a systematic
+error that biases every fit).
+
+Set `milestone: true` when the result obviously answers part of the project's question
+(`PROJECT.md`), so that a paper on the project would report it. When unsure, ask the user,
+and leave it unset until they answer.
+
+When a result relies on work from outside the project (a published result or value, a
+model or approximation, a dataset, software whose correctness it depends on), record that
+in the same step: add the work to `citations/used.bib` and its key to the result's `uses:`.
+An assumption taken from outside (a model, an approximation, a literature value) is also a
+result of its own, `kind: assumption`, with `uses:` naming the source, so that the claims
+graph shows it as a premise of the results that rest on it.
 
 Each result is a node of `type: result` with its own file, `tasks/<id>/results/<result-id>.md`:
 the header, then the result shown and described (the figure, the table, the statement, how

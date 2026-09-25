@@ -146,9 +146,16 @@ writes it and `opsci map build` rewrites it from the front matter; never edit th
 
 ## Results and the claims graph
 
-A result is what the project would state in a paper: a figure, a table, a value, a
-statement or a concept that the work established, or an assumption it takes as given. The
-plots and numbers of debugging runs are not results.
+A result is a figure, a table, a value, a statement or a concept that the work established,
+or an assumption it takes as given. An agent records something as a result when later work
+will rely on it (another task, another result or the paper takes it as input or premise), or
+when it answers part of the task's goal. Debugging findings (a bug fixed, a check passed, a
+tuning run) go only in the task's `map.md`, unless they matter conceptually: they change what
+the project believes or how its results must be read. The agent sets `milestone: true` when
+a result obviously answers part of the project's question, and asks you when unsure. When a
+result relies on outside work, the agent adds the work to `citations/used.bib` and its key to
+the result's `uses:`; an assumption taken from outside is a result of its own, `kind:
+assumption`, so the claims graph shows it as a premise.
 
 Each result has its own file with a `type: result` header: `tasks/<id>/results/<result-id>.md`,
 or `results/<result-id>.md` for a result that combines several tasks. The body shows and
