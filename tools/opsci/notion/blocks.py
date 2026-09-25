@@ -176,7 +176,12 @@ def _code(lines, lang):
 LIST_RE = re.compile(r"^(?P<ind>\s*)(?P<mark>[-*+]|\d+[.)]) (?P<text>.*)$")
 
 
-def md_to_blocks(md: str) -> list:
+IMAGE_LINE = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+)\)$")
+
+
+def md_to_blocks(md: str, images=None) -> list:
+    """Blocks for a markdown text. `images(target, alt)` turns a line holding only an image
+    (`![alt](path)`) into a block, or returns None to keep the line as text."""
     lines = unwrap(strip_generated(md)).splitlines()
     out, stack = [], []          # stack: (indent, list block) for nesting
     i = 0
@@ -253,6 +258,13 @@ def md_to_blocks(md: str) -> list:
             stack.append((ind, b))
             i += 1
             continue
+        m = IMAGE_LINE.match(s)
+        if m and images:
+            b = images(m.group(2), m.group(1))
+            if b:
+                put(b)
+                i += 1
+                continue
         # paragraph; an indented paragraph under a list item becomes its child
         rt = rich(s)
         ind = len(line) - len(line.lstrip())
@@ -319,8 +331,8 @@ def link_rich(rt: list, find) -> list:
         spans = find(content)
         if not spans:
             out.append(x)
-        elif ann.get("code"):
-            out += _t(content, ann, link=spans[0][2])
+        elif ann.get("code"):             # a path: the last (most specific) node named in it
+            out += _t(content, ann, link=spans[-1][2])
         else:
             pos = 0
             for start, end, url in spans:

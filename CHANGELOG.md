@@ -76,6 +76,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
   user's own Notion integration through the REST API; its @mentions notify the user.
   A remade plot (a new dated name) replaces the old one in place. Feed messages are removed
   after three days and kept in `messages/notion-feed.jsonl`.
+- The Notion mirror includes the claims graph (on the Map page), the milestone results
+  (`results/README.md`), each task's results page, and a Results database with one page per
+  result node. Figures in these files (`![alt](path)`) are uploaded and shown as images, and
+  result ids link to their pages like task ids.
 - In the Notion mirror, every mention of a task (full id, unique short id such as `t02`, or a
   path under `tasks/<id>/`) links to the task's page, in pages, tables and Feed messages. A
   sync creates new tasks' rows first, so that every page can link to them.

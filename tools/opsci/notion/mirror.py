@@ -1,10 +1,16 @@
 """The Notion mirror of a project: render the project files into pages, and write what changed.
 
-Pages under the project's root page: Project (PROJECT.md), Context, Map (the Mermaid graph as a
-code block), Log, Rules, Brainstorm context, Private docs, the Feed (feed.py), and the Tasks
-database: one row per task in tasks/, brainstorm/tasks/ and the verifications/ directories,
-its properties from the node header, its body the task's context.md, then Plan, Task log and
-subcontext files as toggles, then its plots.
+Pages under the project's root page: Project (PROJECT.md), Context, Map (the project graph and
+the claims graph as Mermaid code blocks, and the dead ends), Milestone results (results/README.md), Log,
+Rules, Brainstorm context, Private docs, the Feed (feed.py), and two databases:
+- Tasks: one row per task in tasks/, brainstorm/tasks/ and the verifications/ directories,
+  its properties from the node header, its body the task's context.md, then Results (the
+  task's results/README.md), Plan, Task map, Task log and subcontext files as toggles, then
+  its plots.
+- Results: one row per result node (`type: result`, tasks/<id>/results/*.md or results/*.md),
+  its properties from the node header, its body the result's file.
+Figures in these files (a line `![alt](path)`) are uploaded and shown as images. Every mention
+of a task or result id links to its page.
 
 Plots: every image or PDF under tasks/<id>/ (not data/). Files that differ only by an ISO date
 in the name (bands_2026-09-25.png, bands_2026-09-28.png) are versions of one plot: only the
@@ -27,7 +33,7 @@ import json
 import re
 from pathlib import Path
 
-from ..nodes import TASK_ROOT_GLOBS
+from ..nodes import TASK_ROOT_GLOBS, scan
 from . import blocks as nb
 from .client import MAX_UPLOAD, NotionError
 from .project import Project
@@ -129,15 +135,15 @@ def page_url(page_id: str) -> str:
 
 
 def task_links(st: dict) -> dict:
-    """{task id: URL of its Notion page} for every task page the state knows."""
+    """{task or result id: URL of its Notion page} for every such page the state knows."""
     return {k.split(":", 1)[1]: page_url(v["page_id"]) for k, v in (st.get("pages") or {}).items()
-            if k.startswith("task:") and v.get("page_id")}
+            if k.startswith(("task:", "result:")) and v.get("page_id")}
 
 
 def task_finder(links: dict):
-    """A function text -> [(start, end, url)] finding references to tasks: a full task id
-    (t02-posterior-inclination, also inside a path tasks/t02-.../context.md), or its short
-    form (t02) when exactly one task has it."""
+    """A function text -> [(start, end, url)] finding references to tasks and results: a full
+    id (t02-posterior-inclination, r-t02-near-edge-on-at-merger, also inside a path), or a
+    task's short form (t02) when exactly one task has it."""
     if not links:
         return lambda text, self_url=None: []
     names = dict(links)
@@ -160,14 +166,36 @@ def task_finder(links: dict):
 
 # ---------------------------------------------------------------- render
 
+def image_resolver(root: Path, base: Path):
+    """For md_to_blocks: an image line whose file exists in the project becomes an image
+    placeholder with the file's path and hash (the sync uploads it and fills the block)."""
+    def resolve(target: str, alt: str):
+        if re.match(r"[a-z]+://", target):
+            return None
+        p = (base / target.split("#")[0]).resolve()
+        if not p.is_file() or p.suffix.lower() not in PLOT_EXT or not p.is_relative_to(root.resolve()) \
+                or p.stat().st_size > MAX_UPLOAD:
+            return None
+        rel = str(p.relative_to(root.resolve()))
+        kind = "pdf" if p.suffix.lower() == ".pdf" else "image"
+        return {"object": "block", "type": kind, kind: {},
+                "_local": {"path": rel, "sha": _sha(p.read_bytes()), "alt": alt}}
+    return resolve
+
+
+def _md(root: Path, path: Path, text: str | None = None) -> list:
+    """md_to_blocks for a project file, with its figures resolved relative to the file."""
+    return nb.md_to_blocks(text if text is not None else _read(path), images=image_resolver(root, path.parent))
+
+
 def render(root: Path, links: dict | None = None) -> list[dict]:
-    """The project as Notion pages. `links` ({task id: URL}) turns references to tasks into
-    links to their pages."""
+    """The project as Notion pages. `links` ({task or result id: URL}) turns references to
+    tasks and results into links to their pages."""
     pages = []
     finder = task_finder(links or {})
 
     def page(key, title, blocks, kind="page", props=None, plots=(), icon=None):
-        self_url = (links or {}).get(key.split(":", 1)[1]) if key.startswith("task:") else None
+        self_url = (links or {}).get(key.split(":", 1)[1]) if key.startswith(("task:", "result:")) else None
         blocks = nb.link_blocks(blocks, lambda text: finder(text, self_url))
         pages.append({"key": key, "kind": kind, "title": title, "icon": icon, "properties": props or {},
                       "blocks": blocks, "plots": list(plots),
@@ -185,10 +213,13 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
 
     if (root / "map" / "README.md").exists():
         blocks = nb.md_to_blocks(_read(root / "map" / "README.md"))
-        for f in ("graph.md", "dead_ends.md"):
+        for f in ("graph.md", "claims.md", "dead_ends.md"):
             if (root / "map" / f).exists():
                 blocks += [nb.blk("divider")] + nb.demote(nb.md_to_blocks(_read(root / "map" / f)))
         page("map", "Map", blocks, icon="🗺️")
+
+    if (root / "results" / "README.md").exists():
+        page("results", "Milestone results", _md(root, root / "results" / "README.md"), icon="🏆")
 
     logs = sorted((root / "log").glob("[0-9]*.md"), reverse=True)
     blocks = [b for p in logs for b in nb.demote(nb.md_to_blocks(_read(p)))]
@@ -212,7 +243,11 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
             fm, body = nb.split_front_matter(_read(ctx))
             tid = fm.get("id", td.name)
             body = re.sub(r"\A\s*# .*\n", "", nb.strip_generated(body))   # the row title has it
-            blocks = nb.md_to_blocks(body)
+            blocks = _md(root, ctx, body)
+            res = td / "results" / "README.md"
+            if res.exists():
+                inner = _md(root, res, re.sub(r"\A\s*# .*\n", "", nb.strip_generated(_read(res))))
+                blocks.append(nb.toggle("Results", nb.demote(inner, 2)))
             for name, label in (("plan.md", "Plan"), ("map.md", "Task map"), ("log.md", "Task log")):
                 if (td / name).exists():
                     inner = nb.md_to_blocks(nb.split_front_matter(_read(td / name))[1])
@@ -227,7 +262,49 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
                      "Privacy": fm.get("privacy"), "Verification": fm.get("verification"),
                      "Summary": str(fm.get("summary", ""))}
             page(f"task:{tid}", props["Name"], blocks, kind="task", props=props, plots=plots_in(root, td))
+
+    for n in sorted(scan(root).nodes, key=lambda n: n.path):
+        if n.get("type") != "result" or Path(n.path).name == "README.md":
+            continue
+        f = root / n.path
+        body = re.sub(r"\A\s*# .*\n", "", nb.strip_generated(nb.split_front_matter(_read(f))[1]))
+        parts = Path(n.path).parts          # tasks/<id>/results/<rid>.md, or results/<rid>.md
+        task = parts[-3] if len(parts) >= 3 and parts[-2] == "results" else ""
+        props = {"Name": f"{n.id}: {n.get('title', '')}".rstrip(": "), "ID": n.id,
+                 "Kind": n.get("kind"), "Status": n.get("status"),
+                 "Milestone": bool(n.get("milestone")), "Verification": n.get("verification"),
+                 "Task": task, "Summary": str(n.get("summary", ""))}
+        page(f"result:{n.id}", props["Name"], _md(root, f, body), kind="result", props=props)
     return pages
+
+
+def result_properties(props: dict, links: dict | None = None) -> dict:
+    find = task_finder(links or {})
+    out = {"Name": {"title": nb._t(props["Name"])},
+           "ID": {"rich_text": nb._t(props["ID"])},
+           "Milestone": {"checkbox": bool(props.get("Milestone"))},
+           "Task": {"rich_text": nb.link_rich(nb._t(props["Task"]), find) if props.get("Task") else []},
+           "Summary": {"rich_text": nb.fit100(nb.rich(props["Summary"]))},
+           "Last synced": {"date": {"start": dt.date.today().isoformat()}}}
+    for k in ("Kind", "Status", "Verification"):
+        out[k] = {"select": {"name": str(props[k])} if props.get(k) else None}
+    return out
+
+
+RESULTS_DB_PROPERTIES = {
+    "Name": {"title": {}}, "ID": {"rich_text": {}}, "Task": {"rich_text": {}},
+    "Summary": {"rich_text": {}}, "Last synced": {"date": {}}, "Milestone": {"checkbox": {}},
+    "Kind": {"select": {}},
+    "Status": {"select": {"options": [{"name": n, "color": c} for n, c in (
+        ("active", "blue"), ("paused", "yellow"), ("done", "green"), ("failed", "red"),
+        ("superseded", "gray"), ("abandoned", "brown"))]}},
+    "Verification": {"select": {}},
+}
+
+
+def row_properties(page: dict, links: dict | None = None) -> dict:
+    return result_properties(page["properties"], links) if page["kind"] == "result" \
+        else task_properties(page["properties"])
 
 
 def task_properties(props: dict) -> dict:
@@ -311,9 +388,25 @@ class Mirror:
             if b["type"] not in KEEP_TYPES and b["id"] not in keep:
                 self.c.delete(b["id"])
 
+    def _resolve_images(self, blocks: list) -> list:
+        """Upload the figures of image placeholders (image_resolver) and fill their blocks."""
+        out = []
+        for b in blocks:
+            if "_local" in b:
+                loc = b["_local"]
+                fid = self.p.upload(self.st, self.p.root / loc["path"], loc["sha"])
+                cap = nb._t(loc["path"], {"code": True, "color": "gray"})
+                b = nb.media(fid, cap, kind=b["type"])
+            else:
+                body = b[b["type"]]
+                if body.get("children"):
+                    b = {**b, b["type"]: {**body, "children": self._resolve_images(body["children"])}}
+            out.append(b)
+        return out
+
     def _write_body(self, page: dict, page_id: str) -> dict:
         self._clear(page_id)
-        blocks = page["blocks"] + self._plot_blocks(page)
+        blocks = self._resolve_images(page["blocks"]) + self._plot_blocks(page)
         ids = self.c.append(page_id, blocks)
         by_key = {x["key"]: x for x in page["plots"]}
         out = {}
@@ -378,6 +471,18 @@ class Mirror:
             log(f"  removed {key}")
         return out
 
+    def database(self, kind: str) -> str:
+        """The id of the Tasks or Results database; Results is made when first needed."""
+        if kind == "task":
+            return self.st["tasks_db"]
+        if not self.st.get("results_db"):
+            db = self.c.call("POST", "/databases", {
+                "parent": {"type": "page_id", "page_id": self.st["root_page"]},
+                "title": nb._t("Results"), "properties": RESULTS_DB_PROPERTIES})
+            self.st["results_db"] = db["id"]
+            self.save()
+        return self.st["results_db"]
+
     def sync_page(self, how: str, page: dict, log=print):
         pages = self.st["pages"]
         home = self.st["root_page"]
@@ -395,14 +500,15 @@ class Mirror:
             return
         if how == "new":
             body = {"parent": {"page_id": home}, "properties": {"title": {"title": nb._t(page["title"])}}}
-            if page["kind"] == "task":
-                body = {"parent": {"database_id": self.st["tasks_db"]},
-                        "properties": task_properties(page["properties"])}
+            if page["kind"] in ("task", "result"):
+                body = {"parent": {"database_id": self.database(page["kind"])},
+                        "properties": row_properties(page, task_links(self.st))}
             if page.get("icon"):
                 body["icon"] = {"type": "emoji", "emoji": page["icon"]}
             ent["page_id"] = self.c.call("POST", "/pages", body)["id"]
-        elif page["kind"] == "task":
-            self.c.call("PATCH", f"/pages/{ent['page_id']}", {"properties": task_properties(page["properties"])})
+        elif page["kind"] in ("task", "result"):
+            self.c.call("PATCH", f"/pages/{ent['page_id']}",
+                        {"properties": row_properties(page, task_links(self.st))})
         elif how == "text":
             body = {"properties": {"title": {"title": nb._t(page["title"])}}}
             if page.get("icon"):
@@ -418,18 +524,18 @@ class Mirror:
 def sync(proj: Project, only=None, plots_only=False, dry_run=False, log=print) -> list[tuple[str, str]]:
     """Write every changed page; return [(how, key)]. The state is saved after each page.
 
-    New tasks get their (empty) rows first, so that every page can link to every task."""
+    New tasks and results get their (empty) rows first, so that every page can link to them."""
     m = Mirror(proj) if not dry_run else None
     st = m.st if m else proj.require_state()
     if m:
         for page in render(proj.root, task_links(st)):
             ent = st["pages"].get(page["key"], {})
-            if page["kind"] == "task" and not ent.get("page_id"):
+            if page["kind"] in ("task", "result") and not ent.get("page_id"):
                 log(f"new    {page['key']}")
                 ent = st["pages"].setdefault(page["key"], {})
                 ent["page_id"] = m.c.call("POST", "/pages", {
-                    "parent": {"database_id": st["tasks_db"]},
-                    "properties": task_properties(page["properties"])})["id"]
+                    "parent": {"database_id": m.database(page["kind"])},
+                    "properties": row_properties(page)})["id"]
                 m.save()
     todo = changes(render(proj.root, task_links(st)), st)
     if only:

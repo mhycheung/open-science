@@ -730,3 +730,65 @@ def test_task_finder_edges():
     assert f("t02 is ambiguous; t02-b is not") == [(18, 23, "U2")]
     assert f("t01x, xt01, t01-ab") == []
     assert f("t01", self_url="U1") == []
+
+
+# ---------------------------------------------------------------- claims graph and results
+
+def add_result(td: Path, rid: str, fig: str, depends=()) -> Path:
+    (td / "results").mkdir(exist_ok=True)
+    f = td / "results" / f"{rid}.md"
+    f.write_text(
+        f"---\nid: {rid}\ntitle: 'Result {rid} with $x^2$'\ntype: result\nkind: figure\nstatus: done\n"
+        f"milestone: true\nverification: unverified\nsummary: 'It holds, $y = 1$.'\n"
+        + (f"depends_on: [{', '.join(depends)}]\n" if depends else "")
+        + f"---\n# {rid}\n\n![]({fig})\n\nRests on t01 and {', '.join(depends) or 'nothing'}.\n")
+    return f
+
+
+def test_claims_graph_results_and_figures(mirrored):
+    S, m = mirrored, mirrored.mock
+    (S.proj / "map" / "claims.md").write_text("# Claims graph\n\n```mermaid\nflowchart LR\n  a --> b\n```\n")
+    add_result(S.td, "r-t01-first", "../fig/x_2026-09-25.png")
+    add_result(S.td, "r-t01-second", "../fig/x_2026-09-25.png", depends=["r-t01-first"])
+    (S.proj / "results").mkdir(exist_ok=True)
+    (S.proj / "results" / "README.md").write_text(
+        "# Results\n\n## r-t01-second\n\n![r-t01-second](../tasks/t01-demo/fig/x_2026-09-25.png)\n\n"
+        "| | |\n|---|---|\n| full description | [r-t01-second](../tasks/t01-demo/results/r-t01-second.md) |\n")
+    (S.td / "results" / "README.md").write_text("# Results: demo\n\n## r-t01-first\n\n![r-t01-first](../fig/x_2026-09-25.png)\n")
+    out = run(S, "notion", "sync", cwd=S.proj).stdout
+    assert "new    result:r-t01-first" in out and re.search(r"^(new|text)   results$", out, re.M)
+    assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+    st = state(S.proj)
+    url = {k: mirror.page_url(v["page_id"]) for k, v in st["pages"].items()}
+    # the Map shows both graphs
+    codes = [n for n in m.kids(st["pages"]["map"]["page_id"]) if n["type"] == "code"]
+    assert any("a --> b" in MockNotion.plain(n["body"]["rich_text"]) for n in codes)
+    # a Results database with one row per result, properties from the header
+    assert m.child_pages(st["root_page"]).get("Results") == st["results_db"]
+    row = m.pages[st["pages"]["result:r-t01-second"]["page_id"].replace("-", "")]
+    assert row["parent"] == {"type": "database_id", "database_id": st["results_db"]}
+    assert row["properties"]["Milestone"]["checkbox"] is True
+    assert row["properties"]["Kind"]["select"] == {"name": "figure"}
+    assert (row["properties"]["Task"]["rich_text"][0]["text"]["link"] or {}).get("url") == url["task:t01-demo"]
+    # the result page: its figure uploaded, a link to the result it rests on, no link to itself
+    body = m.kids(st["pages"]["result:r-t01-second"]["page_id"])
+    imgs = [n for n in body if n["type"] == "image"]
+    assert imgs and m.file_of(imgs[0]["id"]) == ("x_2026-09-25.png", b"png-x-25")
+    links, _ = _links(m, st["pages"]["result:r-t01-second"]["page_id"])
+    assert ("r-t01-first", url["result:r-t01-first"]) in links
+    assert all(u != url["result:r-t01-second"] for _, u in links)
+    # the milestone page: figure, and the path to the result file links to the result page
+    links, _ = _links(m, st["pages"]["results"]["page_id"])
+    mpage = st["pages"]["results"]["page_id"]
+    assert any(n["type"] == "image" for n in m.kids(mpage))
+    cells = [x for n in m.kids(mpage) if n["type"] == "table" for r in m.kids(n["id"])
+             for c in r["body"]["cells"] for x in c]
+    assert any((x.get("text") or {}).get("link", {}).get("url") == url["result:r-t01-second"] for x in cells)
+    # the task page has a Results toggle with the figure inside
+    tog = [n for n in m.kids(task_page(S.proj)) if n["type"] == "heading_2"
+           and MockNotion.plain(n["body"]["rich_text"]) == "Results"]
+    assert tog and any(k["type"] == "image" for k in m.kids(tog[0]["id"]))
+    # a changed figure rewrites the pages that show it
+    (S.td / "fig" / "x_2026-09-25.png").write_bytes(b"png-x-25-v2")
+    out = run(S, "notion", "diff", cwd=S.proj).stdout
+    assert "text   result:r-t01-second" in out and "text   results" in out

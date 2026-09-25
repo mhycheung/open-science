@@ -23,16 +23,20 @@ Under your projects page (for example "Research projects") each project has a pa
 |---|---|
 | Project | `PROJECT.md` |
 | Context | `context.md` |
-| Map | `map/README.md`, the project graph (`map/graph.md`) as a Mermaid diagram, `map/dead_ends.md` |
+| Map | `map/README.md`, the project graph (`map/graph.md`) and the claims graph (`map/claims.md`) as Mermaid diagrams, `map/dead_ends.md` |
+| Milestone results | `results/README.md`, with its figures |
 | Log | `log/*.md`, newest month first |
 | Rules | `rules/README.md` |
 | Brainstorm context | `brainstorm/context.md` |
 | Private docs | every `private-docs/**/*.md`, one toggle each |
-| **Tasks** (a database) | one row per task in `tasks/` and `brainstorm/tasks/`: properties from the node header (status, area, privacy, verification, summary), and a page with the task's `context.md`, then its plan, task map, log and subcontext files as toggles, then its plots |
+| **Tasks** (a database) | one row per task in `tasks/` and `brainstorm/tasks/`: properties from the node header (status, area, privacy, verification, summary), and a page with the task's `context.md`, then its results page (`results/README.md`), plan, task map, log and subcontext files as toggles, then its plots |
+| **Results** (a database) | one row per result (`type: result` in `tasks/<id>/results/` or `results/`): properties from its header (kind, status, milestone, verification, task, summary), and a page with the result's file and its figures |
 | **Feed** | messages from the agents, newest first |
 
-Every mention of a task links to its page: its full id (`t02-posterior-inclination`), its
-short id (`t02`, when only one task starts with it), and a path inside it
+A figure in these files (a line `![alt](path)` whose file is in the project) is uploaded and
+shown as an image. Every mention of a task or result links to its page: its full id
+(`t02-posterior-inclination`, `r-t02-near-edge-on-at-merger`), a task's
+short id (`t02`, when only one task starts with it), and a path naming it
 (`tasks/t02-posterior-inclination/context.md`), in every page, table and Feed message. The
 text stays as written. The Mermaid source of the graph is not linked; the node table under it
 is.
