@@ -41,15 +41,17 @@ three minutes of reading.
 
 ## Install
 
-Add this repository as a Claude Code plugin marketplace, install the `open-science` plugin,
-and run its onboarding skill:
+Install the plugin and start Claude Code:
 
 ```bash
-claude plugin marketplace add mhycheung/open-science   # or the path to a local checkout
+claude plugin marketplace add mhycheung/open-science
 claude plugin install open-science@open-science
+claude
 ```
 
-Then, in a new Claude Code session, type `/open-science:onboard`.
+In Claude Code, type `/open-science:onboard`. The [tutorial](docs/tutorial.md) says what
+onboarding does and gives the prompts for the next steps: starting a project, brainstorming,
+starting a task and using Notion.
 
 The framework has three components. Use any combination; each works without the others,
 except context management, which needs project management.

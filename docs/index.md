@@ -33,38 +33,19 @@ because the prompt cache expires while the session sits idle: waking a session t
 holds a long conversation would resend all of it uncached, which costs far more than a
 fresh start from the context file.
 
-## Install: the onboarding skill
+## Install
 
-The framework is installed with Claude Code, through the onboarding skill
-`open-science:onboard`. Install the `open-science` plugin, then run the skill in Claude Code:
+Install the plugin and start Claude Code:
 
 ```bash
-claude plugin marketplace add mhycheung/open-science   # or the path to a local checkout
+claude plugin marketplace add mhycheung/open-science
 claude plugin install open-science@open-science
+claude
 ```
 
-Then, in a new Claude Code session, type `/open-science:onboard`.
-
-The skill:
-
-- checks what your machine already has (git identity, GitHub SSH access, tmux, SLURM,
-  `opsci`, installed plugins, credentials files), and asks only what the checks cannot
-  answer;
-- asks which components you want, explaining each in plain language, and installs their
-  plugins with `claude plugin install <plugin>@open-science`;
-- installs the `opsci` command if it is missing (it needs Python 3.11 or later, or pixi);
-- with context management, sets up tmux for mouse use and explains how to arrange your work
-  in it (see [Working in tmux](tmux.md)); on a SLURM cluster, it can also write a batch job
-  that keeps a tmux session running on a compute node;
-- sets up GitHub access, notifications (Notion, Slack or files) and Zenodo tokens.
-
-It changes none of your settings (git config, Claude settings, `~/.tmux.conf`, file modes)
-without a yes to that change, and it never asks you to paste a token into the chat: tokens
-are written by a script that you run in a terminal of your own. New plugins load only in a
-new Claude Code session. Run `/open-science:onboard` again to add components later.
-
-Every step the skills run is also a command of `opsci`, which you can run yourself; see
-[The opsci command](cli.md).
+In Claude Code, type `/open-science:onboard`. The [tutorial](tutorial.md) says what
+onboarding does and gives the prompts for the next steps: starting a project, brainstorming,
+starting a task and using Notion.
 
 ## Components
 

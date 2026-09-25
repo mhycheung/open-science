@@ -1,7 +1,8 @@
 # Tutorial
 
 Every step on this page is a prompt you give to Claude Code. To do a step by hand without an
-agent, follow the link in that section.
+agent, follow the link in that section. Every step the skills run is also a command of
+`opsci`, which you can run yourself ([The opsci command](cli.md)).
 
 ## 1. Onboarding
 
@@ -25,7 +26,8 @@ does not change any of your settings without asking you first. API tokens are ne
 into the chat: you write them by running a script in your own terminal. When it finishes,
 start a new Claude Code session so the new plugins load.
 
-Without an agent: [Get started](index.md#install-the-onboarding-skill).
+Without an agent: install `opsci` ([The opsci command](cli.md)), then set up each component
+from its page, listed in [Get started](index.md#components).
 
 ## 2. Start a new project
 
