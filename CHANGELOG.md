@@ -11,6 +11,13 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- `open-science-project:migrate-project` now fills in each task's results (the claims
+  graph), the task maps and `map/README.md`, and always tracks the migration in its own
+  soft-private task, `tasks/t00-migration/`, with the pane registered for it, so that a
+  large migration can continue in another session with
+  `open-science-context:continue-context`. It asks whether the git-ignored files should be
+  copied or moved to their new paths, and offers to do that after the merge is approved,
+  together with `opsci notion enable` and `opsci notion init`. No layout change.
 - The project graph (`map/graph.md`) and the claims graph (`map/claims.md`) are drawn as
   images instead of Mermaid: `map/graph.svg` and `map/claims.svg` for the site and GitHub,
   and a PNG of each for Notion. Graphviz places the cards and arrows and pdflatex typesets

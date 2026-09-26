@@ -144,16 +144,28 @@ Moves an existing project, ongoing or finished, into the layout without losing a
 
 1. It works in a git worktree on a new branch, so the original is untouched until you
    merge, and records every file with its hash first:
-   `opsci migrate inventory <worktree> -o <scratch>/inventory.json`.
+   `opsci migrate inventory <worktree> -o <scratch>/inventory.json`. It lists the files git
+   ignores (data, outputs) with their size and asks whether, after the merge, you want them
+   copied to their new paths or moved.
 2. It instantiates the template into a scratch directory and copies over only the files the
-   project does not have.
+   project does not have. It then creates the migration task, `tasks/t00-migration/`
+   (soft-private), and registers the tmux pane for its `context.md`. That file records the
+   worktree, the inventory, your answers and the next step, and its `plan.md` holds the
+   approved mapping, so a large migration can stop and be taken over by another session
+   with `open-science-context:continue-context`.
 3. It proposes a mapping (which directories become tasks; what goes to `src/`, `data/`,
-   `paper/`, `citations/`, `rules/`, `archive/`) and **waits for your approval** before
-   moving anything. Files move with `git mv`, so history follows them.
-4. It writes a node header per task, the project `context.md`, `PROJECT.md` from the
-   project's own descriptions, and one log line, then builds the map.
+   `paper/`, `citations/`, `rules/`, `archive/`; where each ignored file goes; the results
+   each task will record) and **waits for your approval** before moving anything. Files
+   move with `git mv`, so history follows them, and references to old paths are fixed.
+4. It writes a node header per task, a result file for each approved result (with what it
+   rests on, its figures and code, and the external works it uses), each task's `map.md`,
+   `map/README.md`, the project `context.md`, `PROJECT.md` from the project's own
+   descriptions, and one log line, then builds the map and the claims graph.
 5. It runs `opsci migrate compare <scratch>/inventory.json <worktree>`, which fails if any
-   file's content is found nowhere (a moved file counts as kept), and reports. You merge.
+   file's content is found nowhere (a moved file counts as kept), reports, and asks you to
+   approve the merge.
+6. After the merge it offers to copy or move the ignored files, and to mirror the project
+   to Notion (`opsci notion enable`, then `opsci notion init`).
 
 ## `open-science-project:update-from-template`
 
