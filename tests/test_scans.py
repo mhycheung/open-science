@@ -20,6 +20,7 @@ def site(monkeypatch):
     monkeypatch.setattr(leakscan.getpass, "getuser", lambda: USER)
     monkeypatch.setattr(leakscan.socket, "gethostname", lambda: HOST)
     monkeypatch.setattr(leakscan.socket, "getfqdn", lambda: HOST)
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
 
 
 def leak_names(tmp_path, text, name="notes.md", root=None):
@@ -254,3 +255,17 @@ def test_framework_repo_passes_its_own_scans():
     assert leaks == [], leakscan.format_hits(leaks)
     secrets, _ = secretscan.scan(REPO, files, honour_planted_marker=True)
     assert [h for h in secrets if not h.pattern.startswith("gitleaks")] == []
+
+
+def test_escaped_markup_is_not_an_absolute_path(tmp_path):
+    # a built page escapes `tasks/<id>/results/README.md`; the `;` must not start a path
+    assert leak_names(tmp_path, "<code>tasks/&lt;id&gt;/results/README.md</code>", "index.html") == []
+    assert leak_names(tmp_path, '{"text": "tasks/&lt;id&gt;/results/README.md"}', "search_index.json") == []
+    assert leak_names(tmp_path, "<p>see &#47;scratch/grp/run1</p>", "page.html") == ["absolute-path"]
+
+
+def test_github_runner_account_is_not_a_site_identifier(tmp_path, site, monkeypatch):
+    monkeypatch.setattr(leakscan.getpass, "getuser", lambda: "runner")
+    assert leak_names(tmp_path, "the chunk runner") == ["site-identifier (user name)"]
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    assert leak_names(tmp_path, "the chunk runner") == []

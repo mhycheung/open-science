@@ -60,7 +60,7 @@ def test_clean_project_passes(proj):
     assert probs == [], [str(p) for p in probs]
     assert "tasks/t01-fit/context.md" in ex.files
     assert "PROJECT.md" in ex.files  # exported, and needs no status header
-    n, report, _ = publish.check(proj)
+    n, report, _ = publish.check(proj, build_site=False)
     assert n == 0 and "PASSED" in report.read_text()
 
 
@@ -234,7 +234,7 @@ def public(tmp_path):
 
 
 def publish_now(root, bare):
-    n, _, ex = publish.check(root)
+    n, _, ex = publish.check(root, build_site=False)
     assert n == 0
     return publish.push(root, ex.export_id, str(bare))
 
@@ -261,6 +261,16 @@ def test_push_records_and_status_passes_on_identical_pair(proj, public):
     assert publish.status(proj, str(public)) == ([], [])
 
 
+def test_check_builds_the_site_of_the_export(proj):
+    # the public repo's workflow builds the site with a leak scan; the check does it before the push
+    n, report, _ = publish.check(proj)
+    assert n == 0, report.read_text()
+    (proj / "tasks/t01-fit/notes.md").write_text("---\nstatus: draft\n---\n# Notes\n\nSee [the plot](missing.md).\n")
+    commit(proj)
+    n, report, _ = publish.check(proj)
+    assert n and "[site] site: mkdocs:" in report.read_text()
+
+
 def test_push_retries_after_a_failed_first_push(proj, public):
     # the first push commits in the local checkout, then the remote rejects it; the retry must still push
     hook = public / "hooks/pre-receive"
@@ -274,7 +284,7 @@ def test_push_retries_after_a_failed_first_push(proj, public):
 
 
 def test_push_refuses_unreviewed_export(proj, public):
-    n, _, ex = publish.check(proj)
+    n, _, ex = publish.check(proj, build_site=False)
     with open(proj / "tasks/t01-fit/context.md", "a") as f:
         f.write("changed after the review\n")
     commit(proj)
@@ -286,7 +296,7 @@ def test_push_refuses_failing_checks(proj, public):
     with open(proj / "tasks/t01-fit/context.md", "a") as f:
         f.write("see /scratch/grp/x\n")
     commit(proj)
-    n, _, ex = publish.check(proj)
+    n, _, ex = publish.check(proj, build_site=False)
     assert n > 0
     with pytest.raises(publish.PublishError, match="check"):
         publish.push(proj, ex.export_id, str(public))
@@ -302,7 +312,7 @@ def test_status_reports_pending_and_drift(proj, public, tmp_path):
     public_edit(tmp_path, public, "tasks/t01-fit/log.md", "fixed a typo\n")
     drift, _ = publish.status(proj, str(public))
     assert drift and "pull-public" in drift[0]
-    n, _, ex = publish.check(proj)
+    n, _, ex = publish.check(proj, build_site=False)
     with pytest.raises(publish.PublishError, match="changes the private repo lacks"):
         publish.push(proj, ex.export_id, str(public))
 
@@ -419,7 +429,7 @@ def plain_repo(root):
 
 def test_publish_check_works_without_the_template(tmp_path):
     root = plain_repo(tmp_path / "plain")
-    n, report, ex = publish.check(root)
+    n, report, ex = publish.check(root, build_site=False)
     assert n == 0, report.read_text()
     assert sorted(ex.files) == ["README.md", "notes/notes.md", "src/a.py"]
     assert "map and `status:` header checks were skipped" in report.read_text()
@@ -433,6 +443,6 @@ def test_template_checks_apply_once_the_repo_is_a_template_project(tmp_path):
     (root / "config" / "framework.yaml").write_text("x: 1\n")
     git(root, "add", "-A")
     git(root, "-c", "user.name=T", "-c", "user.email=t@example.org", "commit", "-qm", "mark")
-    n, report, _ = publish.check(root)
+    n, report, _ = publish.check(root, build_site=False)
     text = report.read_text()
     assert n > 0 and "[map]" in text and "[status] notes/notes.md" in text

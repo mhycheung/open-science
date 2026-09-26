@@ -266,7 +266,7 @@ def test_old_layout_is_noted_in_the_report(proj):
     fw = proj / "config/framework.yaml"
     fw.write_text("\n".join(l for l in fw.read_text().splitlines() if not l.startswith("layout_version")) + "\n")
     commit(proj)
-    _, report, _ = publish.check(proj)
+    _, report, _ = publish.check(proj, build_site=False)
     assert "older than the framework's" in report.read_text()
 
 
@@ -404,7 +404,7 @@ def test_map_overrides_group_and_rewrite_unpublished_nodes(proj):
     assert "n_private_calibration --> n_private_calibration" not in graph
     assert "| cal-c (not published) |" in graph and "A private cross-check" in graph
     assert "publish/map_overrides.yaml" not in ex.files
-    _, report, _ = publish.check(proj)
+    _, report, _ = publish.check(proj, build_site=False)
     text = report.read_text()
     assert "## Unpublished nodes in the public map" in text and "`cal-a`: in group `private-calibration`" in text
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import datetime as dt
 import fnmatch
 import hashlib
+import importlib.util
 import io
 import re
 import shutil
@@ -1106,12 +1107,25 @@ def write_report(root: Path, ex: Export, probs: list[Problem], info: dict, diff:
     return path
 
 
-def check(root: Path, commit: str = "HEAD") -> tuple[int, Path, Export]:
+def check_site(ex: Export, work: Path) -> tuple[list[Problem], list[str]]:
+    """Build the site of the export as the public repo's workflow will, with its leak scan.
+    (problems, notes). Without mkdocs the build is skipped with a note."""
+    from . import site
+    if importlib.util.find_spec("mkdocs") is None:
+        return [], [f"the site was not built: mkdocs is not installed (pip install {site.MKDOCS_PINS})"]
+    return [Problem("site", "site", m) for m in site.build(ex.tree, work / "site")], []
+
+
+def check(root: Path, commit: str = "HEAD", build_site: bool = True) -> tuple[int, Path, Export]:
     """Export, run every check, write the report. Returns (problem count, report path, export)."""
     root = Path(root).resolve()
     work = Path(tempfile.mkdtemp(prefix="opsci-publish-"))
     ex = export(root, work / "new", commit)
     probs, info = run_checks(root, ex)
+    if build_site:
+        sp, snotes = check_site(ex, work)
+        probs += sp
+        info["notes"] += snotes
     diff = review_diff(root, ex, work)
     return len(probs), write_report(root, ex, probs, info, diff), ex
 

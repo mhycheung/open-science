@@ -48,7 +48,7 @@ the map and the node headers.
 | check | refuses |
 |---|---|
 | `policy` | `policy.collaborators_agreed` in the manifest is not `true`: confirm that co-authors agree to publishing shared work (or that there are none), then set it |
-| `leak` | internal information in a file's name, its content (for a PNG, its text chunks; for a PDF, its dictionaries and strings): absolute paths, email addresses, IP addresses (not package versions such as `alsa-lib-1.2.16.1`), SLURM job identifiers, your user name, this machine's host name and domain, the values in `config/site.local.yaml` (scratch path, account, partition, `identifiers`), and the patterns in `publish/PRIVATE_POLICY.md` |
+| `leak` | internal information in a file's name, its content (for a PNG, its text chunks; for a PDF, its dictionaries and strings): absolute paths, email addresses, IP addresses (not package versions such as `alsa-lib-1.2.16.1`), SLURM job identifiers, your user name, this machine's host name and domain (neither on a GitHub Actions runner), the values in `config/site.local.yaml` (scratch path, account, partition, `identifiers`), and the patterns in `publish/PRIVATE_POLICY.md` |
 | `secret` | private keys; Slack, GitHub, AWS, Google, Anthropic and OpenAI tokens and keys; a token, password or key assigned to a variable; a password inside a URL. If `gitleaks` is installed, its findings are added |
 | `citation` | a citation key (`[@key]` in markdown, `\cite{key}` in LaTeX) that is not in an exported `.bib` file |
 | `map` | node header errors, and a `map/graph.md` or `map/dead_ends.md` that is out of date |
@@ -59,6 +59,7 @@ the map and the node headers.
 | `references` | a node header whose `depends_on`, `supersedes` or `related` names a hard-private node (an edge to a soft-private node is allowed; the public map shows it); a link in an exported markdown or HTML file to a file or directory of the commit that is not exported. For a soft-private target the fix is a plain mention in backticks instead of the link |
 | `private-content` | exported text that contains, from hard-private material only: the id of a hard-private node (only ids containing `-`, `_` or a digit are matched); its title, if the title has 3 or more words; the path of a hard-private task directory or file; a run of 12 words shared with a hard-private prose file. Text of the template and of the task skeleton is ignored in that comparison. Mentions of soft-private material are allowed; the report lists them as notes |
 | `redaction` | a redaction marker with no closing `<!-- /redact -->`, or one with an empty reason |
+| `site` | the project site of the export, built as the public repository's workflow builds it (`opsci site build`), fails: a broken link in strict mode, or a leak in the built pages and search index. Skipped with a note if `mkdocs` is not installed |
 | `map-overrides` | in `publish/map_overrides.yaml`: a group or node entry that names a published, hard-private or unknown node, a group with fewer than two members or an id already in use, a node in two entries, a missing title or summary, an unknown key |
 
 The `map` and `status` checks run only in a project made from the template (one with

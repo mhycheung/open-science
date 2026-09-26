@@ -9,17 +9,18 @@ There is no override flag. If a legitimate string matches, change the string, no
 
 Pattern sources:
 - fixed patterns (absolute paths, emails, IPv4 addresses, SLURM job identifiers);
-- site identifiers, as literals: the current user name, this host's name and domain, and
-  the values in ``config/site.local.yaml`` (scratch path, account, partition, and the list
-  ``identifiers``). A partition named by a plain word (``shared``, ``gpu``) matches only
-  where it names the partition (``--partition=shared``, ``-p shared``, ``partition: shared``);
-  as a bare word it is ordinary English;
+- site identifiers, as literals: the current user name, this host's name and domain (neither
+  on a GitHub Actions runner), and the values in ``config/site.local.yaml`` (scratch path,
+  account, partition, and the list ``identifiers``). A partition named by a plain word
+  (``shared``, ``gpu``) matches only where it names the partition (``--partition=shared``,
+  ``-p shared``, ``partition: shared``); as a bare word it is ordinary English;
 - the project's private patterns, the fenced block in ``publish/PRIVATE_POLICY.md``.
 """
 
 from __future__ import annotations
 
 import getpass
+import html
 import os
 import re
 import socket
@@ -135,13 +136,16 @@ def host_identifiers() -> list[str]:
 def site_identifiers(root: Path | None) -> list[tuple[str, str]]:
     """(source, literal) pairs that name this site: user, host, and site.local.yaml values."""
     pairs: list[tuple[str, str]] = []
-    try:
-        user = getpass.getuser()
-    except Exception:  # no user database entry; nothing to add
-        user = os.environ.get("USER", "")
-    if user:
-        pairs.append(("user name", user))
-    pairs += [("host name", h) for h in host_identifiers()]
+    # On a GitHub Actions runner the account ("runner") and host belong to GitHub, not to the
+    # project's site; the site build there must not refuse the English word "runner".
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        try:
+            user = getpass.getuser()
+        except Exception:  # no user database entry; nothing to add
+            user = os.environ.get("USER", "")
+        if user:
+            pairs.append(("user name", user))
+        pairs += [("host name", h) for h in host_identifiers()]
     if root is not None:
         cfg_path = Path(root) / SITE_CONFIG
         if cfg_path.is_file():
@@ -272,6 +276,9 @@ def scan_file(path: Path, rel: str, patterns) -> list[Hit]:
     except UnicodeDecodeError:
         text = data.decode("latin-1")
         binary = True
+    if not binary and rel.endswith((".html", ".htm", ".xml", ".json")):
+        # Markup escapes '<' and '>' as entities, whose ';' would otherwise start an absolute path.
+        text = html.unescape(text)
     return hits + scan_text(text, rel, "content", [p for p in patterns if p.binary] if binary else patterns)
 
 
