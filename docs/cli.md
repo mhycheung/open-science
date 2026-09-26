@@ -127,7 +127,7 @@ Fails if the project `context.md` or a task `context.md` (verification tasks inc
 ```
 opsci publish status [--public-repo PUBLIC_REPO] [ROOT]
 opsci publish check [--commit COMMIT] [ROOT]
-opsci publish push --export-id EXPORT_ID [--public-repo PUBLIC_REPO] [--commit COMMIT] [ROOT]
+opsci publish push --export-id EXPORT_ID --message MESSAGE [--public-repo PUBLIC_REPO] [--commit COMMIT] [ROOT]
 opsci publish export --out OUT [--commit COMMIT] [ROOT]
 opsci publish pull-public [--public-repo PUBLIC_REPO] [ROOT]
 ```
@@ -137,7 +137,8 @@ opsci publish pull-public [--public-repo PUBLIC_REPO] [ROOT]
 - `check`: export, run every check, write the review report and diff under
   `publish/reports/`. Prints the report path and the export id.
 - `push`: after the user approves the report, push the export with that id to the public
-  repository. `--public-repo` defaults to `public_repo` in the manifest.
+  repository. `--message` says what the publish adds; the files it changes and the private
+  commit are appended. `--public-repo` defaults to `public_repo` in the manifest.
 - `export`: write the files the manifest allows, from one commit, into the empty directory
   `OUT`.
 - `pull-public`: bring public-side changes into a new private branch for review.

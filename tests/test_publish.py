@@ -236,7 +236,7 @@ def public(tmp_path):
 def publish_now(root, bare):
     n, _, ex = publish.check(root, build_site=False)
     assert n == 0
-    return publish.push(root, ex.export_id, str(bare))
+    return publish.push(root, ex.export_id, str(bare), message="Publish the fit task")
 
 
 def public_edit(tmp_path, bare, path, text):
@@ -259,6 +259,46 @@ def test_push_records_and_status_passes_on_identical_pair(proj, public):
     assert "tasks/t01-fit/context.md" in files and publish.SITE_WORKFLOW in files
     assert not [f for f in files if f.startswith(("publish/", "lit_cache/", "contracts/"))]
     assert publish.status(proj, str(public)) == ([], [])
+    msg = git(public, "log", "-1", "--format=%B", "main").stdout
+    assert msg.startswith("Publish the fit task\n\n") and "- added: tasks/t01-fit/context.md" in msg
+    assert f"private commit {private[:12]}" in msg
+
+
+def test_commit_message_caps_the_file_list():
+    rows = "".join(f"M\tf{i}.md\n" for i in range(publish.MAX_LISTED + 5)) + "D\told.md\n"
+    msg = publish.commit_message(None, rows, "a" * 40)
+    assert msg.startswith(f"Publish {publish.MAX_LISTED + 6} changed files\n\n- changed: f0.md")
+    assert "- and 6 more files" in msg and "old.md" not in msg
+
+
+@pytest.mark.parametrize("repo, url", [
+    ("git@github.com:Some-Lab/qnm-study.git", "https://some-lab.github.io/qnm-study/"),
+    ("https://github.com/some-lab/qnm-study", "https://some-lab.github.io/qnm-study/"),
+    ("ssh://git@github.com/some-lab/Some-Lab.github.io.git", "https://some-lab.github.io/"),
+    ("/tmp/public.git", None),
+    ("https://gitlab.com/some-lab/qnm-study.git", None),
+])
+def test_pages_url(repo, url):
+    assert publish.pages_url(repo) == url
+
+
+def test_readme_must_link_the_site(proj):
+    m = proj / "publish/manifest.yaml"
+    base = m.read_text()
+    m.write_text(base + "public_repo: git@github.com:some-lab/demo.git\n")
+    commit(proj, "public repo")
+    probs = [p for p in problems(proj)[0] if p.check == "site-link"]
+    assert len(probs) == 1 and "https://some-lab.github.io/demo/" in probs[0].message
+    readme = proj / "README.md"
+    readme.write_text(readme.read_text().replace("\n", "\n\nThe project site: <https://some-lab.github.io/demo/>\n", 1))
+    commit(proj, "site link")
+    assert "site-link" not in checks_of(proj)
+    m.write_text(base + "public_repo: git@github.com:some-lab/demo.git\nsite_url: https://qnm.example.org\n")
+    commit(proj, "custom domain")
+    assert "site-link" in checks_of(proj)
+    m.write_text(base + "public_repo: git@github.com:some-lab/demo.git\nsite_url: \"\"\n")
+    commit(proj, "no site")
+    assert "site-link" not in checks_of(proj)
 
 
 def test_check_builds_the_site_of_the_export(proj):

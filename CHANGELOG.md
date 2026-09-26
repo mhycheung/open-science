@@ -11,6 +11,14 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- The public repo's README links to the project site: a new `opsci publish check` check,
+  `site-link`, refuses an export whose `README.md` lacks the site URL, which is the GitHub
+  Pages URL of `public_repo`, or the new manifest key `site_url` (a custom domain; `""` for
+  no site). `open-science-publish:publish` adds the link at the first publish. No layout
+  change.
+- Public commits say what they publish: `opsci publish push` requires `--message`, a
+  summary the user approves with the export, and appends the files added, changed and
+  removed and the private commit, in place of `Publish <commit>`. No layout change.
 - `open-science-project:migrate-project` now moves every note to `private-docs/` and makes
   every task whose work is writing notes soft-private, without asking; the mapping tells the
   user so, and only what the user explicitly names is made public. No layout change.

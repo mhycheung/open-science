@@ -42,8 +42,11 @@ the map and the node headers.
    you decide.
 5. **Your approval.** You approve this export id: by running the push with it, or, with the
    skill, in the conversation. An earlier general "go ahead" does not count.
-6. **The push.** `opsci publish push --export-id <id>` copies the export into the public
-   repository as a new commit, pushes it, and records the publish.
+6. **The push.** `opsci publish push --export-id <id> --message "<summary>"` copies the
+   export into the public repository as a new commit, pushes it, and records the publish.
+   The commit message is the summary (what this publish adds, written for readers of the
+   public repository; with the skill, the agent proposes it and you approve it with the
+   export), then the files added, changed and removed, and the private commit.
 
 ## The checks
 
@@ -62,6 +65,7 @@ the map and the node headers.
 | `private-content` | exported text that contains, from hard-private material only: the id of a hard-private node (only ids containing `-`, `_` or a digit are matched); its title, if the title has 3 or more words; the path of a hard-private task directory or file; a run of 12 words shared with a hard-private prose file. Text of the template and of the task skeleton is ignored in that comparison. Mentions of soft-private material are allowed; the report lists them as notes |
 | `redaction` | a redaction marker with no closing `<!-- /redact -->`, or one with an empty reason |
 | `omission` | an omission marker with no closing `<!-- /omit -->` |
+| `site-link` | an exported `README.md` that does not link to the project site: the GitHub Pages URL of `public_repo` (`https://<owner>.github.io/<repo>/`), or `site_url` in the manifest. Add `The project site: <URL>` under the title |
 | `site` | the project site of the export, built as the public repository's workflow builds it (`opsci site build`), fails: a broken link in strict mode, or a leak in the built pages and search index. Skipped with a note if `mkdocs` is not installed |
 | `map-overrides` | in `publish/map_overrides.yaml`: a group or node entry that names a published, hard-private or unknown node, a group with fewer than two members or an id already in use, a node in two entries, a missing title or summary, an unknown key |
 
@@ -186,7 +190,7 @@ because the public text differs from the private text there; bring such an edit 
 ```bash
 opsci publish status                        # 1. drift and pending changes
 opsci publish check                         # 2. export HEAD, run the checks, write the report
-opsci publish push --export-id <id>         # 6. after your approval
+opsci publish push --export-id <id> -m "<summary>"  # 6. after your approval
 opsci publish export --out <empty dir>      # the export alone, without checks
 opsci publish pull-public                   # bring public-side changes into a private branch
 opsci site preview                          # build the project site of the current export

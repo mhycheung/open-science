@@ -42,7 +42,8 @@ def cmd_check(args) -> int:
 
 def cmd_push(args) -> int:
     try:
-        private, public = P.push(Path(args.root), args.export_id, args.public_repo, args.commit)
+        private, public = P.push(Path(args.root), args.export_id, args.public_repo, args.commit,
+                                 message=args.message)
     except P.PublishError as exc:
         return _fail(exc)
     print(f"published {private[:12]} as public commit {public[:12]}; recorded in {P.LAST_PUBLISHED}")
@@ -113,6 +114,9 @@ def add_parser(sub) -> None:
     p.add_argument("--export-id", required=True, help="the export id printed in the approved report")
     p.add_argument("--public-repo", help="URL or path of the public repo (default: public_repo in the manifest)")
     p.add_argument("--commit", default="HEAD")
+    p.add_argument("--message", "-m", required=True,
+                   help="what this publish adds, for readers of the public repo: a subject line, then an "
+                        "optional paragraph (the changed files are appended)")
     p.set_defaults(func=cmd_push)
 
     s = pb.add_parser("status", help="consistency check: public changes the private repo lacks, and unpublished changes")

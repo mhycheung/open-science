@@ -49,6 +49,9 @@ and may be run whenever they help.
    this is an ongoing, unpublished project. Many results are very preliminary and
    unverified." The user may change the text or decline. Write the answer into the manifest
    (`site_banner: "<text>"`, or `""` for none) and commit. Never skip the question.
+   The `site-link` check refuses a `README.md` that does not link to the project site (the
+   GitHub Pages URL of `public_repo`, or `site_url:` in the manifest for a custom domain):
+   add `The project site: <URL>` under the README's title, commit, and check again.
 
 4. **Hard-private mentions: the user decides each one.** When `references` or
    `private-content` reports hard-private material (`AGENTS.md` §6), list **all** of the
@@ -97,7 +100,11 @@ and may be run whenever they help.
 
 9. **Stop for approval.** Show the user the report path, the check result, the files
    exported, your review findings, the items you omitted from the context files, and how
-   the unpublished nodes appear in the map. The user approves **this export id**, in this
+   the unpublished nodes appear in the map, and the public commit message you propose: a
+   subject line that says what this publish adds ("Publish the ringdown fits of t03 and the
+   dead end of t02"), then a short paragraph if the subject is not enough. Write it for
+   readers of the public repo, from the exported diff only: no private material. The push
+   appends the list of changed files. The user approves **this export id**, in this
    conversation. A general "go ahead" given earlier does not cover it. Without approval, do
    not push.
 
@@ -107,7 +114,7 @@ and may be run whenever they help.
 11. **Push:**
 
    ```bash
-   opsci publish push --export-id <id>
+   opsci publish push --export-id <id> --message "<the approved commit message>"
    ```
 
    The public repo is `public_repo:` in `publish/manifest.yaml` (or `--public-repo`). The

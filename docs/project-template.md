@@ -262,6 +262,7 @@ The publish allowlist. Keys (any other key is refused):
 | `policy.collaborators_agreed` | `true` once co-authors have agreed that shared work may be public; the publish check fails until it is set |
 | `hard_private` | optional list of paths or globs of hard-private material that is not inside a hard-private task; never exported, and the export may not name it or copy its text |
 | `public_repo` | URL or path of the public repository, used by `opsci publish push` |
+| `site_url` | optional: the project site's URL when it is not the GitHub Pages URL of `public_repo` (a custom domain), or `""` for no site. The `site-link` check requires `README.md` to link to it |
 | `status_exempt` | markdown files that need no `status:` header, added to the default list (READMEs, plot captions `*.caption.md`, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `context.md`, `log/`, `map/`, `citations/`, `rules/`, task logs, task maps and `subcontext/`, `docs/`, and the same skeleton files under `brainstorm/`) |
 
 Whatever the manifest says, `publish/`, `lit_cache/`, `data/`, `messages/`, `.opsci/`,

@@ -38,6 +38,8 @@ never:
 #
 # Optional keys:
 # public_repo: <URL or path>  # where `opsci publish push` pushes; or pass --public-repo
+# site_url: <URL>             # the project site, when it is not the GitHub Pages URL of
+#                             # public_repo (a custom domain); "" for no site. README.md must link to it
 # site_banner: "<text>"       # the banner at the top of every page of the project site. The
 #                             # default warns that the work is ongoing, unpublished and
 #                             # preliminary; "" removes the banner (e.g. once it is published)

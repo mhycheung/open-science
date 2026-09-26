@@ -45,7 +45,7 @@ STATUS_EXEMPT = ("README.md", "**/README.md", "**/*.caption.md", "AGENTS.md", "C
                  "verifications/*/log.md", "verifications/*/map.md", "verifications/*/subcontext/**",
                  "brainstorm/verifications/*/log.md", "brainstorm/verifications/*/map.md",
                  "brainstorm/verifications/*/subcontext/**")
-MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo", "site_banner"}
+MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo", "site_banner", "site_url"}
 POLICY_KEYS = {"default_privacy", "collaborators_agreed"}
 PRIVACY_TIERS = nodes.PRIVACY_TIERS
 # How unpublished nodes appear in the published map: groups that replace several nodes with
@@ -110,6 +110,7 @@ class Manifest:
     public_repo: str | None
     hard_private: list[str] = field(default_factory=list)
     site_banner: str = ""  # the project site's banner; "" for none
+    site_url: str | None = None  # the project site's URL, when it is not the GitHub Pages URL of public_repo
 
 
 @dataclass
@@ -195,8 +196,12 @@ def load_manifest(root: Path) -> Manifest:
         banner = ""
     if not isinstance(banner, str):
         raise PublishError(f"{MANIFEST}: site_banner must be a text, or \"\" (or false) for no banner")
+    site_url = m.get("site_url")
+    if site_url is not None and not isinstance(site_url, str):
+        raise PublishError(f"{MANIFEST}: site_url must be a URL, or \"\" for no site")
     return Manifest(
         site_banner=banner.strip(),
+        site_url=site_url.strip() if site_url is not None else None,
         include=include,
         never=lists["never"] or [],
         status_exempt=STATUS_EXEMPT + tuple(lists["status_exempt"] or ()),
@@ -1084,6 +1089,35 @@ def check_policy(man: Manifest) -> list[Problem]:
     return []
 
 
+def pages_url(repo: str) -> str | None:
+    """The GitHub Pages URL of a github.com repo (an https or ssh remote), or None."""
+    m = re.fullmatch(r"(?:https://(?:[^@/]+@)?|ssh://(?:[^@/]+@)?|git@)github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?/?",
+                     repo.strip())
+    if not m:
+        return None
+    owner, name = m.group(1).lower(), m.group(2)
+    return f"https://{name.lower()}/" if name.lower() == f"{owner}.github.io" else f"https://{owner}.github.io/{name}/"
+
+
+def site_url(man: Manifest) -> str | None:
+    """The URL of the project site: `site_url` in the manifest ("" for none), else the GitHub
+    Pages URL of `public_repo`, else None."""
+    if man.site_url is not None:
+        return man.site_url or None
+    return pages_url(str(man.public_repo)) if man.public_repo else None
+
+
+def check_site_link(ex: Export, man: Manifest) -> list[Problem]:
+    """The published README links to the project site, so that a reader of the public repo finds it."""
+    url = site_url(man)
+    if not url or "README.md" not in ex.files:
+        return []
+    if url.rstrip("/") in (_read(ex.tree / "README.md") or ""):
+        return []
+    return [Problem("site-link", "README.md", f"the README does not link to the project site: add "
+                    f"`The project site: <{url}>` under the title")]
+
+
 def is_template_project(snap: Path) -> bool:
     """A project made from the template (component 2, open-science-project). The same test
     as the project plugin's hooks: AGENTS.md and config/framework.yaml at the root."""
@@ -1093,7 +1127,7 @@ def is_template_project(snap: Path) -> bool:
 def run_checks(root: Path, ex: Export) -> tuple[list[Problem], dict]:
     man = load_manifest(ex.snapshot) if (ex.snapshot / MANIFEST).is_file() else load_manifest(root)
     structured = is_template_project(ex.snapshot)
-    probs = check_policy(man) + check_scans(root, ex) + check_citations(ex)
+    probs = check_policy(man) + check_site_link(ex, man) + check_scans(root, ex) + check_citations(ex)
     if structured:  # the map and `status:` headers exist only in a template project
         probs += check_map(ex) + check_status(ex, man)
     cp, notes = check_copyright(root, ex)
@@ -1355,9 +1389,9 @@ def push(root: Path, export_id_expected: str, public_repo: str | None = None, co
     wf.write_text(site.workflow(root, load_manifest(root).site_banner), encoding="utf-8")
     _git(co, "add", "-A")
     ident = _identity(root)
-    msg = message or f"Publish {sha[:12]}"
     if _git(co, "diff", "--cached", "--quiet", check=False).returncode == 0:
         raise PublishError("nothing to publish: the public repo already equals this export")
+    msg = commit_message(message, _git(co, "diff", "--cached", "--name-status").stdout, sha)
     _git(co, *ident, "commit", "--quiet", "-m", msg)
     _git(co, "push", "--quiet", "origin", "main")
     public_sha = _git(co, "rev-parse", "HEAD").stdout.strip()
@@ -1365,6 +1399,22 @@ def push(root: Path, export_id_expected: str, public_repo: str | None = None, co
     _git(root, *ident, "commit", "--quiet", "-m", f"Record publish of {sha[:12]} (public {public_sha[:12]})",
          "--", LAST_PUBLISHED)
     return sha, public_sha
+
+
+CHANGE_WORDS = {"A": "added", "M": "changed", "D": "removed"}
+MAX_LISTED = 40  # changed files listed in a public commit message
+
+
+def commit_message(summary: str | None, name_status: str, sha: str) -> str:
+    """The public commit message: the summary (a subject line, then an optional paragraph, written
+    for readers of the public repo), the files the publish adds, changes and removes, and the
+    private commit it exports."""
+    rows = [line.split("\t") for line in name_status.splitlines() if line.strip()]
+    files = [f"- {CHANGE_WORDS.get(r[0][0], 'changed')}: {r[-1]}" for r in rows]
+    if len(files) > MAX_LISTED:
+        files = files[:MAX_LISTED] + [f"- and {len(files) - MAX_LISTED} more files"]
+    head = (summary or "").strip() or f"Publish {len(rows)} changed file{'s' if len(rows) != 1 else ''}"
+    return f"{head}\n\n" + "\n".join(files) + f"\n\nExported from private commit {sha[:12]}.\n"
 
 
 def _identity(root: Path) -> list[str]:
