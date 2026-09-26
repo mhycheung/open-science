@@ -79,23 +79,24 @@ and commit in the worktree. Another session resumes with
    The mapping says which existing directories become `tasks/<id>/`; what goes to `src/`,
    `data/` (plus `data/MANIFEST.yaml`), `paper/`, `citations/`; what stays where it is;
    where each git-ignored file goes. Old context documents and plans move unchanged into
-   their task's `subcontext/`; a pitfalls or rules file becomes `rules/`. By default every
-   note (meeting notes, correspondence, drafts, working notes, remarks about people) goes to
+   their task's `subcontext/`; a pitfalls or rules file becomes `rules/`. Every note
+   (meeting notes, correspondence, drafts, working notes, remarks about people) goes to
    `private-docs/`, committed but never exported (soft-private: other files may name them in
-   passing, but not link to them). Ask whether any note should be public instead; only the
-   ones the user names go to `docs/` or their task. Documentation for readers goes to
-   `docs/`, which is published, so nothing private may stay there. Ideas not yet started as
-   work may go to `brainstorm/`; what fits nowhere goes to `archive/`. Ask the privacy tier
-   of each task (`public`, `soft-private` or `hard-private`; definitions in
+   passing, but not link to them). Do not ask about this; the mapping says that the notes
+   will be soft-private by default, and only notes the user explicitly asks to make public
+   go to `docs/` or their task. Documentation for readers goes to `docs/`, which is
+   published, so nothing private may stay there. Ideas not yet started as work may go to
+   `brainstorm/`; what fits nowhere goes to `archive/`. Ask the privacy tier of each other
+   task (`public`, `soft-private` or `hard-private`; definitions in
    `open-science-project:new-task`, "Privacy tier"). A task whose work is writing notes
-   (lecture or reading notes, write-ups, a notes document) is `soft-private` by default,
-   like the notes themselves; propose that tier and ask only whether it should be public
-   instead. Hard-private material outside a task goes under `hard_private:` in
-   `publish/manifest.yaml`. Unless the user declined results (step 2), the mapping also
-   lists each task's results: title, kind, the file that shows it, and whether you propose
-   it as a milestone (ask when unsure). Write the approved mapping into the migration task's
-   `plan.md`, split so that each subtask fits in one session. Then move with `git mv`, so
-   history follows the files.
+   (lecture or reading notes, write-ups, a notes document) is `soft-private`, like the notes
+   themselves: do not ask its tier, state in the mapping that it will be soft-private by
+   default, and change it only if the user explicitly asks. Hard-private material outside a
+   task goes under `hard_private:` in `publish/manifest.yaml`. Unless the user declined
+   results (step 2), the mapping also lists each task's results: title, kind, the file that
+   shows it, and whether you propose it as a milestone (ask when unsure). Write the approved
+   mapping into the migration task's `plan.md`, split so that each subtask fits in one
+   session. Then move with `git mv`, so history follows the files.
 
    Moving files breaks references: search the code, scripts, notebooks, configs and job
    scripts for the old paths and imports of moved modules, and fix them. Run the project's
