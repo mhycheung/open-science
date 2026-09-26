@@ -70,6 +70,7 @@ class MockNotion:
         self.fail_once: set[tuple[str, str]] = set()
         self.echo_token: set[tuple[str, str]] = set()
         self.max_page_size = 100
+        self.max_body = 500_000       # Notion rejects larger request bodies with 413
         self.bot = {"object": "user", "id": str(uuid.uuid4()), "type": "bot", "name": "opsci test bot",
                     "bot": {}}
         self.person = {"object": "user", "id": str(uuid.uuid4()), "type": "person", "name": "User Person",
@@ -114,6 +115,9 @@ class MockNotion:
                     if (method, path) in mock.echo_token:
                         return self._send(400, {"object": "error", "status": 400, "code": "validation_error",
                                                 "message": f"bad request with token {mock.token}"})
+                    if len(body) > mock.max_body:
+                        return self._send(413, {"object": "error", "status": 413, "code": "payload_too_large",
+                                                "message": "Request body too large."})
                     try:
                         code, obj = mock.route(method, path, parse_qs(u.query), body,
                                                self.headers.get("Content-Type", ""))

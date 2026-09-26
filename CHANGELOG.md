@@ -22,6 +22,11 @@ layout 1) and the framework's, in order, before it applies the other template ch
 - `open-science-project:migrate-project` now moves every note to `private-docs/` and makes
   every task whose work is writing notes soft-private, without asking; the mapping tells the
   user so, and only what the user explicitly names is made public. No layout change.
+- `opsci notion sync` no longer stops on large projects: a list or to-do item over 100 rich
+  text items keeps the rest as paragraphs under it, a table cell is fitted to 100 items, a
+  long table is split into tables of 30 rows with the header repeated, and append requests
+  are batched to stay under Notion's request size (HTTP 413). Plots over 5 MiB (the upload
+  limit of a free workspace, was 20 MiB) are listed, not uploaded. No layout change.
 - Publishing starts only when the user asks for it or says yes when asked: rule 3 of the
   template's `AGENTS.md`, `open-science-publish:publish` and
   `open-science-publish:zenodo-release` now say so, and that "push" alone means the private

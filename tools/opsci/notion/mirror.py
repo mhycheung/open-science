@@ -381,7 +381,7 @@ class Mirror:
         out = [nb.blk("heading_2", nb.rich("Plots"))] if page["plots"] else []
         for x in page["plots"]:
             if x["too_big"]:
-                out += nb.md_to_blocks(f"`{x['path']}` (over 20 MiB, not uploaded)")
+                out += nb.md_to_blocks(f"`{x['path']}` (over {MAX_UPLOAD // 2**20} MiB, not uploaded)")
             else:
                 out += self._pair(x)
         return out

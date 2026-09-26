@@ -60,8 +60,8 @@ Files that differ only by an ISO date in their name are versions of one plot. A 
 gets a new dated name (`bands_2026-09-28.png` after `bands_2026-09-25.png`): the sync shows
 the newest version in the place of the older one. The image block and the caption box are
 updated in place, and nothing else on the page moves. A PDF with a PNG of the same stem is
-the same figure and is not shown twice. Files over 20 MiB are listed but not uploaded (the
-limit of Notion's single-part upload).
+the same figure and is not shown twice. Files over 5 MiB are listed but not uploaded (the
+upload limit of a free Notion workspace).
 
 ## The Feed
 

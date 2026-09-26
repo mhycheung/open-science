@@ -13,6 +13,7 @@ import re
 import yaml
 
 MAX_TEXT = 2000
+TABLE_ROWS = 30     # body rows per Notion table (see _table)
 CODE_LANGS = {"python", "bash", "shell", "json", "yaml", "markdown", "mermaid", "latex", "toml",
               "c", "c++", "javascript", "typescript", "html", "css", "sql", "diff", "plain text"}
 LANG_ALIASES = {"sh": "bash", "py": "python", "yml": "yaml", "md": "markdown", "tex": "latex",
@@ -142,6 +143,15 @@ def blk(kind, rt=None, **extra):
     return {"object": "block", "type": kind, kind: body}
 
 
+def _list_blk(kind, rt, **extra):
+    """A list or to-do item holds at most 100 rich text items: the rest become paragraphs nested
+    under it, so that the item keeps its place in the list."""
+    b = blk(kind, rt[:100], **extra)
+    if len(rt) > 100:
+        b[kind]["children"] = _rt_blocks("paragraph", rt[100:])
+    return b
+
+
 def _rt_blocks(kind, rt, **extra):
     """A rich_text array holds at most 100 items: split long ones over several blocks."""
     if len(rt) <= 100:
@@ -158,10 +168,14 @@ def _table(rows):
         cells.append([p.strip() for p in parts])
     width = max(len(c) for c in cells)
     trs = [{"object": "block", "type": "table_row",
-            "table_row": {"cells": [rich(c) for c in (row + [""] * width)[:width]]}} for row in cells]
-    return {"object": "block", "type": "table",
-            "table": {"table_width": width, "has_column_header": True, "has_row_header": False,
-                      "children": trs}}
+            "table_row": {"cells": [fit100(rich(c)) for c in (row + [""] * width)[:width]]}} for row in cells]
+    # A table goes to Notion in one request with all its rows, and a request body must stay under
+    # about 500 KB, so a long table becomes several tables of TABLE_ROWS rows, each with the header.
+    head, body = trs[:1], trs[1:]
+    return [{"object": "block", "type": "table",
+             "table": {"table_width": width, "has_column_header": True, "has_row_header": False,
+                       "children": head + body[i:i + TABLE_ROWS]}}
+            for i in range(0, max(len(body), 1), TABLE_ROWS)]
 
 
 def _code(lines, lang):
@@ -221,7 +235,8 @@ def md_to_blocks(md: str, images=None) -> list:
             while i < len(lines) and lines[i].strip().startswith("|"):
                 rows.append(lines[i])
                 i += 1
-            put(_table(rows))
+            for t in _table(rows):
+                put(t)
             continue
         m = re.match(r"^(#{1,6}) (.*)$", s)
         if m:
@@ -243,11 +258,11 @@ def md_to_blocks(md: str, images=None) -> list:
             text = m.group("text")
             todo = re.match(r"^\[( |x|X)\] (.*)$", text)
             if todo:
-                b = blk("to_do", rich(todo.group(2)), checked=todo.group(1) != " ")
+                b = _list_blk("to_do", rich(todo.group(2)), checked=todo.group(1) != " ")
             elif m.group("mark")[0].isdigit():
-                b = blk("numbered_list_item", rich(text))
+                b = _list_blk("numbered_list_item", rich(text))
             else:
-                b = blk("bulleted_list_item", rich(text))
+                b = _list_blk("bulleted_list_item", rich(text))
             while stack and stack[-1][0] >= ind:
                 stack.pop()
             if stack:

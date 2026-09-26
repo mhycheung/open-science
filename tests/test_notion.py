@@ -259,6 +259,29 @@ def test_rich_text_limits_of_100_items():
     assert nb.fit100(rt[:5]) == rt[:5]
 
 
+
+def test_long_list_item_table_cell_and_table_are_split():
+    long = " ".join(f"$a_{{{i}}}$" for i in range(150))          # 299 rich text items
+    bs = nb.md_to_blocks(f"- [ ] {long}\n- {long}\n  - nested\n")
+    todo, bullet = bs
+    assert len(todo["to_do"]["rich_text"]) == 100 and len(bullet["bulleted_list_item"]["rich_text"]) == 100
+    over = [len(c["paragraph"]["rich_text"]) for c in todo["to_do"]["children"]]
+    assert over == [100, 99]                                      # nothing lost, all under the item
+    assert bullet["bulleted_list_item"]["children"][-1]["type"] == "bulleted_list_item"
+    rows = "\n".join(f"| r{i} | {long if i == 3 else 'x'} |" for i in range(70))
+    tables = nb.md_to_blocks(f"| a | b |\n|---|---|\n{rows}\n")
+    assert [len(t["table"]["children"]) for t in tables] == [31, 31, 11]
+    assert all(t["table"]["children"][0] == tables[0]["table"]["children"][0] for t in tables)
+    assert all(len(c) <= 100 for t in tables for r in t["table"]["children"] for c in r["table_row"]["cells"])
+
+
+def test_append_batches_by_request_size():
+    big = nb.blk("paragraph", nb._t("x" * 1900) * 100)          # ~200 KB of JSON each
+    small = nb.blk("paragraph", nb._t("y"))
+    groups = NC._batches([big, big, small, big] + [small] * 120)
+    assert [len(g) for g in groups] == [1, 2, 50, 50, 21]     # a third big one would pass MAX_BODY
+    assert sum(groups, []) == [big, big, small, big] + [small] * 120
+
 # ---------------------------------------------------------------- end to end: init, diff, sync
 
 @pytest.fixture

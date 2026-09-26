@@ -30,7 +30,9 @@ VERSION = "2022-06-28"
 # so it cannot be used to send the token anywhere else.
 TEST_API_ENV = "OPSCI_NOTION_TEST_API_BASE"
 TOKEN_RE = re.compile(r"\b(?:ntn|secret)_[A-Za-z0-9]{20,}")
-MAX_UPLOAD = 20 * 1024 * 1024   # single-part upload limit of the Notion API
+MAX_UPLOAD = 5 * 1024 * 1024    # upload limit of a free Notion workspace (paid: 5 GiB, multipart);
+                                # a larger plot is listed on its page instead of uploaded
+MAX_BODY = 350_000              # bytes per append request; Notion rejects bodies over ~500 KB (413)
 
 
 class NotionError(Exception):
@@ -149,9 +151,9 @@ class Client:
         appended in follow-up requests (tables keep their rows: Notion needs them at once).
         """
         ids = []
-        for i in range(0, len(blocks), 50):
+        for batch in _batches(blocks):
             flat, kids = [], []
-            for b in blocks[i:i + 50]:
+            for b in batch:
                 b = json.loads(json.dumps(b))
                 for k in [k for k in b if k.startswith("_")]:
                     b.pop(k)                         # internal markers (_plot, _cap)
@@ -172,10 +174,10 @@ class Client:
         return ids
 
     def upload(self, path: Path) -> str:
-        """Upload one file (single part, at most 20 MiB); return the file upload id."""
+        """Upload one file (single part, at most MAX_UPLOAD); return the file upload id."""
         size = path.stat().st_size
         if size > MAX_UPLOAD:
-            raise NotionError(f"{path.name} is over 20 MiB; Notion's single-part upload limit")
+            raise NotionError(f"{path.name} is over {MAX_UPLOAD // 2**20} MiB, the upload limit")
         ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
         fu = self.call("POST", "/file_uploads", {"filename": path.name, "content_type": ctype})
         boundary = uuid.uuid4().hex
@@ -186,6 +188,22 @@ class Client:
         if r.get("status") != "uploaded":
             raise NotionError(f"upload of {path.name} did not complete (status {r.get('status')})")
         return fu["id"]
+
+
+
+def _batches(blocks: list, most: int = 50) -> list[list]:
+    """Consecutive groups of at most `most` blocks whose request body (children excluded, table
+    rows included: they go with their table) stays under MAX_BODY bytes."""
+    out, cur, size = [], [], 0
+    for b in blocks:
+        body = {k: v for k, v in b[b["type"]].items() if k != "children" or b["type"] == "table"}
+        n = len(json.dumps({**b, b["type"]: body}))
+        if cur and (len(cur) >= most or size + n > MAX_BODY):
+            out.append(cur)
+            cur, size = [], 0
+        cur.append(b)
+        size += n
+    return out + [cur] if cur else out
 
 
 def page_id_from(url_or_id: str) -> str:
