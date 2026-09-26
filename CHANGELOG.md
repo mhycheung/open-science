@@ -20,6 +20,17 @@ layout 1) and the framework's, in order, before it applies the other template ch
   (`git init -b main`) unless the user asks for another name. No layout change: a project
   that has the old line keeps it.
 
+- Fewer false hits in the publish check, from the pilot project. The leak scan reads only
+  the text chunks of a PNG, not its compressed pixel data (a chance path-like byte run in
+  an IDAT chunk had matched `absolute-path`). The IPv4 pattern skips package versions: a match inside a
+  longer dotted run or after `-` or `>=`/`==` (`alsa-lib-1.2.16.1`,
+  `>=0.2026.6.22.1.23.34`), and allows the RFC 5737 documentation ranges. A partition in
+  `config/site.local.yaml` named by a plain word (`shared`) matches only where it names the
+  partition (`--partition=shared`, `-p shared`, `partition: shared`). Plot captions
+  (`**/*.caption.md`) need no `status:` header, and the Notion mirror strips a front-matter
+  header from a caption if it has one. The manifest's `status_exempt` now adds to the
+  default list instead of replacing it. No layout change: a project that copied the default
+  list into `status_exempt` can delete the copy.
 - Figure PDFs no longer fail the publish check. The leak scan reads a PDF's dictionaries and
   strings (with object and metadata streams decompressed) instead of its raw bytes: glyph
   lists such as `/CharSet` and compressed page content had produced false `absolute-path`

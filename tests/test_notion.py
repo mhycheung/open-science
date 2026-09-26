@@ -589,7 +589,7 @@ def test_test_api_override_refused_for_non_loopback(S, monkeypatch):
     env = dict(S.env, **{NC.TEST_API_ENV: "http://example.org/v1"})
     r = run(S, "notion", "check", cwd=make_project(S), rc=2, env=env)
     assert "loopback" in r.stderr
-    for url in ("http://example.org/v1", "https://127.0.0.1:9/v1", "http://10.0.0.1/v1"):
+    for url in ("http://example.org/v1", "https://127.0.0.1:9/v1", "http://192.0.2.1/v1"):
         monkeypatch.setenv(NC.TEST_API_ENV, url)
         with pytest.raises(NC.NotionError, match="loopback"):
             NC.Client("x")

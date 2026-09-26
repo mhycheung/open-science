@@ -1,9 +1,9 @@
 """The leak scan: refuse to publish anything that carries internal information.
 
 Generalised from a working project's site leak gate. It scans every file of a tree: the
-file's path, its bytes, the text chunks of PNG images, and the dictionaries and strings of
-PDFs. Any hit refuses the publish,
-names the file and prints the matching line.
+file's path, its bytes, the text chunks of PNG images (not their compressed pixels), and
+the dictionaries and strings of PDFs. Any hit refuses the publish, names the file and prints
+the matching line.
 
 There is no override flag. If a legitimate string matches, change the string, not the scan.
 
@@ -11,7 +11,9 @@ Pattern sources:
 - fixed patterns (absolute paths, emails, IPv4 addresses, SLURM job identifiers);
 - site identifiers, as literals: the current user name, this host's name and domain, and
   the values in ``config/site.local.yaml`` (scratch path, account, partition, and the list
-  ``identifiers``);
+  ``identifiers``). A partition named by a plain word (``shared``, ``gpu``) matches only
+  where it names the partition (``--partition=shared``, ``-p shared``, ``partition: shared``);
+  as a bare word it is ordinary English;
 - the project's private patterns, the fenced block in ``publish/PRIVATE_POLICY.md``.
 """
 
@@ -97,8 +99,13 @@ FIXED_PATTERNS: tuple[Pattern, ...] = (
        # GitHub's SSH login, the same for every user.
        allowed=r"(?:.*@(?:[\w.-]+\.)?(?:example\.(?:com|org|net)|[\w-]+\.(?:invalid|test|example))"
                r"|git@github\.com)$"),
-    _p("ipv4", r"\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}\b",
-       "an IP address names a machine", binary=False, allowed=r"127\.\d+\.\d+\.\d+$|0\.0\.0\.0$"),
+    # Not inside a longer dotted run and not after '-' or a version operator: package
+    # versions (alsa-lib-1.2.16.1, >=0.2026.6.22.1.23.34, ==2.0.1.3) are not addresses.
+    _p("ipv4", r"(?<![\w.-])(?<![<>=!~]=)(?:25[0-5]|2[0-4]\d|1?\d?\d)"
+       r"(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?![\w-]|\.\d)",
+       "an IP address names a machine", binary=False,
+       # loopback, the unspecified address, and the RFC 5737 documentation ranges
+       allowed=r"(?:127\.\d+\.\d+|192\.0\.2|198\.51\.100|203\.0\.113)\.\d+$|0\.0\.0\.0$"),
     _p("slurm-job-id", r"(?:slurm|sbatch|squeue|jobid|job[ _\-]?id)[ _\-:=]*\d{3,}",
        "a SLURM job identifier", re.IGNORECASE),
     _p("slurm-array-id", r"\b\d{6,9}_\d{1,5}\b", "a SLURM array job/task identifier",
@@ -185,11 +192,17 @@ def policy_patterns(root: Path) -> list[Pattern]:
     return out
 
 
+def _partition(name: str, value: str, why: str) -> Pattern:
+    return _p(name, r"(?:partition\b|(?<![\w-])-p)[\s\"'=:]*" + re.escape(value) + r"(?![A-Za-z0-9])",
+              why, re.IGNORECASE)
+
+
 def patterns_for(root: Path | None) -> list[Pattern]:
     """Every pattern that applies to a project (or, with root None, to any tree on this site)."""
     pats = list(FIXED_PATTERNS)
-    pats += [_literal(f"site-identifier ({src})", val, f"names this site ({src})")
-             for src, val in site_identifiers(root)]
+    for src, val in site_identifiers(root):
+        make = _partition if src.endswith("batch.partition") and val.isalpha() else _literal
+        pats.append(make(f"site-identifier ({src})", val, f"names this site ({src})"))
     if root is not None:
         pats += policy_patterns(root)
     return pats
@@ -245,6 +258,10 @@ def scan_file(path: Path, rel: str, patterns) -> list[Hit]:
     if path.is_symlink() or not path.is_file():
         return hits
     data = path.read_bytes()
+    if data.startswith(PNG_MAGIC):
+        # Text chunks only: the pixel data is compressed, and random bytes match short patterns.
+        meta = _png_text(data)
+        return hits + (scan_text(meta, rel, "image-metadata", patterns) if meta else [])
     if pdf.is_pdf(data):
         # Dictionaries and strings only: compressed streams are random bytes, and runs of PDF
         # names look like paths. With those gone, every pattern applies.
@@ -255,12 +272,7 @@ def scan_file(path: Path, rel: str, patterns) -> list[Hit]:
     except UnicodeDecodeError:
         text = data.decode("latin-1")
         binary = True
-    hits += scan_text(text, rel, "content", [p for p in patterns if p.binary] if binary else patterns)
-    if data.startswith(PNG_MAGIC):
-        meta = _png_text(data)
-        if meta:
-            hits += scan_text(meta, rel, "image-metadata", patterns)
-    return hits
+    return hits + scan_text(text, rel, "content", [p for p in patterns if p.binary] if binary else patterns)
 
 
 def scan_tree(root: Path, patterns, files=None, honour_planted_marker: bool = False) -> list[Hit]:

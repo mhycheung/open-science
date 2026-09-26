@@ -261,7 +261,7 @@ The publish allowlist. Keys (any other key is refused):
 | `policy.collaborators_agreed` | `true` once co-authors have agreed that shared work may be public; the publish check fails until it is set |
 | `hard_private` | optional list of paths or globs of hard-private material that is not inside a hard-private task; never exported, and the export may not name it or copy its text |
 | `public_repo` | URL or path of the public repository, used by `opsci publish push` |
-| `status_exempt` | markdown files that need no `status:` header; replaces the default list (READMEs, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `context.md`, `log/`, `map/`, `citations/`, `rules/`, task logs, task maps and `subcontext/`, `docs/`, and the same skeleton files under `brainstorm/`) |
+| `status_exempt` | markdown files that need no `status:` header, added to the default list (READMEs, plot captions `*.caption.md`, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `context.md`, `log/`, `map/`, `citations/`, `rules/`, task logs, task maps and `subcontext/`, `docs/`, and the same skeleton files under `brainstorm/`) |
 
 Whatever the manifest says, `publish/`, `lit_cache/`, `data/`, `messages/`, `.opsci/`,
 `.env` and `config/site.local.yaml` are never exported.
@@ -304,7 +304,10 @@ notify:
 ```
 
 The values of `scratch`, `batch.account`, `batch.partition` and a list `identifiers` are also
-added to the leak scan, so they cannot reach the public repository. The `notify:` section is
+added to the leak scan, so they cannot reach the public repository. A partition named by a
+plain word (`shared`, `gpu`) is matched only where it names the partition
+(`--partition=shared`, `-p shared`, `partition: shared`), since the bare word is ordinary
+English. The `notify:` section is
 described in [Notifications](notify.md).
 
 ### `.claude/`

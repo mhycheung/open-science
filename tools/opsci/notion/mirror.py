@@ -69,7 +69,7 @@ def caption_paragraphs(plot: Path) -> list[list]:
     cf = caption_file(plot)
     if not cf.exists():
         return []
-    text = nb.strip_generated(_read(cf)).strip()
+    text = nb.strip_generated(nb.split_front_matter(_read(cf))[1]).strip()
     out = []
     for para in re.split(r"\n\s*\n", text):
         if para.strip():

@@ -34,9 +34,8 @@ ALWAYS_NEVER = ("publish", "lit_cache", "data", "config/site.local.yaml", ".opsc
 # Public-repo infrastructure (site workflow, issue templates). Not part of the export, kept
 # on the public side, ignored by the consistency check and by pull-public.
 PUBLIC_ONLY = (".github",)
-# Markdown files that need no `status` header by default. The manifest's `status_exempt`
-# replaces this list.
-STATUS_EXEMPT = ("README.md", "**/README.md", "AGENTS.md", "CLAUDE.md", "PROJECT.md", "context.md",
+# Markdown files that need no `status` header. The manifest's `status_exempt` adds to this list.
+STATUS_EXEMPT = ("README.md", "**/README.md", "**/*.caption.md", "AGENTS.md", "CLAUDE.md", "PROJECT.md", "context.md",
                  "log/**", "map/**", "citations/**", "rules/**", "tasks/*/log.md", "tasks/*/map.md",
                  "tasks/*/subcontext/**", "docs/**", "brainstorm/context.md", "brainstorm/log/**",
                  "brainstorm/map/**", "brainstorm/tasks/*/log.md",
@@ -184,7 +183,7 @@ def load_manifest(root: Path) -> Manifest:
     return Manifest(
         include=include,
         never=lists["never"] or [],
-        status_exempt=tuple(lists["status_exempt"]) if lists["status_exempt"] is not None else STATUS_EXEMPT,
+        status_exempt=STATUS_EXEMPT + tuple(lists["status_exempt"] or ()),
         default_privacy=default,
         collaborators_agreed=policy.get("collaborators_agreed") is True,
         public_repo=m.get("public_repo"),

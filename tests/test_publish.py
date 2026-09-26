@@ -141,6 +141,14 @@ def test_document_without_status_is_refused(proj):
     (proj / "results/fit.md").write_text("---\nstatus: done\n---\n# Fit result\n")
     commit(proj)
     assert problems(proj)[0] == []
+    # plot captions need no header; the manifest's status_exempt adds to the defaults
+    (proj / "results/fit_2026-09-25.caption.md").write_text("The fit.\n")
+    (proj / "results/notes.md").write_text("Notes.\n")
+    commit(proj)
+    assert [p.path for p in problems(proj)[0]] == ["results/notes.md"]
+    m.write_text(m.read_text() + "status_exempt:\n  - results/notes.md\n")
+    commit(proj)
+    assert problems(proj)[0] == []
 
 
 def test_copyright_checks(proj):

@@ -48,7 +48,7 @@ the map and the node headers.
 | check | refuses |
 |---|---|
 | `policy` | `policy.collaborators_agreed` in the manifest is not `true`: confirm that co-authors agree to publishing shared work (or that there are none), then set it |
-| `leak` | internal information in a file's name, content or PNG text chunks: absolute paths, email addresses, IP addresses, SLURM job identifiers, your user name, this machine's host name and domain, the values in `config/site.local.yaml` (scratch path, account, partition, `identifiers`), and the patterns in `publish/PRIVATE_POLICY.md` |
+| `leak` | internal information in a file's name, its content (for a PNG, its text chunks; for a PDF, its dictionaries and strings): absolute paths, email addresses, IP addresses (not package versions such as `alsa-lib-1.2.16.1`), SLURM job identifiers, your user name, this machine's host name and domain, the values in `config/site.local.yaml` (scratch path, account, partition, `identifiers`), and the patterns in `publish/PRIVATE_POLICY.md` |
 | `secret` | private keys; Slack, GitHub, AWS, Google, Anthropic and OpenAI tokens and keys; a token, password or key assigned to a variable; a password inside a URL. If `gitleaks` is installed, its findings are added |
 | `citation` | a citation key (`[@key]` in markdown, `\cite{key}` in LaTeX) that is not in an exported `.bib` file |
 | `map` | node header errors, and a `map/graph.md` or `map/dead_ends.md` that is out of date |

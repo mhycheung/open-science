@@ -35,6 +35,7 @@ LEAKS = [
     ("x@y.io", "email"),
     ("ssh -T someone@github.com", "email"),  # only the git login is allowed
     ("login node 10.12.0.5", "ipv4"),
+    ("host=10.12.0.5.", "ipv4"),
     ("jobid=4412345", "slurm-job-id"),
     ("array task 20888489_3 failed", "slurm-array-id"),
     ("see slurm-4412345.out", "slurm-out-file"),
@@ -52,9 +53,13 @@ def test_leak_refused(tmp_path, site, text, pattern):
 CLEAN = [
     "a relative path data/run1/out.h5 and ~/config",
     "a URL https://example.org/a/b and #!/usr/bin/env python",
-    "reserved addresses someone@example.org, x@lab.invalid, loopback 127.0.0.1",
+    "reserved addresses someone@example.org, x@lab.invalid, loopback 127.0.0.1, doc 192.0.2.7",
     "GitHub's SSH login: ssh -T git@github.com",
     "version 1.2.3 and a date 2026-09-23",
+    # package versions in lock files
+    "conda-forge/linux-64/alsa-lib-1.2.16.1-h7cc23a3_1.conda",
+    "- astropy-iers-data >=0.2026.6.22.1.23.34",
+    "- pyerfa >=2.0.1.3 and numpy==1.2.3.4",
     f"a longer word {USER}x does not match the user name",
 ]
 
@@ -78,10 +83,18 @@ def test_site_config_values_are_scanned(tmp_path, site):
         "identifiers: [Rivendell]\n")
     tree = tmp_path / "tree"
     tree.mkdir()
-    for word in ("phy99999", "wholenode", "Rivendell"):
-        (tree / "a.md").write_text(f"submitted with {word}\n")
+    for text in ("submitted with phy99999", "submitted with Rivendell", "#SBATCH -p wholenode",
+                 "sbatch --partition=wholenode", "-pwholenode", "partition: wholenode", 'partition "wholenode"'):
+        (tree / "a.md").write_text(text + "\n")
         names = {h.pattern for h in leakscan.scan_tree(tree, leakscan.patterns_for(proj))}
-        assert any("site.local.yaml" in n for n in names), word
+        assert any("site.local.yaml" in n for n in names), text
+    # a partition named by a plain word is ordinary English outside a partition context
+    (tree / "a.md").write_text("a wholenode layout; the partition itself is not named\n")
+    assert leakscan.scan_tree(tree, leakscan.patterns_for(proj)) == []
+    # a partition name that is not a plain word matches anywhere
+    (proj / "config/site.local.yaml").write_text("batch:\n  partition: gpu-a100\n")
+    (tree / "a.md").write_text("ran on gpu-a100\n")
+    assert leakscan.scan_tree(tree, leakscan.patterns_for(proj)) != []
     # placeholders in an unfilled config are not patterns
     (proj / "config/site.local.yaml").write_text("scratch: <path>\nbatch:\n  account: <acct>\n")
     (tree / "a.md").write_text("clean text\n")
@@ -118,6 +131,15 @@ def test_png_metadata_is_scanned(tmp_path, site, compressed):
     hits = leakscan.scan_tree(tmp_path, leakscan.patterns_for(None))
     assert "image-metadata" in {h.where for h in hits}
     (tmp_path / "fig.png").write_bytes(_png_with_text(b"Software", b"matplotlib", compressed))
+    assert leakscan.scan_tree(tmp_path, leakscan.patterns_for(None)) == []
+
+
+def test_png_pixels_are_not_scanned(tmp_path, site):
+    # compressed pixel data can hold a path-like byte run by chance
+    png = _png_with_text(b"Software", b"matplotlib", False)
+    idat = b"IDAT" + b"\xa6\xbb/v/m\xe1I{"
+    png = png[:-12] + struct.pack(">I", len(idat) - 4) + idat + struct.pack(">I", zlib.crc32(idat)) + png[-12:]
+    (tmp_path / "fig.png").write_bytes(png)
     assert leakscan.scan_tree(tmp_path, leakscan.patterns_for(None)) == []
 
 
