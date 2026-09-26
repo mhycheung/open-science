@@ -11,6 +11,22 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- The project graph (`map/graph.md`) and the claims graph (`map/claims.md`) are drawn as
+  images instead of Mermaid: `map/graph.svg` and `map/claims.svg` for the site and GitHub,
+  and a PNG of each for Notion. Graphviz places the cards and arrows and pdflatex typesets
+  them in a serif style, so LaTeX in titles is set properly. Every arrow now points forward
+  in time: a superseded node points to the node that superseded it ("superseded by"), and
+  a checked node to its verification task ("verified by"); the headers still say
+  `supersedes` and `verifies`. An arrow that a longer path already implies is left out of
+  the image. The claims graph shows the external works a result uses in brackets on its
+  card, not as boxes with arrows. Brainstorm nodes sit in an orange dashed box.
+  Verification tasks have a double border, not a hexagon shape. The pages list every edge as
+  text: the project graph's node table gains `title` and `depends on` columns, and both
+  pages end with an "Other links" list. `opsci map build` redraws an image only when its
+  graph changed. Drawing needs Graphviz, pdflatex (TikZ, standalone, lmodern, xcolor) and
+  Poppler; `pixi.toml` now includes Graphviz. `opsci publish` redraws each exported image
+  from the published nodes, and refuses the export if it cannot. No layout change: the
+  next `opsci map build` in a project writes the images; commit them.
 - The project site shows a banner at the top of every page that stays in view as the page
   scrolls. By default it warns that the project is ongoing, unpublished and preliminary;
   `site_banner:` in `publish/manifest.yaml` changes the text, and `""` removes it. The

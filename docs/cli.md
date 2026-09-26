@@ -89,10 +89,22 @@ file. Brainstorm nodes are part of the
 project graph, drawn in a box of their own. ROOT may be the project or its `brainstorm/`
 directory; both build the same files. It also writes a starting `map.md` (the task's graph,
 one node) for any task that has none, and never rewrites an existing one. It reports header
-errors and writes nothing if there are any. Verification tasks are drawn as hexagons labelled
-`verification`, with a dotted `verifies` arrow to each node they check; it warns when one is
-not where `opsci task new` would put it, or is less private than a node it verifies.
+errors and writes nothing if there are any. Verification tasks are drawn as cards with a
+double border, with a dashed "verified by" arrow from each node they check; it warns when one
+is not where `opsci task new` would put it, or is less private than a node it verifies.
 `--check` writes nothing and fails if the generated files are out of date.
+
+The project graph and the claims graph are images beside their pages: `map/graph.svg` and
+`map/claims.svg` (for the project site and GitHub), and a PNG of each (for Notion). Graphviz
+places the cards and arrows and pdflatex typesets them, so `$...$` in a title is set as
+LaTeX (a title whose LaTeX does not compile is set as plain text). Every arrow points
+forward: from a node to what depends on it ("used by"), from a node to the node that
+superseded it ("superseded by"), and from a node to the verification task that checked it
+("verified by"). An image is redrawn only when its graph changed. Drawing needs Graphviz
+(`dot`), `pdflatex` with the TikZ, standalone, lmodern and xcolor packages, and Poppler
+(`pdftocairo`, `pdftoppm`); without them `map build` warns and leaves the images out of date,
+and `opsci publish check` refuses the export. `opsci publish` redraws each exported image
+from the published nodes only.
 
 ## `opsci context`
 

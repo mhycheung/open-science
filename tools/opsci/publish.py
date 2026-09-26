@@ -23,7 +23,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from . import leakscan, mapbuild, nodes, pdf, results, secretscan
+from . import graphdraw, leakscan, mapbuild, nodes, pdf, results, secretscan
 
 MANIFEST = "publish/manifest.yaml"
 LAST_PUBLISHED = "publish/LAST_PUBLISHED"
@@ -364,6 +364,17 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
             if rel in files:
                 (tree / rel).write_text(text, encoding="utf-8")
                 rebuilt.append(rel)
+        # The committed graph images show every node: each exported one is redrawn, and one
+        # that cannot be redrawn stops the publish.
+        for base, d in mapbuild.drawings(map_nodes, lambda sub: f"{sub}/map/graph.md" in files,
+                                         results.read_bib(snap)).items():
+            if f"{base}.svg" not in files and f"{base}.png" not in files:
+                continue
+            try:
+                graphdraw.render(d, tree / base)
+                rebuilt += [f for f in (f"{base}.svg", f"{base}.png") if f in files]
+            except (graphdraw.DrawError, OSError, subprocess.SubprocessError) as exc:
+                rprobs.append(Problem("map", f"{base}.svg", f"cannot redraw the graph image for the export: {exc}"))
     return Export(sha, files, excluded, export_id(tree, files), tree, snap, exported_nodes, rebuilt,
                   map_nodes, map_private if rebuilt else [], hard, redacted, rprobs)
 

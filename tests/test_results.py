@@ -6,6 +6,7 @@ import time
 import pytest
 
 from conftest import git, run_opsci
+from opsci import nodes, results
 from map_project import header
 
 BIB = """
@@ -82,13 +83,16 @@ def test_results_pages_and_claims_graph(project):
     assert "## r-mass:" in ms and "## r-psd:" not in ms
     assert "![r-mass](../tasks/t02-fit/S2/corner.png)" in ms
     claims = read(project, "map/claims.md")
-    assert 'subgraph n_t01_noise["task t01-noise: Noise model"]' in claims
-    assert "n_r_psd --> n_r_mass" in claims and "b_Isi2019 --> n_r_mass" in claims
+    assert "![Claims graph](claims.svg)" in claims
+    drawing = results.claims_drawing(nodes.scan(project).nodes, results.read_bib(project))
+    assert {"id": "t01-noise", "kicker": "task t01-noise", "title": "Noise model", "style": "task"} in drawing["boxes"]
+    assert ["r-psd", "r-mass", "dep"] in drawing["edges"]
+    assert next(c for c in drawing["cards"] if c["id"] == "r-mass")["tags"] == ["Isi2019"]
     assert "Testing the No-Hair Theorem with GW150914" in claims
     assert "None: every live result rests only on live work." in claims
     # results in a results directory are drawn in the claims graph, not the task graph
     graph = read(project, "map/graph.md")
-    assert "n_r_mass" not in graph and "[the claims graph](claims.md)" in graph
+    assert "r-mass" not in graph and "[the claims graph](claims.md)" in graph
     assert build(project, "--check").returncode == 0
 
 
@@ -107,11 +111,14 @@ def test_superseded_premise_marks_every_result_resting_on_it(project):
     assert "r-mass.md: rests on r-psd, which is superseded (by r-psd-v2)" in r.stderr
     assert "r-paper-claim.md: rests on r-psd (through r-mass), which is superseded" in r.stderr
     claims = read(project, "map/claims.md")
-    assert "class n_r_mass,n_r_paper_claim atrisk" in claims
+    drawing = results.claims_drawing(nodes.scan(project).nodes)
+    assert {c["id"] for c in drawing["cards"] if c.get("at_risk")} == {"r-mass", "r-paper-claim"}
+    assert ["r-psd", "r-psd-v2", "superseded"] in drawing["edges"]  # old -> new
+    assert "- `r-psd` is superseded by `r-psd-v2`." in claims
     assert "## May no longer hold" in claims and "None: every live" not in claims
     assert "May no longer hold:" in read(project, "tasks/t02-fit/results/README.md")
     # the project-level result sits in its own box and is a milestone
-    assert 'subgraph project_results["project-level results"]' in claims
+    assert next(c for c in drawing["cards"] if c["id"] == "r-paper-claim")["box"] == "results"
     assert "## r-paper-claim:" in read(project, "results/README.md")
     # the superseded result moves to the withdrawn table of its task page
     t1 = read(project, "tasks/t01-noise/results/README.md")
@@ -119,7 +126,8 @@ def test_superseded_premise_marks_every_result_resting_on_it(project):
     # control: once the dependent result is moved to the new premise, nothing is at risk
     mass(project, depends_on=["r-psd-v2"])
     r = build(project)
-    assert "superseded" not in r.stderr and "atrisk" not in read(project, "map/claims.md")
+    assert "superseded" not in r.stderr
+    assert not any(c.get("at_risk") for c in results.claims_drawing(nodes.scan(project).nodes)["cards"])
 
 
 def test_dead_task_marks_its_live_results(project):

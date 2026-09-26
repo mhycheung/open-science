@@ -1,3 +1,5 @@
+import os
+import re
 import shutil
 import subprocess
 import sys
@@ -7,6 +9,9 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 TEMPLATE = REPO / "template"
+# Drawing the graph images takes seconds and needs LaTeX: the tests write placeholder images
+# (tests/test_graphdraw.py draws real ones).
+os.environ.setdefault("OPSCI_GRAPH_IMAGES", "stub")
 
 
 def pytest_addoption(parser):
@@ -31,6 +36,17 @@ def run_opsci(*args, cwd=None):
     """Run the CLI as a user would; returns CompletedProcess with text output."""
     return subprocess.run([sys.executable, "-m", "opsci.cli", *map(str, args)],
                           capture_output=True, text=True, cwd=cwd)
+
+
+def graph_deps(text: str) -> dict[str, list[str]]:
+    """The `depends on` column of a project graph page (map/graph.md): id -> the ids it lists."""
+    out = {}
+    cell = r"(?:\\\||[^|])*"  # a table cell: a | in it is written \|
+    for line in text.splitlines():
+        m = re.match(rf"\| \[?([\w.-]+)\]?{cell}\|(?: {cell}\|){{4}} ({cell})\|", line)
+        if m and m[1] != "id":
+            out[m[1]] = re.findall(r"`([^`]+)`", m[2])
+    return out
 
 
 def git(cwd, *args):

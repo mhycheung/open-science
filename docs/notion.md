@@ -23,7 +23,7 @@ Under your projects page (for example "Research projects") each project has a pa
 |---|---|
 | Project | `PROJECT.md` |
 | Context | `context.md` |
-| Map | `map/README.md`, the project graph (`map/graph.md`) and the claims graph (`map/claims.md`) as Mermaid diagrams, `map/dead_ends.md` |
+| Map | `map/README.md`, the project graph (`map/graph.md`) and the claims graph (`map/claims.md`) as images (their PNG files), `map/dead_ends.md` |
 | Milestone results | `results/README.md`, with its figures |
 | Log | `log/*.md`, newest month first |
 | Rules | `rules/README.md` |
@@ -38,8 +38,7 @@ shown as an image. Every mention of a task or result links to its page: its full
 (`t02-posterior-inclination`, `r-t02-near-edge-on-at-merger`), a task's
 short id (`t02`, when only one task starts with it), and a path naming it
 (`tasks/t02-posterior-inclination/context.md`), in every page, table and Feed message. The
-text stays as written. The Mermaid source of the graph is not linked; the node table under it
-is.
+text stays as written. The graph images are not linked; the node tables under them are.
 
 Mathematics written as `$...$` or `$$...$$` in the project files appears as equations.
 Tables, lists, code, Mermaid diagrams and links are converted too. A link to a project file

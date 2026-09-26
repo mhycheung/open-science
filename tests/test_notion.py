@@ -792,3 +792,13 @@ def test_claims_graph_results_and_figures(mirrored):
     (S.td / "fig" / "x_2026-09-25.png").write_bytes(b"png-x-25-v2")
     out = run(S, "notion", "diff", cwd=S.proj).stdout
     assert "text   result:r-t01-second" in out and "text   results" in out
+
+
+def test_graph_image_uploads_its_png(tmp_path):
+    # map/graph.md shows graph.svg; Notion gets the PNG drawn beside it
+    (tmp_path / "map").mkdir()
+    (tmp_path / "map/graph.svg").write_text("<svg/>")
+    resolve = mirror.image_resolver(tmp_path, tmp_path / "map")
+    assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.svg"  # control: no PNG
+    (tmp_path / "map/graph.png").write_bytes(b"\x89PNG")
+    assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.png"

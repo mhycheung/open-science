@@ -1,7 +1,7 @@
 """The Notion mirror of a project: render the project files into pages, and write what changed.
 
 Pages under the project's root page: Project (PROJECT.md), Context, Map (the project graph and
-the claims graph as Mermaid code blocks, and the dead ends), Milestone results (results/README.md), Log,
+the claims graph as images (their PNG files), and the dead ends), Milestone results (results/README.md), Log,
 Rules, Brainstorm context, Private docs, the Feed (feed.py), and two databases:
 - Tasks: one row per task in tasks/, brainstorm/tasks/ and the verifications/ directories,
   its properties from the node header, its body the task's context.md, then Results (the
@@ -173,6 +173,8 @@ def image_resolver(root: Path, base: Path):
         if re.match(r"[a-z]+://", target):
             return None
         p = (base / target.split("#")[0]).resolve()
+        if p.suffix.lower() == ".svg" and p.with_suffix(".png").is_file():
+            p = p.with_suffix(".png")  # a graph image (opsci.graphdraw): Notion shows the PNG
         if not p.is_file() or p.suffix.lower() not in PLOT_EXT or not p.is_relative_to(root.resolve()) \
                 or p.stat().st_size > MAX_UPLOAD:
             return None
@@ -215,7 +217,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
         blocks = nb.md_to_blocks(_read(root / "map" / "README.md"))
         for f in ("graph.md", "claims.md", "dead_ends.md"):
             if (root / "map" / f).exists():
-                blocks += [nb.blk("divider")] + nb.demote(nb.md_to_blocks(_read(root / "map" / f)))
+                blocks += [nb.blk("divider")] + nb.demote(_md(root, root / "map" / f))
         page("map", "Map", blocks, icon="🗺️")
 
     if (root / "results" / "README.md").exists():

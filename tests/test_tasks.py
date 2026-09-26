@@ -5,7 +5,8 @@ import re
 import pytest
 import yaml
 
-from conftest import git, run_opsci
+from conftest import git, graph_deps, run_opsci
+from opsci import mapbuild, nodes
 
 
 @pytest.fixture
@@ -69,7 +70,7 @@ def test_task_new_writes_node_table_under_title(project):
         assert "| **status** | active |" in text
     assert "| **autonomy** | autonomous |" in (project / "tasks" / "t01-noise" / "plan.md").read_text()
     r = run_opsci("map", "build", "--check", project)
-    assert "out of date: map/graph.md\n" in r.stderr  # the map only, not the task files
+    assert "out of date: map/graph.md, map/graph.svg\n" in r.stderr  # the map only, not the task files
 
 
 def test_map_build_refreshes_node_table(project):
@@ -304,9 +305,11 @@ def test_brainstorm_nodes_join_the_project_graph(project):
         assert r.returncode == 0, r.stderr
     # the project graph has both, the brainstorm node in its own box, linked from map/
     pgraph = (project / "map" / "graph.md").read_text()
-    assert "t01-work" in pgraph and '  subgraph brainstorm["brainstorm"]\n    n_b01_idea[' in pgraph
-    assert "[b01-idea](../brainstorm/tasks/b01-idea/context.md)" in pgraph
-    assert "n_t01_work[" not in pgraph.split("subgraph brainstorm")[1].split("  end")[0]
+    assert "t01-work" in pgraph and "[b01-idea](../brainstorm/tasks/b01-idea/context.md)" in pgraph
+    drawing = mapbuild.graph_drawing(nodes.scan(project).nodes)
+    assert drawing["boxes"] == [{"id": "brainstorm", "kicker": "brainstorm", "title": "ideas, not yet project work",
+                                 "style": "brainstorm"}]
+    assert {c["id"]: c["box"] for c in drawing["cards"]} == {"b01-idea": "brainstorm", "t01-work": None}
     # the brainstorm map has the brainstorm node only, with a link that resolves from there
     bgraph = (b / "map" / "graph.md").read_text()
     assert "[b01-idea](../tasks/b01-idea/context.md)" in bgraph and "t01-work" not in bgraph
@@ -331,7 +334,7 @@ def test_edges_cross_between_project_and_brainstorm(project):
     assert r.returncode == 0, r.stderr
     assert run_opsci("map", "build", project).returncode == 0
     pgraph = (project / "map" / "graph.md").read_text()
-    assert "n_t01_work --> n_b01_idea" in pgraph and "n_b01_idea --- n_t02" in pgraph
+    assert graph_deps(pgraph)["b01-idea"] == ["t01-work"] and "- `b01-idea` is related to `t02`." in pgraph
     # control: an id that is not a node is still refused
     r = run_opsci("task", "new", "b02", "--title", "x", "--depends-on", "nosuch", "--root", b)
     assert r.returncode == 1 and "not nodes" in r.stderr
@@ -394,8 +397,11 @@ def test_verification_task_placement_privacy_and_graph(project):
     assert r.returncode == 0, r.stderr
     assert "warning" not in r.stderr
     graph = (project / "map" / "graph.md").read_text()
-    assert 'n_v02_review{{"v02-review: Review both<br/>verification · active"}}' in graph
-    assert "n_v02_review -.->|verifies| n_t02_noise" in graph
+    drawing = mapbuild.graph_drawing(nodes.scan(project).nodes)
+    card = next(c for c in drawing["cards"] if c["id"] == "v02-review")
+    assert card["verification"] and card["meta"] == "verification · active"
+    assert ["t02-noise", "v02-review", "verified"] in drawing["edges"]  # checked node -> verification
+    assert "- `t02-noise` is verified by `v02-review`." in graph
     assert "| verification | active |" in graph
     assert "| verification | `v01-audit` |" in (one / "context.md").read_text()
     r = run_opsci("context", "check", "-v", project)

@@ -116,9 +116,9 @@ one and asks.
 - **Privacy.** By default the strictest privacy of the nodes it verifies. A verification task
   inside a task is exported only if both are public. `opsci map build` warns about a
   verification task that is less private than what it verifies.
-- **In the graphs.** `map/graph.md` draws it as a hexagon labelled `verification`, with a
-  dotted `verifies` arrow to each node it checks; `map/claims.md` does the same for one that
-  verifies a result. Node tables and the Notion Tasks database give its type as
+- **In the graphs.** `map/graph.md` draws it as a card with a double border, with a dashed
+  arrow labelled "verified by" from each node it checks; `map/claims.md` does the same for
+  one that verifies a result. Node tables and the Notion Tasks database give its type as
   `verification`.
 - **What it changes.** Its findings are results in its own `results/`. A confirmed node may
   be set `verification: verified` with `evidence:` pointing there; a refuted node's `status`
@@ -164,8 +164,9 @@ writes it and `opsci map build` rewrites it from the front matter; never edit th
   says `privacy: public`. When `privacy` is absent, `policy.default_privacy` in the manifest
   applies; the template sets it to `public`. A header with the old field `publish:` is
   refused by `opsci map build`, with a message naming `privacy`.
-- After changing a header, run `opsci map build`. It writes `map/graph.md` (a Mermaid graph
-  and a table of every node, each task linked to its `map.md`) and `map/dead_ends.md` (every failed, superseded or abandoned
+- After changing a header, run `opsci map build`. It writes `map/graph.md` (the project graph as
+  an image, then a table of every node with what it depends on, each task linked to its
+  `map.md`) and `map/dead_ends.md` (every failed, superseded or abandoned
   node, with the reason), and the results pages and claims graph described next. It refuses
   bad headers, duplicate ids, edges to nodes that do not exist, and cycles in `depends_on`;
   with an error it writes nothing.
@@ -206,9 +207,9 @@ git ignores, a missing file is only a warning) and that every `uses` key is in
   `opsci task new` creates it.
 - `results/README.md`: the milestone results of the project (`milestone: true`, and every
   result in `results/`).
-- `map/claims.md`: the claims graph. A Mermaid graph of every result, in a box per task, with
-  arrows from what it rests on (results, tasks, datasets, external works) to what uses it
-  (other results, papers); then a table of every result with its statement, where it is
+- `map/claims.md`: the claims graph. An image of every result, in a box per task, with
+  arrows from what it rests on (results, tasks, datasets) to what uses it (other results,
+  papers), and the external works it uses in brackets on its card; then a table of every result with its statement, where it is
   stored, the code, its verification, and the weakest verification among the results it
   rests on (`chain`).
 

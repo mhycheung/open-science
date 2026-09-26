@@ -152,7 +152,7 @@ def test_one_sided_related_edge_is_drawn(tmp_path):
     _edit(files, T3, related=None)  # only t04 (the later id) lists the pair now
     root = write(tmp_path / "proj", files)
     assert run_opsci("map", "build", root).returncode == 0
-    assert "n_t03_fit_v2 --- n_t04_scan" in (root / "map" / "graph.md").read_text()
+    assert "- `t03-fit-v2` is related to `t04-scan`." in (root / "map" / "graph.md").read_text()
 
 
 def test_empty_project(tmp_path):

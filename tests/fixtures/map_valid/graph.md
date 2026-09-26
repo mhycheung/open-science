@@ -2,44 +2,26 @@
 
 # Project graph
 
-Arrows: `A --> B` means B depends on A. Dotted arrows point from the new node to the
-node it supersedes. Plain lines join related nodes. Colour shows the status.
+Each card is a node; its colour shows the status. An arrow from A to B means B depends on
+A; an arrow that a longer path of arrows already implies is left out (the table lists
+every dependency). Dashed arrows point from a node to the node that superseded it, and
+from a node to the verification task that verified it. Dotted lines join related nodes.
 
-```mermaid
-flowchart LR
-  n_p1_paper["p1-paper: Paper draft<br/>paper · active"]
-  n_r1_fit_result["r1-fit-result: Fit result page<br/>result · done"]
-  n_t00_pilot["t00-pilot: Pilot<br/>task · abandoned"]
-  n_t01_noise_model["t01-noise-model: Noise model<br/>task · done"]
-  n_t02_fit_v1["t02-fit-v1: Fit, first likelihood<br/>task · superseded"]
-  n_t03_fit_v2["t03-fit-v2: Fit with the #quot;corrected#quot; likelihood<br/>task · active"]
-  n_t04_scan["t04-scan: Start-time scan<br/>task · failed"]
-  n_t03_fit_v2 --> n_p1_paper
-  n_t03_fit_v2 --> n_r1_fit_result
-  n_t01_noise_model --> n_t02_fit_v1
-  n_t01_noise_model --> n_t03_fit_v2
-  n_t03_fit_v2 -.->|supersedes| n_t02_fit_v1
-  n_t03_fit_v2 --- n_t04_scan
-  classDef active fill:#dbeafe,stroke:#1d4ed8
-  class n_p1_paper,n_t03_fit_v2 active
-  classDef done fill:#dcfce7,stroke:#15803d
-  class n_r1_fit_result,n_t01_noise_model done
-  classDef failed fill:#fee2e2,stroke:#b91c1c
-  class n_t04_scan failed
-  classDef superseded fill:#e5e7eb,stroke:#4b5563
-  class n_t02_fit_v1 superseded
-  classDef abandoned fill:#e5e7eb,stroke:#4b5563,stroke-dasharray:4
-  class n_t00_pilot abandoned
-```
+![Project graph](graph.svg)
 
 ## Nodes
 
-| id | type | status | verification | summary |
-|---|---|---|---|---|
-| [p1-paper](../paper/node.yaml) | paper | active | unverified | Paper on the corrected fit. |
-| [r1-fit-result](../site/results/fit.md) | result | done | unverified | Posterior of the corrected fit. |
-| [t00-pilot](../archive/t00-pilot/context.md) | task | abandoned | unverified | Pilot on simulated data only; not continued. |
-| [t01-noise-model](../tasks/t01-noise-model/context.md) · [map](../tasks/t01-noise-model/map.md) | task | done | verified | Gaussian noise model fixed from off-source data. |
-| [t02-fit-v1](../tasks/t02-fit-v1/context.md) · [map](../tasks/t02-fit-v1/map.md) | task | superseded | unverified | Likelihood omitted the window normalisation \| biased amplitudes. |
-| [t03-fit-v2](../tasks/t03-fit-v2/context.md) · [map](../tasks/t03-fit-v2/map.md) | task | active | unverified | Refit with the normalised likelihood. |
-| [t04-scan](../tasks/t04-scan/context.md) · [map](../tasks/t04-scan/map.md) | task | failed | unverified | Scan unstable below 10 ms; route dropped. |
+| id | title | type | status | verification | depends on | summary |
+|---|---|---|---|---|---|---|
+| [p1-paper](../paper/node.yaml) | Paper draft | paper | active | unverified | `t03-fit-v2` | Paper on the corrected fit. |
+| [r1-fit-result](../site/results/fit.md) | Fit result page | result | done | unverified | `t03-fit-v2` | Posterior of the corrected fit. |
+| [t00-pilot](../archive/t00-pilot/context.md) | Pilot | task | abandoned | unverified |  | Pilot on simulated data only; not continued. |
+| [t01-noise-model](../tasks/t01-noise-model/context.md) · [map](../tasks/t01-noise-model/map.md) | Noise model | task | done | verified |  | Gaussian noise model fixed from off-source data. |
+| [t02-fit-v1](../tasks/t02-fit-v1/context.md) · [map](../tasks/t02-fit-v1/map.md) | Fit, first likelihood | task | superseded | unverified | `t01-noise-model` | Likelihood omitted the window normalisation \| biased amplitudes. |
+| [t03-fit-v2](../tasks/t03-fit-v2/context.md) · [map](../tasks/t03-fit-v2/map.md) | Fit with the "corrected" likelihood | task | active | unverified | `t01-noise-model` | Refit with the normalised likelihood. |
+| [t04-scan](../tasks/t04-scan/context.md) · [map](../tasks/t04-scan/map.md) | Start-time scan | task | failed | unverified |  | Scan unstable below 10 ms; route dropped. |
+
+## Other links
+
+- `t02-fit-v1` is superseded by `t03-fit-v2`.
+- `t03-fit-v2` is related to `t04-scan`.

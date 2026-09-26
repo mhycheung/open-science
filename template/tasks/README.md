@@ -122,8 +122,8 @@ evidence: tasks/t07-mode-fit-v2/S3/provenance.yaml
 - `results/README.md`: the milestone results (`milestone: true`, and every result in
   `results/`);
 - `map/claims.md`: the claims graph. Every result, grouped by the task it came from, with
-  arrows from what it rests on (results, tasks, datasets, external works) and to what uses
-  it, and a table with each result's verification and the weakest verification in its chain.
+  arrows from what it rests on (results, tasks, datasets) and to what uses it, and the
+  external works it uses on its card, and a table with each result's verification and the weakest verification in its chain.
 
 When a result fails or is superseded, change its `status` (and give the new result
 `supersedes:`). `opsci map build` then warns about, and `map/claims.md` lists and marks, every
@@ -147,8 +147,8 @@ with `v` and a number (`v01-audit-mode-fit`).
     opsci task new v01-audit-mode-fit --title "Audit the mode fit" --verifies t07-mode-fit-v2
 
 puts it in the right place. Its privacy is by default the strictest privacy of the nodes it
-verifies; `--privacy` overrides that. The graphs draw it as a hexagon labelled
-`verification`, with a dotted arrow to each node it verifies. `opsci map build` reports a
+verifies; `--privacy` overrides that. The graphs draw it as a card with a double
+border, with a dashed "verified by" arrow from each node it verifies. `opsci map build` reports a
 task in a `verifications/` directory without `verifies` and a task with `verifies` outside
 one, and warns when a verification task is in the wrong place or less private than what it
 verifies.

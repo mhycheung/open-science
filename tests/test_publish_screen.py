@@ -1,9 +1,12 @@
 """Publish screening of what the export leaves out: the map rebuilt from the published nodes,
 the `references`, `private-content` and `redaction` checks, and the three privacy tiers.
 Each refusal case has a control."""
+import json
+
 import pytest
 
-from opsci import publish, tasks
+from conftest import graph_deps
+from opsci import graphdraw, mapbuild, publish, tasks
 from test_publish import commit, problems, proj, set_header  # noqa: F401  (proj is a fixture)
 
 SECRET_TITLE = "Secret collaboration with Rivendell"
@@ -49,7 +52,12 @@ def test_exported_map_leaves_out_private_nodes(proj):
         assert leak not in graph, leak
     assert ex.rebuilt_map[:3] == ["map/graph.md", "map/dead_ends.md", "map/claims.md"]
     assert "results/README.md" in ex.rebuilt_map and "tasks/open-work/results/README.md" in ex.rebuilt_map
-    for rel in ex.rebuilt_map:  # the claims graph and the results pages leave it out too
+    assert "map/graph.svg" in ex.rebuilt_map and "map/graph.png" in ex.rebuilt_map
+    drawing = mapbuild.drawings(ex.map_nodes, lambda sub: False)["map/graph"]  # the image leaves it out
+    assert graphdraw.SVG_MARK.format(graphdraw.digest(drawing)) in (ex.tree / "map/graph.svg").read_text()
+    for leak in ("secret-collab", "Rivendell", "Unpublished joint analysis"):
+        assert leak not in json.dumps(drawing), leak
+    for rel in [r for r in ex.rebuilt_map if r.endswith(".md")]:  # the claims graph and the results pages too
         text = (ex.tree / rel).read_text()
         for leak in ("secret-collab", "secret_collab", "Rivendell", "Unpublished joint analysis"):
             assert leak not in text, (rel, leak)
@@ -67,7 +75,7 @@ def test_soft_private_dependency_is_shown_unlinked(proj):
     probs, ex = problems(proj)
     assert probs == [], [str(p) for p in probs]
     graph = (ex.tree / "map/graph.md").read_text()
-    assert "n_secret_collab --> n_open_work" in graph and SECRET_TITLE in graph
+    assert graph_deps(graph)["open-work"] == ["secret-collab"] and SECRET_TITLE in graph
     assert "| secret-collab (not published) |" in graph and "../tasks/secret-collab" not in graph
     assert "[open-work](../tasks/open-work/context.md)" in graph  # control: published, linked
     assert "tasks/secret-collab/context.md" not in ex.files
@@ -257,7 +265,12 @@ def test_published_brainstorm_honours_task_headers(proj):
                       ("map/graph.md", "../brainstorm/tasks/idea-open/context.md")):
         graph = (ex.tree / rel).read_text()
         assert f"[idea-open]({link})" in graph and "| idea-soft (not published) |" in graph, rel
-        assert "idea-closed" not in graph and "Rivendell" not in graph, rel
+        assert "idea-closed" not in graph and "Rivendell" not in graph
+    # the exported image is drawn from the published nodes, not copied from the private repo
+    drawing = mapbuild.drawings(ex.map_nodes, lambda sub: False)["map/graph"]
+    assert "Rivendell" not in json.dumps(drawing) and "idea-soft" in json.dumps(drawing)
+    assert graphdraw.SVG_MARK.format(graphdraw.digest(drawing)) in (ex.tree / "map/graph.svg").read_text()
+    assert graphdraw.digest(drawing) not in (proj / "map/graph.svg").read_text()  # control: the committed image, rel
     assert probs == [], [str(p) for p in probs]
     assert layout.outdated_message(proj) is None
 
@@ -356,7 +369,8 @@ def test_unpublished_brainstorm_is_named_in_the_project_map(proj):
     assert probs == [], [str(p) for p in probs]
     assert not [f for f in ex.files if f.startswith("brainstorm/")]
     graph = (ex.tree / "map/graph.md").read_text()
-    assert 'subgraph brainstorm["brainstorm"]' in graph and "n_t01_fit --> n_idea_soft" in graph
+    assert graph_deps(graph)["idea-soft"] == ["t01-fit"]
+    assert "box are ideas under that directory" in graph
     assert "| idea-soft (not published) |" in graph
     assert "idea-closed" not in graph and "Rivendell" not in graph
 
@@ -396,12 +410,13 @@ def test_map_overrides_group_and_rewrite_unpublished_nodes(proj):
     probs, ex = problems(proj)
     assert probs == [], [str(p) for p in probs]
     graph = (ex.tree / "map/graph.md").read_text()
-    for gone in ("Acme", "cal-a", "cal-b", "n_cal_a", "Residuals"):
-        assert gone not in graph, gone
+    drawing = json.dumps(mapbuild.drawings(ex.map_nodes, lambda sub: False)["map/graph"])
+    for gone in ("Acme", "cal-a", "cal-b", "Residuals"):
+        assert gone not in graph and gone not in drawing, gone
     assert "| private-calibration (not published) |" in graph and "Private calibration work" in graph
     # edges to members point to the group; the edge between members is gone
-    assert "n_t01_fit --> n_private_calibration" in graph and "n_private_calibration --> n_open_work" in graph
-    assert "n_private_calibration --> n_private_calibration" not in graph
+    deps = graph_deps(graph)
+    assert deps["private-calibration"] == ["t01-fit"] and deps["open-work"] == ["private-calibration"]
     assert "| cal-c (not published) |" in graph and "A private cross-check" in graph
     assert "publish/map_overrides.yaml" not in ex.files
     _, report, _ = publish.check(proj, build_site=False)
