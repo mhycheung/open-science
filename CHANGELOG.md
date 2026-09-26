@@ -26,11 +26,15 @@ layout 1) and the framework's, in order, before it applies the other template ch
   a checked node to its verification task ("verified by"); the headers still say
   `supersedes` and `verifies`. An arrow that a longer path already implies is left out of
   the image. The claims graph shows the external works a result uses in brackets on its
-  card, not as boxes with arrows. Brainstorm nodes sit in an orange dashed box.
+  card, not as boxes with arrows. Brainstorm nodes sit in an orange dashed box, task boxes
+  have a solid grey border, and a node the export leaves out is labelled "not published".
+  In the claims graph, assumptions and the nodes the results start from are drawn quieter,
+  and milestones stronger, than other results. On the Notion Map page the node table is in
+  a closed toggle.
   Verification tasks have a double border, not a hexagon shape. The pages list every edge as
   text: the project graph's node table gains `title` and `depends on` columns, and both
   pages end with an "Other links" list. `opsci map build` redraws an image only when its
-  graph changed. Drawing needs Graphviz, pdflatex (TikZ, standalone, lmodern, xcolor) and
+  graph or the drawing code changed. Drawing needs Graphviz, pdflatex (TikZ, standalone, lmodern, xcolor) and
   Poppler; `pixi.toml` now includes Graphviz. `opsci publish` redraws each exported image
   from the published nodes, and refuses the export if it cannot. No layout change: the
   next `opsci map build` in a project writes the images; commit them.

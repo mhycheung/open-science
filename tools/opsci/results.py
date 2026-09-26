@@ -373,8 +373,9 @@ def _claims_edges(p: dict) -> list[tuple[str, str, str]]:
     return out
 
 
-def claims_drawing(nodes: list[Node], bib=None) -> dict | None:
-    """The drawing of the claims graph (``graphdraw``), or None if there are no results."""
+def claims_drawing(nodes: list[Node], bib=None, unpublished=frozenset()) -> dict | None:
+    """The drawing of the claims graph (``graphdraw``), or None if there are no results. The
+    nodes (and task boxes) whose ids are in ``unpublished`` are labelled "not published"."""
     p = _claims_parts(nodes)
     ids, rs = p["ids"], p["rs"]
     if not rs:
@@ -387,14 +388,21 @@ def claims_drawing(nodes: list[Node], bib=None) -> dict | None:
             t = ids[box]
             brain = t.path.split("/", 1)[0] in SUBROOTS
             boxes.append({"id": box, "kicker": f"{'brainstorm ' if brain else ''}{display_type(t)} {box}",
-                          "title": str(t.get("title") or ""), "style": "brainstorm" if brain else "task"})
+                          "title": str(t.get("title") or ""), "style": "brainstorm" if brain else "task",
+                          **({"unpublished": True} if box in unpublished else {})})
         for n in p["boxes"][box]:
+            rank = "milestone" if is_milestone(n) else "premise" if n.get("kind") == "assumption" else None
             cards.append({"id": n.id, "title": str(n.get("title") or ""), "meta": _meta(n), "status": n.get("status"),
-                          "box": box or None, "at_risk": bool(at_risk(n, ids)), "tags": list(n.get("uses") or [])})
+                          **({"rank": rank} if rank else {}),
+                          "box": box or None, "at_risk": bool(at_risk(n, ids)), "tags": list(n.get("uses") or []),
+                          **({"unpublished": True} if n.id in unpublished else {})})
+    starts = {d for n in rs for d in n.get("depends_on", []) or []} - set(p["users"]) - set(p["verifiers"])
     for i in sorted(p["drawn"] - p["rids"] - p["boxed"]):
         m = ids[i]
         cards.append({"id": i, "title": str(m.get("title") or ""), "meta": f"{display_type(m)} · {m.get('status')}",
-                      "status": m.get("status"), "verification": is_verification(m)})
+                      "status": m.get("status"), "verification": is_verification(m),
+                      **({"rank": "premise"} if i in starts else {}),
+                      **({"unpublished": True} if i in unpublished else {})})
     edges = graphdraw.transitive_reduction(_claims_edges(p))
     return graphdraw.drawing(cards, boxes, edges, "used by")
 

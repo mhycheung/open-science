@@ -282,6 +282,28 @@ def toggle(title: str, inner: list, level: int = 2) -> dict:
     return blk(f"heading_{level}", rich(title), is_toggleable=True, children=inner)
 
 
+def collapse(blocks: list, titles: set[str]) -> list:
+    """Each heading whose text is in ``titles`` as a toggle heading (shown closed) holding the
+    blocks under it, up to the next heading of the same or a higher level."""
+    out, i = [], 0
+    while i < len(blocks):
+        b = blocks[i]
+        t = b["type"]
+        text = "".join(r.get("plain_text") or r.get("text", {}).get("content", "")
+                       for r in b.get(t, {}).get("rich_text", [])) if t.startswith("heading_") else None
+        if text not in titles or b[t].get("is_toggleable"):
+            out.append(b)
+            i += 1
+            continue
+        j = i + 1
+        while j < len(blocks) and not (blocks[j]["type"].startswith("heading_")
+                                       and int(blocks[j]["type"][-1]) <= int(t[-1])):
+            j += 1
+        out.append(blk(t, b[t]["rich_text"], is_toggleable=True, children=blocks[i + 1:j]))
+        i = j
+    return out
+
+
 def callout(rt, emoji="🔄", color="gray_background", children=None):
     b = blk("callout", rt, icon={"type": "emoji", "emoji": emoji}, color=color)
     if children:

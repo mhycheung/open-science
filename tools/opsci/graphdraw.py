@@ -25,7 +25,6 @@ import tempfile
 import zlib
 from pathlib import Path
 
-VERSION = "1"  # bump when the look changes, so that every image is redrawn
 STATUS_COLOURS = {  # fill, stroke
     "active": ("dbeafe", "1d4ed8"), "done": ("dcfce7", "15803d"), "paused": ("fef9c3", "a16207"),
     "failed": ("fee2e2", "b91c1c"), "superseded": ("e5e7eb", "4b5563"), "abandoned": ("e5e7eb", "4b5563"),
@@ -36,12 +35,15 @@ PAD = 5.0             # space between a card's border and its text
 BAR = 3.0             # width of the status bar on a card's left edge
 TOOLS = ("dot", "pdflatex", "pdftocairo", "pdftoppm")
 SVG_MARK = "<!-- opsci-graph {} -->"
+_SOURCE = Path(__file__).read_bytes()
 
 PREAMBLE = r"""\usepackage[T1]{fontenc}\usepackage[utf8]{inputenc}\usepackage{lmodern}
 \usepackage{amsmath,amssymb}\usepackage{xcolor}\usepackage{tikz}
 \usetikzlibrary{arrows.meta}
 \definecolor{citeS}{HTML}{6d28d9}\definecolor{riskS}{HTML}{dc2626}
-\definecolor{brainF}{HTML}{fff7ed}\definecolor{brainS}{HTML}{c2410c}"""
+\definecolor{brainF}{HTML}{fff7ed}\definecolor{brainS}{HTML}{c2410c}
+\newcommand\unpub{\tikz[baseline=(u.base)]\node[fill=black!65,text=white,rounded corners=1.5pt,
+  inner sep=1.3pt](u){\scriptsize\textsc{not published}};}"""
 
 
 class DrawError(Exception):
@@ -53,9 +55,11 @@ class DrawError(Exception):
 def drawing(cards: list[dict], boxes: list[dict], edges: list[tuple], legend: str) -> dict:
     """A drawing. ``cards``: dicts with ``id``, ``title``, ``meta`` (the line under the
     title), ``status``, and optionally ``box`` (a box id), ``verification`` (drawn with a
-    double border), ``at_risk`` (a thick red border) and ``tags`` (citation keys).
-    ``boxes``: dicts with ``id``, ``kicker`` (the first line of the heading), ``title`` and
-    ``style`` (``task`` or ``brainstorm``). ``edges``: ``(from, to, kind)``, with kind
+    double border), ``at_risk`` (a thick red border), ``tags`` (citation keys),
+    ``unpublished`` (a "not published" label) and ``rank``: ``premise`` (an assumption or a
+    starting point, drawn quieter) or ``milestone`` (drawn stronger). ``boxes``: dicts with ``id``, ``kicker`` (the
+    first line of the heading), ``title``, ``style`` (``task`` or ``brainstorm``) and
+    optionally ``unpublished``. ``edges``: ``(from, to, kind)``, with kind
     ``dep`` (an arrow), ``superseded`` (old to new), ``verified`` (checked node to the
     verification task) or ``related`` (a dotted line); an end may be a box id. ``legend``:
     the name of a ``dep`` arrow."""
@@ -63,7 +67,8 @@ def drawing(cards: list[dict], boxes: list[dict], edges: list[tuple], legend: st
 
 
 def digest(d: dict) -> str:
-    return hashlib.sha256((VERSION + json.dumps(d, sort_keys=True)).encode()).hexdigest()[:16]
+    """The hash of drawing ``d`` and of this module, so that a change in either redraws the image."""
+    return hashlib.sha256(_SOURCE + json.dumps(d, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def transitive_reduction(edges: list[tuple]) -> list[tuple]:
@@ -131,13 +136,14 @@ def _plain(t: str) -> str:
 
 def _card_tex(c: dict, plain: bool = False) -> str:
     title = _plain(c["title"]) if plain else tex_text(c["title"])
-    s = r"{\footnotesize\ttfamily\color{black!55}" + tex_text(c["id"]) + "}"
+    s = r"\raggedright{\footnotesize\ttfamily\color{black!55}" + tex_text(c["id"]) + r"\par}"
     if title:
-        s += r"\\[1pt]\raggedright " + title
+        look = r"\small\color{black!70}" if c.get("rank") == "premise" else ""
+        s += r"\vspace{2pt}{" + look + title + r"\par}"
     if c.get("meta"):
-        s += r"\\[2pt]{\scriptsize\itshape\color{black!60}" + tex_text(c["meta"]) + "}"
+        s += r"\vspace{6pt}{\scriptsize\itshape\color{black!60}" + tex_text(c["meta"]) + r"\par}"
     if c.get("tags"):
-        s += r"\\[1pt]{\scriptsize\ttfamily\color{citeS}[" + tex_text(", ".join(c["tags"])) + "]}"
+        s += r"\vspace{3pt}{\scriptsize\ttfamily\color{citeS}[" + tex_text(", ".join(c["tags"])) + r"]\par}"
     return s
 
 
@@ -145,6 +151,8 @@ def _box_tex(b: dict, plain: bool = False) -> str:
     title = _plain(b.get("title")) if plain else tex_text(b.get("title"))
     colour = r"\color{brainS}\bfseries" if b.get("style") == "brainstorm" else ""
     s = r"{\small" + colour + r"\textsc{" + tex_text(b["kicker"]) + "}}"
+    if b.get("unpublished"):
+        s += r"\enspace\unpub"
     if title:
         s += r"\\{\footnotesize\itshape " + (r"\color{brainS}" if colour else "") + title + "}"
     return r"\raggedright " + s
@@ -235,7 +243,7 @@ def layout(work: Path, d: dict, dims: dict) -> dict:
             lines.append(f"  {bid[b['id']]}_anchor [shape=point, width=0.01];")
         lines.append("}")
     for i, c in enumerate(d["cards"]):
-        h = dims[f"c{i}"][1] + 2 * PAD + 2
+        h = dims[f"c{i}"][1] + 2 * PAD + 2 + (6 if c.get("unpublished") else 0)  # room for the label
         lines.append(f"c{i} [width={card_w / 72:.4f}, height={h / 72:.4f}];")
 
     def end(x):  # a card, or a box: an edge to a box goes to one of its cards, cut at the box
@@ -303,7 +311,8 @@ def tikz(d: dict, dims: dict, tex: dict, lay: dict) -> str:
             L.append(r"\draw[brainS,dash pattern=on 5pt off 3pt,line width=1.1pt,fill=brainF,rounded corners=6pt]"
                      r" (%.1f,%.1f) rectangle (%.1f,%.1f);" % (x1, y1, x2, y2))
         else:
-            L.append(r"\fill[black!4,rounded corners=6pt] (%.1f,%.1f) rectangle (%.1f,%.1f);" % (x1, y1, x2, y2))
+            L.append(r"\draw[black!55,line width=1.1pt,fill=black!4,rounded corners=6pt]"
+                     r" (%.1f,%.1f) rectangle (%.1f,%.1f);" % (x1, y1, x2, y2))
     heads = []  # drawn after the arrows, so that an arrow passes under a heading
     for i, b in enumerate(d["boxes"]):
         x1, y1, x2, y2 = lay["bbs"][f"b{i}"]
@@ -333,19 +342,26 @@ def tikz(d: dict, dims: dict, tex: dict, lay: dict) -> str:
     for i, c in enumerate(d["cards"]):
         x, y, w, h = lay["pos"][f"c{i}"]
         s = _status(c)
-        border = ["draw=%sS!70" % s, "line width=0.6pt"]
+        rank = c.get("rank")
+        border, fill, bar = ["draw=%sS!70" % s, "line width=0.6pt"], "white", "%sS" % s
+        if rank == "premise":  # quieter: a thin grey border, a muted bar
+            border, fill, bar = ["draw=black!28", "line width=0.4pt"], "black!2", "%sS!40" % s
+        if rank == "milestone":  # sharper: a heavy border in the status colour, a light tint
+            border, fill = ["draw=%sS" % s, "line width=1.4pt"], "%sF!45" % s
         if c.get("verification"):
             border = ["draw=%sS!80" % s, "double=white", "double distance=1.2pt", "line width=0.5pt"]
         if s == "abandoned":
             border.append("dash pattern=on 3pt off 2pt")
         if c.get("at_risk"):
             border = ["draw=riskS", "line width=1.8pt"]
-        L.append(r"\node[%s,fill=white,rounded corners=3pt,minimum width=%.1fpt,minimum height=%.1fpt,"
-                 r"inner sep=0pt] at (%.1f,%.1f) {};" % (",".join(border), w, h, x, y))
-        L.append(r"\fill[%sS] (%.1f,%.1f) rectangle (%.1f,%.1f);"
-                 % (s, x - w / 2 + 0.9, y - h / 2 + 0.9, x - w / 2 + 0.9 + BAR, y + h / 2 - 0.9))
+        L.append(r"\node[%s,fill=%s,rounded corners=3pt,minimum width=%.1fpt,minimum height=%.1fpt,"
+                 r"inner sep=0pt] at (%.1f,%.1f) {};" % (",".join(border), fill, w, h, x, y))
+        L.append(r"\fill[%s] (%.1f,%.1f) rectangle (%.1f,%.1f);"
+                 % (bar, x - w / 2 + 0.9, y - h / 2 + 0.9, x - w / 2 + 0.9 + BAR, y + h / 2 - 0.9))
         L.append(r"\node[anchor=west,inner sep=0pt] at (%.1f,%.1f) {\parbox{%.1fpt}{%s}};"
-                 % (x - w / 2 + PAD + BAR + 2, y, CARD_TEXT_PT, tex[f"c{i}"]))
+                 % (x - w / 2 + PAD + BAR + 2, y - (3 if c.get("unpublished") else 0), CARD_TEXT_PT, tex[f"c{i}"]))
+        if c.get("unpublished"):  # on the top border, at the right
+            L.append(r"\node[anchor=east,inner sep=0pt] at (%.1f,%.1f) {\unpub};" % (x + w / 2 - 6, y + h / 2))
     L.append(_legend(d, lay))
     L += [r"\end{tikzpicture}", r"\end{document}"]
     return "\n".join(L)
@@ -366,12 +382,20 @@ def _legend(d: dict, lay: dict) -> str:
             items.append(arrow % (",dash pattern=on 3pt off 2pt,-{Stealth[length=5pt,width=4pt]}", lab))
     if "related" in kinds:
         items.append(arrow % (",densely dotted", "related"))
+    if any(c.get("rank") == "milestone" for c in d["cards"]):
+        items.append(r"\tikz[baseline=-0.5ex]{\fill[doneF!45,draw=doneS,line width=1.4pt,rounded corners=1.5pt]"
+                     r" (0,-4pt) rectangle (12pt,4pt);}~milestone")
+    if any(c.get("rank") == "premise" for c in d["cards"]):
+        items.append(r"\tikz[baseline=-0.5ex]{\fill[black!2,draw=black!28,line width=0.4pt,rounded corners=1.5pt]"
+                     r" (0,-4pt) rectangle (12pt,4pt);}~assumption or starting point")
     if any(c.get("verification") for c in d["cards"]):
         items.append(r"\tikz[baseline=-0.5ex]{\draw[black!60,double=white,double distance=1.2pt,line width=0.5pt,"
                      r"rounded corners=1.5pt] (0,-4pt) rectangle (12pt,4pt);}~verification task")
     if any(c.get("at_risk") for c in d["cards"]):
         items.append(r"\tikz[baseline=-0.5ex]{\draw[riskS,line width=1.8pt,rounded corners=1.5pt]"
                      r" (0,-4pt) rectangle (12pt,4pt);}~may no longer hold")
+    if any(c.get("unpublished") for c in d["cards"]) or any(b.get("unpublished") for b in d["boxes"]):
+        items.append(r"\unpub~named here; its files are not published")
     if any(b.get("style") == "brainstorm" for b in d["boxes"]):
         items.append(r"\tikz[baseline=-0.5ex]{\draw[brainS,dash pattern=on 3pt off 2pt,line width=0.9pt,"
                      r"fill=brainF,rounded corners=1.5pt] (0,-4pt) rectangle (12pt,4pt);}~brainstorm: ideas, not yet project work")

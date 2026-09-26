@@ -748,6 +748,11 @@ def add_result(td: Path, rid: str, fig: str, depends=()) -> Path:
 def test_claims_graph_results_and_figures(mirrored):
     S, m = mirrored, mirrored.mock
     (S.proj / "map" / "claims.md").write_text("# Claims graph\n\n```mermaid\nflowchart LR\n  a --> b\n```\n")
+    (S.proj / "map" / "graph.md").write_text(
+        "# Project graph\n\n![Project graph](graph.svg)\n\n## Nodes\n\n| id | title |\n|---|---|\n"
+        "| t01-demo | Demo |\n\n## Other links\n\n- `a` is related to `b`.\n")
+    (S.proj / "map" / "graph.svg").write_text("<svg/>")
+    (S.proj / "map" / "graph.png").write_bytes(b"\x89PNG\r\n\x1a\n")
     add_result(S.td, "r-t01-first", "../fig/x_2026-09-25.png")
     add_result(S.td, "r-t01-second", "../fig/x_2026-09-25.png", depends=["r-t01-first"])
     (S.proj / "results").mkdir(exist_ok=True)
@@ -760,9 +765,14 @@ def test_claims_graph_results_and_figures(mirrored):
     assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
     st = state(S.proj)
     url = {k: mirror.page_url(v["page_id"]) for k, v in st["pages"].items()}
-    # the Map shows both graphs
-    codes = [n for n in m.kids(st["pages"]["map"]["page_id"]) if n["type"] == "code"]
+    # the Map shows both graphs: the project graph as its PNG, its node table closed under a toggle
+    kids = m.kids(st["pages"]["map"]["page_id"])
+    codes = [n for n in kids if n["type"] == "code"]
     assert any("a --> b" in MockNotion.plain(n["body"]["rich_text"]) for n in codes)
+    assert any(n["type"] == "image" for n in kids)
+    heads = {MockNotion.plain(n["body"]["rich_text"]): n for n in kids if n["type"].startswith("heading_")}
+    assert heads["Nodes"]["body"].get("is_toggleable") and [k["type"] for k in m.kids(heads["Nodes"]["id"])] == ["table"]
+    assert not heads["Other links"]["body"].get("is_toggleable")  # control: the next section stays open
     # a Results database with one row per result, properties from the header
     assert m.child_pages(st["root_page"]).get("Results") == st["results_db"]
     row = m.pages[st["pages"]["result:r-t01-second"]["page_id"].replace("-", "")]

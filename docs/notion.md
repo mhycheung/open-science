@@ -23,7 +23,7 @@ Under your projects page (for example "Research projects") each project has a pa
 |---|---|
 | Project | `PROJECT.md` |
 | Context | `context.md` |
-| Map | `map/README.md`, the project graph (`map/graph.md`) and the claims graph (`map/claims.md`) as images (their PNG files), `map/dead_ends.md` |
+| Map | `map/README.md`, the project graph (`map/graph.md`) and the claims graph (`map/claims.md`) as images (their PNG files), each node table in a closed toggle, `map/dead_ends.md` |
 | Milestone results | `results/README.md`, with its figures |
 | Log | `log/*.md`, newest month first |
 | Rules | `rules/README.md` |

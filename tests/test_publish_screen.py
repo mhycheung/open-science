@@ -6,7 +6,7 @@ import json
 import pytest
 
 from conftest import graph_deps
-from opsci import graphdraw, mapbuild, publish, tasks
+from opsci import graphdraw, mapbuild, nodes, publish, tasks
 from test_publish import commit, problems, proj, set_header  # noqa: F401  (proj is a fixture)
 
 SECRET_TITLE = "Secret collaboration with Rivendell"
@@ -76,6 +76,13 @@ def test_soft_private_dependency_is_shown_unlinked(proj):
     assert probs == [], [str(p) for p in probs]
     graph = (ex.tree / "map/graph.md").read_text()
     assert graph_deps(graph)["open-work"] == ["secret-collab"] and SECRET_TITLE in graph
+    # the images label what is not published: the committed one by privacy, the exported one by the export
+    assert publish.unpublished_nodes(proj, nodes.scan(proj).nodes) == {"secret-collab"}
+    cards = {c["id"]: c for c in mapbuild.drawings(ex.map_nodes, lambda sub: False,
+                                                   unpublished={"secret-collab"})["map/graph"]["cards"]}
+    assert cards["secret-collab"].get("unpublished") and not cards["open-work"].get("unpublished")
+    assert graphdraw.SVG_MARK.format(graphdraw.digest(mapbuild.drawings(
+        ex.map_nodes, lambda sub: False, unpublished={"secret-collab"})["map/graph"])) in (ex.tree / "map/graph.svg").read_text()
     assert "| secret-collab (not published) |" in graph and "../tasks/secret-collab" not in graph
     assert "[open-work](../tasks/open-work/context.md)" in graph  # control: published, linked
     assert "tasks/secret-collab/context.md" not in ex.files
@@ -257,7 +264,11 @@ def test_published_brainstorm_honours_task_headers(proj):
     tasks.new_task(proj / "brainstorm", "idea-soft", "Soft idea", summary="Named only.")  # default tier
     tasks.new_task(proj / "brainstorm", "idea-closed", "Closed idea about Rivendell", summary="Private.",
                    privacy="hard-private")
+    (proj / "brainstorm/tasks/idea-soft/results/r-idea.md").write_text(  # no privacy of its own
+        "---\nid: r-idea\ntitle: A trend\ntype: result\nkind: figure\nstatus: done\nsummary: x\n---\n# A trend\n")
     commit(proj)
+    # a node in a soft-private task is not published, whatever its own header says
+    assert {"idea-soft", "r-idea"} <= publish.unpublished_nodes(proj, nodes.scan(proj).nodes)
     probs, ex = problems(proj)
     assert "brainstorm/tasks/idea-open/log.md" in ex.files  # control
     assert not [f for f in ex.files if "idea-closed" in f or "idea-soft" in f]
@@ -265,12 +276,14 @@ def test_published_brainstorm_honours_task_headers(proj):
                       ("map/graph.md", "../brainstorm/tasks/idea-open/context.md")):
         graph = (ex.tree / rel).read_text()
         assert f"[idea-open]({link})" in graph and "| idea-soft (not published) |" in graph, rel
-        assert "idea-closed" not in graph and "Rivendell" not in graph
+        assert "idea-closed" not in graph and "Rivendell" not in graph, rel
     # the exported image is drawn from the published nodes, not copied from the private repo
-    drawing = mapbuild.drawings(ex.map_nodes, lambda sub: False)["map/graph"]
+    unexported = {n.id for n in ex.map_nodes if n.path not in set(ex.files)}
+    assert unexported == {"idea-soft", "r-idea"}
+    drawing = mapbuild.drawings(ex.map_nodes, lambda sub: False, unpublished=unexported)["map/graph"]
     assert "Rivendell" not in json.dumps(drawing) and "idea-soft" in json.dumps(drawing)
     assert graphdraw.SVG_MARK.format(graphdraw.digest(drawing)) in (ex.tree / "map/graph.svg").read_text()
-    assert graphdraw.digest(drawing) not in (proj / "map/graph.svg").read_text()  # control: the committed image, rel
+    assert graphdraw.digest(drawing) not in (proj / "map/graph.svg").read_text()  # control: the committed image
     assert probs == [], [str(p) for p in probs]
     assert layout.outdated_message(proj) is None
 

@@ -88,6 +88,17 @@ def test_results_pages_and_claims_graph(project):
     assert {"id": "t01-noise", "kicker": "task t01-noise", "title": "Noise model", "style": "task"} in drawing["boxes"]
     assert ["r-psd", "r-mass", "dep"] in drawing["edges"]
     assert next(c for c in drawing["cards"] if c["id"] == "r-mass")["tags"] == ["Isi2019"]
+    # a milestone is drawn stronger than a result, an assumption or a starting point quieter
+    ranks = {c["id"]: c.get("rank") for c in drawing["cards"]}
+    assert ranks["r-mass"] == "milestone" and ranks["r-psd"] is None
+    put(project, "datasets/strain.md", id="d-strain", title="Strain data", type="dataset", status="done",
+        summary="The strain.")
+    put(project, "tasks/t01-noise/results/r-psd.md", id="r-psd", title="Noise is stationary", type="result",
+        kind="assumption", status="done", depends_on=["d-strain"], summary="Taken as given.")
+    ranks = {c["id"]: c.get("rank") for c in results.claims_drawing(nodes.scan(project).nodes)["cards"]}
+    assert ranks["r-psd"] == "premise" and ranks["d-strain"] == "premise"  # what a result starts from
+    (project / "datasets/strain.md").unlink()
+    psd(project)
     assert "Testing the No-Hair Theorem with GW150914" in claims
     assert "None: every live result rests only on live work." in claims
     # results in a results directory are drawn in the claims graph, not the task graph

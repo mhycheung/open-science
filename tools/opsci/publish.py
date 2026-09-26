@@ -221,11 +221,9 @@ def _privacy(header: dict, man: Manifest) -> str:
 
 
 
-def select(snap: Path, man: Manifest) -> tuple[list[str], dict[str, str], list, set]:
-    """(exported paths, excluded path -> reason, exported nodes, hard-private paths) for a
-    commit snapshot. A file is hard-private if its task, its node, a `node.yaml` above it, or
-    the manifest's `hard_private` list says so; every other excluded file is soft-private."""
-    by_path = {n.path: n for n in all_nodes(snap)}
+def _tier_of(snap: Path, man: Manifest, by_path: dict):
+    """A function: snapshot path -> (tier, what decided it). A file is hard-private if its
+    task, its node, a `node.yaml` above it, or the manifest's `hard_private` list says so."""
     # plan.md repeats its task's header; the task's context.md decides for the directory.
     task_tier = {}
     for glob in nodes.TASK_ROOT_GLOBS:
@@ -261,6 +259,40 @@ def select(snap: Path, man: Manifest) -> tuple[list[str], dict[str, str], list, 
         if any(_matches(f, h) for h in man.hard_private):
             return "hard-private", "listed under hard_private"
         return "public", ""
+    return tier
+
+
+def _exclusion(f: str, man: Manifest, tier) -> str | None:
+    """Why the export leaves out path f (not in the manifest, listed under never, or its
+    tier), or None if it is exported."""
+    t, why = tier(f)
+    if not any(_matches(f, str(e["path"])) for e in man.include):
+        return "not in the manifest"
+    if any(_matches(f, n) for n in man.never):
+        return "listed under never"
+    if t != "public":
+        return f"{why}: {t}"
+    return None
+
+
+def unpublished_nodes(root: Path, node_list: list) -> set[str]:
+    """The ids of the nodes in ``node_list`` whose files the export leaves out (as ``select``
+    decides), for the "not published" labels of the graph images. Empty without a manifest."""
+    try:
+        man = load_manifest(root)
+    except PublishError:
+        return set()
+    tier = _tier_of(Path(root), man, {n.path: n for n in all_nodes(Path(root))})
+    return {n.id for n in node_list
+            if any(_matches(n.path, a) for a in ALWAYS_NEVER) or _exclusion(n.path, man, tier) is not None}
+
+
+def select(snap: Path, man: Manifest) -> tuple[list[str], dict[str, str], list, set]:
+    """(exported paths, excluded path -> reason, exported nodes, hard-private paths) for a
+    commit snapshot. A file is hard-private if its task, its node, a `node.yaml` above it, or
+    the manifest's `hard_private` list says so; every other excluded file is soft-private."""
+    by_path = {n.path: n for n in all_nodes(snap)}
+    tier = _tier_of(snap, man, by_path)
 
     files = sorted(p.relative_to(snap).as_posix() for p in snap.rglob("*")
                    if p.is_file() or p.is_symlink())
@@ -268,15 +300,11 @@ def select(snap: Path, man: Manifest) -> tuple[list[str], dict[str, str], list, 
     for f in files:
         if any(_matches(f, n) for n in ALWAYS_NEVER):
             continue  # never listed in the report either: these are private by construction
-        t, why = tier(f)
-        if t == "hard-private":
+        if tier(f)[0] == "hard-private":
             hard.add(f)
-        if not any(_matches(f, str(e["path"])) for e in man.include):
-            excluded[f] = "not in the manifest"
-        elif any(_matches(f, n) for n in man.never):
-            excluded[f] = "listed under never"
-        elif t != "public":
-            excluded[f] = f"{why}: {t}"
+        why = _exclusion(f, man, tier)
+        if why:
+            excluded[f] = why
         else:
             out.append(f)
     exported = set(out)
@@ -411,8 +439,9 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
                 rebuilt.append(rel)
         # The committed graph images show every node: each exported one is redrawn, and one
         # that cannot be redrawn stops the publish.
+        unexported = {n.id for n in map_nodes if n.path not in set(files)}
         for base, d in mapbuild.drawings(map_nodes, lambda sub: f"{sub}/map/graph.md" in files,
-                                         results.read_bib(snap)).items():
+                                         results.read_bib(snap), unexported).items():
             if f"{base}.svg" not in files and f"{base}.png" not in files:
                 continue
             try:

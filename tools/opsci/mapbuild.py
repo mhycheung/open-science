@@ -69,14 +69,16 @@ def _links(nodes: list[Node], ids: set[str]) -> list[tuple[str, str, str]]:
     return out
 
 
-def graph_drawing(nodes: list[Node]) -> dict | None:
-    """The drawing of the project graph (``graphdraw``), or None if it has no nodes."""
+def graph_drawing(nodes: list[Node], unpublished=frozenset()) -> dict | None:
+    """The drawing of the project graph (``graphdraw``), or None if it has no nodes. The
+    nodes whose ids are in ``unpublished`` are labelled "not published"."""
     nodes, _ = _graph_nodes(nodes)
     if not nodes:
         return None
     ids = {n.id for n in nodes}
     cards = [{"id": n.id, "title": str(n.get("title") or ""), "meta": f"{display_type(n)} · {n.get('status')}",
-              "status": n.get("status"), "box": _subroot(n), "verification": is_verification(n)}
+              "status": n.get("status"), "box": _subroot(n), "verification": is_verification(n),
+              **({"unpublished": True} if n.id in unpublished else {})}
              for n in nodes]
     boxes = [{"id": b, "kicker": b, "title": "ideas, not yet project work", "style": "brainstorm"}
              for b in sorted({b for b in map(_subroot, nodes) if b})]
@@ -169,17 +171,21 @@ def outputs(all_nodes: list[Node], root_has, linked: set[str] | None = None,
     return out
 
 
-def drawings(all_nodes: list[Node], root_has, bib: dict[str, str] | None = None) -> dict[str, dict]:
+def drawings(all_nodes: list[Node], root_has, bib: dict[str, str] | None = None,
+             unpublished=frozenset()) -> dict[str, dict]:
     """The graph images beside the map files, as path without suffix -> drawing
     (``graphdraw``): the project graph and the claims graph, and the same for each sub-root
-    that exists. A graph with nothing in it has no image."""
-    out = {"map/graph": graph_drawing(all_nodes), "map/claims": results.claims_drawing(all_nodes, bib)}
+    that exists. A graph with nothing in it has no image. The nodes whose ids are in
+    ``unpublished`` are labelled "not published"."""
+    out = {"map/graph": graph_drawing(all_nodes, unpublished),
+           "map/claims": results.claims_drawing(all_nodes, bib, unpublished)}
     for sub in SUBROOTS:
         if root_has(sub):
             pre = sub + "/"
             out[f"{sub}/map/graph"] = graph_drawing([Node(n.path[len(pre):], n.header) for n in all_nodes
-                                                     if n.path.startswith(pre)])
-            out[f"{sub}/map/claims"] = results.claims_drawing([n for n in all_nodes if n.path.startswith(pre)], bib)
+                                                     if n.path.startswith(pre)], unpublished)
+            out[f"{sub}/map/claims"] = results.claims_drawing([n for n in all_nodes if n.path.startswith(pre)], bib,
+                                                              unpublished)
     return {k: v for k, v in out.items() if v}
 
 
@@ -301,7 +307,9 @@ def build(root: Path, check: bool = False) -> tuple[ScanResult, list[str]]:
     files = outputs(res.nodes, lambda sub: (root / sub).is_dir(), bib=results.read_bib(root))
     files.update(node_tables(root))
     files.update(task_maps(root, res))
-    draws = drawings(res.nodes, lambda sub: (root / sub).is_dir(), results.read_bib(root))
+    from .publish import unpublished_nodes  # local import: publish imports this module
+    draws = drawings(res.nodes, lambda sub: (root / sub).is_dir(), results.read_bib(root),
+                     unpublished_nodes(root, res.nodes))
     stale = []
     for rel, text in files.items():
         p = root / rel

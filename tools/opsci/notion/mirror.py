@@ -1,7 +1,8 @@
 """The Notion mirror of a project: render the project files into pages, and write what changed.
 
 Pages under the project's root page: Project (PROJECT.md), Context, Map (the project graph and
-the claims graph as images (their PNG files), and the dead ends), Milestone results (results/README.md), Log,
+the claims graph as images (their PNG files), the node table closed under a toggle, and
+the dead ends), Milestone results (results/README.md), Log,
 Rules, Brainstorm context, Private docs, the Feed (feed.py), and two databases:
 - Tasks: one row per task in tasks/, brainstorm/tasks/ and the verifications/ directories,
   its properties from the node header, its body the task's context.md, then Results (the
@@ -217,7 +218,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
         blocks = nb.md_to_blocks(_read(root / "map" / "README.md"))
         for f in ("graph.md", "claims.md", "dead_ends.md"):
             if (root / "map" / f).exists():
-                blocks += [nb.blk("divider")] + nb.demote(_md(root, root / "map" / f))
+                blocks += [nb.blk("divider")] + nb.collapse(nb.demote(_md(root, root / "map" / f)), {"Nodes"})
         page("map", "Map", blocks, icon="🗺️")
 
     if (root / "results" / "README.md").exists():

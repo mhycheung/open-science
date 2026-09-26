@@ -100,7 +100,11 @@ places the cards and arrows and pdflatex typesets them, so `$...$` in a title is
 LaTeX (a title whose LaTeX does not compile is set as plain text). Every arrow points
 forward: from a node to what depends on it ("used by"), from a node to the node that
 superseded it ("superseded by"), and from a node to the verification task that checked it
-("verified by"). An image is redrawn only when its graph changed. Drawing needs Graphviz
+("verified by"). Task boxes have a solid grey border, brainstorm boxes a dashed orange one.
+A node that the export leaves out (its task or header is not public, or the manifest does
+not include it) is labelled "not published". In the claims graph, assumptions and the nodes
+the results start from are drawn quieter and milestones stronger than other results. An
+image is redrawn only when its graph or the drawing code changed. Drawing needs Graphviz
 (`dot`), `pdflatex` with the TikZ, standalone, lmodern and xcolor packages, and Poppler
 (`pdftocairo`, `pdftoppm`); without them `map build` warns and leaves the images out of date,
 and `opsci publish check` refuses the export. `opsci publish` redraws each exported image
