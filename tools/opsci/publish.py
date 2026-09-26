@@ -1138,7 +1138,10 @@ def public_checkout(root: Path, repo: str) -> tuple[Path, str | None]:
     if heads:
         _git(co, "checkout", "--quiet", "-B", "main", "origin/main")
         return co, heads.split()[0]
-    _git(co, "checkout", "--quiet", "--orphan", "main", check=False)
+    # No main on the remote (a new repo, or a first push that failed): start main unborn, dropping
+    # any local commit that never reached the remote, so the export is compared against nothing.
+    _git(co, "symbolic-ref", "HEAD", "refs/heads/main")
+    _git(co, "update-ref", "-d", "refs/heads/main", check=False)
     return co, None
 
 

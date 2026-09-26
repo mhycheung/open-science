@@ -94,7 +94,8 @@ def test_leak_in_built_site_fails(repo, tmp_path):
     assert any("leak in built site" in p and "absolute-path" in p for p in problems)
 
 
-def test_workflow_installs_opsci_at_the_recorded_commit(tmp_path):
+def test_workflow_installs_opsci_at_the_recorded_commit(tmp_path, monkeypatch):
+    monkeypatch.setattr(site, "running_commit", lambda: None)
     (tmp_path / "config").mkdir()
     fw = tmp_path / "config/framework.yaml"
     fw.write_text('framework_repo: "https://github.com/someone/open-science"\ncopied_at_commit: "abc1234"\n')
@@ -107,3 +108,14 @@ def test_workflow_installs_opsci_at_the_recorded_commit(tmp_path):
     fw.write_text('framework_repo: "local copy"\ncopied_at_commit: "abc1234"\n')
     run = [s.get("run", "") for s in yaml.safe_load(site.workflow(tmp_path))["jobs"]["build"]["steps"]]
     assert any("exit 1" in r for r in run)
+
+
+def test_workflow_installs_over_https_at_the_running_commit(tmp_path, monkeypatch):
+    # an ssh remote is not a pip URL, and CI has no key: the public framework repo is fetched over https,
+    # at the commit of the opsci that ran the publish, not the older commit the template was copied from
+    monkeypatch.setattr(site, "running_commit", lambda: "f" * 40)
+    (tmp_path / "config").mkdir()
+    for repo in ("git@github.com:someone/open-science.git", "ssh://git@github.com/someone/open-science.git"):
+        (tmp_path / "config/framework.yaml").write_text(f'framework_repo: "{repo}"\ncopied_at_commit: "abc1234"\n')
+        run = " ".join(s.get("run", "") for s in yaml.safe_load(site.workflow(tmp_path))["jobs"]["build"]["steps"])
+        assert f'"opsci @ git+https://github.com/someone/open-science.git@{"f" * 40}#subdirectory=tools"' in run

@@ -261,6 +261,18 @@ def test_push_records_and_status_passes_on_identical_pair(proj, public):
     assert publish.status(proj, str(public)) == ([], [])
 
 
+def test_push_retries_after_a_failed_first_push(proj, public):
+    # the first push commits in the local checkout, then the remote rejects it; the retry must still push
+    hook = public / "hooks/pre-receive"
+    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.chmod(0o755)
+    with pytest.raises(publish.PublishError, match="push"):
+        publish_now(proj, public)
+    hook.unlink()
+    private, pub = publish_now(proj, public)
+    assert git(public, "rev-parse", "main").stdout.strip() == pub
+
+
 def test_push_refuses_unreviewed_export(proj, public):
     n, _, ex = publish.check(proj)
     with open(proj / "tasks/t01-fit/context.md", "a") as f:

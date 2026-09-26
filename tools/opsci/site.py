@@ -8,6 +8,7 @@ strict mode, so a broken link fails it, and the built site must pass the leak sc
 
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -292,12 +293,45 @@ def _framework(root: Path) -> tuple[str | None, str | None]:
     return cfg.get("framework_repo"), cfg.get("copied_at_commit")
 
 
+def _https(repo: str) -> str | None:
+    """The https clone URL of a git remote (`git@host:a/b.git` and `ssh://git@host/a/b.git` ->
+    `https://host/a/b.git`), or None. The framework repo is public, so CI needs no key."""
+    m = (re.fullmatch(r"git@([^:/]+):(.+?)/?", repo)
+         or re.fullmatch(r"ssh://(?:[^@/]+@)?([^:/]+)(?::\d+)?/(.+?)/?", repo)
+         or re.fullmatch(r"https://(?:[^@/]+@)?([^/]+)/(.+?)/?", repo))
+    return f"https://{m.group(1)}/{m.group(2)}" if m else None
+
+
+def running_commit() -> str | None:
+    """The framework commit of the opsci that is running: the commit pip recorded for a git
+    install, or HEAD of the framework checkout it runs from when tools/ is clean. None if unknown."""
+    try:
+        from importlib.metadata import distribution
+        commit = json.loads(distribution("opsci").read_text("direct_url.json") or "{}") \
+            .get("vcs_info", {}).get("commit_id")
+        if commit:
+            return commit
+    except Exception:
+        pass
+    tools = Path(__file__).resolve().parents[1]
+
+    def git(*args: str) -> str | None:
+        r = subprocess.run(["git", "-C", str(tools), *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else None
+    if (tools / "pyproject.toml").is_file() and git("status", "--porcelain", "--untracked-files=no", "--", ".") == "":
+        return git("rev-parse", "HEAD")
+    return None
+
+
 def workflow(root: Path) -> str:
     """The GitHub Actions workflow that builds the site on the public repo and deploys it to Pages.
-    It installs opsci from the framework repo at the commit in config/framework.yaml."""
-    repo, commit = _framework(root)
-    if repo and re.match(r"^(https://|git@|ssh://)", str(repo)) and commit and re.fullmatch(r"[0-9a-f]{7,40}", str(commit)):
-        install = f'pip install "opsci @ git+{repo}@{commit}#subdirectory=tools" {MKDOCS_PINS}'
+    It installs opsci over https from the framework repo in config/framework.yaml, at the commit of
+    the opsci running this publish (else at the recorded copied_at_commit)."""
+    repo, copied = _framework(root)
+    url = _https(str(repo)) if repo else None
+    commit = running_commit() or copied
+    if url and commit and re.fullmatch(r"[0-9a-f]{7,40}", str(commit)):
+        install = f'pip install "opsci @ git+{url}@{commit}#subdirectory=tools" {MKDOCS_PINS}'
     else:
         install = ('echo "config/framework.yaml names no public framework repo and commit; '
                    'opsci cannot be installed" && exit 1')
