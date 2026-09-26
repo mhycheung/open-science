@@ -48,7 +48,7 @@ PREAMBLE = r"""\usepackage[T1]{fontenc}\usepackage[utf8]{inputenc}\usepackage{lm
 \usetikzlibrary{arrows.meta}
 \definecolor{citeS}{HTML}{6d28d9}\definecolor{riskS}{HTML}{dc2626}
 \definecolor{brainF}{HTML}{fff7ed}\definecolor{brainS}{HTML}{c2410c}
-\definecolor{publicB}{HTML}{15803d}\definecolor{softB}{HTML}{b45309}\definecolor{hardB}{HTML}{b91c1c}
+\definecolor{publicB}{HTML}{15803d}\definecolor{softB}{HTML}{b45309}\definecolor{hardB}{HTML}{7f1d1d}
 \newcommand\badge[2]{\tikz[baseline=(u.base)]\node[fill=#1,text=white,rounded corners=1.5pt,
   inner sep=1.3pt](u){\scriptsize\textsc{#2}};}"""
 
