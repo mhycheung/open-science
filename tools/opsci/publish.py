@@ -44,7 +44,7 @@ STATUS_EXEMPT = ("README.md", "**/README.md", "**/*.caption.md", "AGENTS.md", "C
                  "verifications/*/log.md", "verifications/*/map.md", "verifications/*/subcontext/**",
                  "brainstorm/verifications/*/log.md", "brainstorm/verifications/*/map.md",
                  "brainstorm/verifications/*/subcontext/**")
-MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo"}
+MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo", "site_banner"}
 POLICY_KEYS = {"default_privacy", "collaborators_agreed"}
 PRIVACY_TIERS = nodes.PRIVACY_TIERS
 # How unpublished nodes appear in the published map: groups that replace several nodes with
@@ -103,6 +103,7 @@ class Manifest:
     collaborators_agreed: bool
     public_repo: str | None
     hard_private: list[str] = field(default_factory=list)
+    site_banner: str = ""  # the project site's banner; "" for none
 
 
 @dataclass
@@ -181,7 +182,14 @@ def load_manifest(root: Path) -> Manifest:
         if val is not None and not (isinstance(val, list) and all(isinstance(v, str) for v in val)):
             raise PublishError(f"{MANIFEST}: {key} must be a list of paths or globs")
         lists[key] = val
+    from .site import DEFAULT_BANNER
+    banner = m.get("site_banner", DEFAULT_BANNER)
+    if banner is False or banner is None:
+        banner = ""
+    if not isinstance(banner, str):
+        raise PublishError(f"{MANIFEST}: site_banner must be a text, or \"\" (or false) for no banner")
     return Manifest(
+        site_banner=banner.strip(),
         include=include,
         never=lists["never"] or [],
         status_exempt=STATUS_EXEMPT + tuple(lists["status_exempt"] or ()),
@@ -1107,13 +1115,14 @@ def write_report(root: Path, ex: Export, probs: list[Problem], info: dict, diff:
     return path
 
 
-def check_site(ex: Export, work: Path) -> tuple[list[Problem], list[str]]:
+def check_site(root: Path, ex: Export, work: Path) -> tuple[list[Problem], list[str]]:
     """Build the site of the export as the public repo's workflow will, with its leak scan.
     (problems, notes). Without mkdocs the build is skipped with a note."""
     from . import site
     if importlib.util.find_spec("mkdocs") is None:
         return [], [f"the site was not built: mkdocs is not installed (pip install {site.MKDOCS_PINS})"]
-    return [Problem("site", "site", m) for m in site.build(ex.tree, work / "site")], []
+    man = load_manifest(ex.snapshot) if (ex.snapshot / MANIFEST).is_file() else load_manifest(root)
+    return [Problem("site", "site", m) for m in site.build(ex.tree, work / "site", banner=man.site_banner)], []
 
 
 def check(root: Path, commit: str = "HEAD", build_site: bool = True) -> tuple[int, Path, Export]:
@@ -1123,7 +1132,7 @@ def check(root: Path, commit: str = "HEAD", build_site: bool = True) -> tuple[in
     ex = export(root, work / "new", commit)
     probs, info = run_checks(root, ex)
     if build_site:
-        sp, snotes = check_site(ex, work)
+        sp, snotes = check_site(root, ex, work)
         probs += sp
         info["notes"] += snotes
     diff = review_diff(root, ex, work)
@@ -1245,7 +1254,7 @@ def push(root: Path, export_id_expected: str, public_repo: str | None = None, co
     from . import site  # the site workflow is generated at every publish
     wf = co / SITE_WORKFLOW
     wf.parent.mkdir(parents=True, exist_ok=True)
-    wf.write_text(site.workflow(root), encoding="utf-8")
+    wf.write_text(site.workflow(root, load_manifest(root).site_banner), encoding="utf-8")
     _git(co, "add", "-A")
     ident = _identity(root)
     msg = message or f"Publish {sha[:12]}"

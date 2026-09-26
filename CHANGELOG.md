@@ -11,6 +11,20 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- The project site shows a banner at the top of every page that stays in view as the page
+  scrolls. By default it warns that the project is ongoing, unpublished and preliminary;
+  `site_banner:` in `publish/manifest.yaml` changes the text, and `""` removes it. The
+  manifest is not exported, so `opsci publish push` writes the text into the site workflow.
+  `opsci site build` and `site preview` take `--banner`. The site also typesets LaTeX with
+  MathJax (`pymdownx.arithmatex`): inline `$...$` and displayed `$$...$$`. The template's
+  `AGENTS.md` says to write `\lvert x \rvert` in table cells, as a bare `|` ends the cell.
+  No layout change: without `site_banner` a project gets the default banner.
+- The site workflow installs `opsci` over https (a `git@` or `ssh://` framework repo is
+  converted) at the commit of the `opsci` that ran the publish, not `copied_at_commit`. A
+  push retried after the remote rejected the first one no longer reports "nothing to
+  publish". In the built site the leak scan unescapes HTML entities before matching, and on
+  a GitHub Actions runner it no longer treats the runner's user and host names as site
+  identifiers. `opsci publish check` builds the site of the export (the new `site` check).
 - The README line naming the framework is opt-in. The new-project and migrate-project
   skills show the user the line and add it only with their consent (`opsci template
   instantiate --framework-line`, a new `framework-line` component). It now links the

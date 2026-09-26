@@ -120,6 +120,11 @@ opsci site preview
 It builds the site of the export of `HEAD` into `_site/` (gitignored; `--out <dir>` to
 change it), in strict mode, and leak-scans the built site.
 
+Every page carries a banner, by default a warning that the project is ongoing, unpublished
+and preliminary. `site_banner:` in `publish/manifest.yaml` changes the text, and `""` removes
+it; change it only when the user asks (for example once the work is published). The push
+writes the text into the site workflow, so the change reaches the site at the next publish.
+
 ## Rules
 
 - Never push to the public remote with `git push`; only `opsci publish push` does it.

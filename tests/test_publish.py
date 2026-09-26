@@ -446,3 +446,16 @@ def test_template_checks_apply_once_the_repo_is_a_template_project(tmp_path):
     n, report, _ = publish.check(root, build_site=False)
     text = report.read_text()
     assert n > 0 and "[map]" in text and "[status] notes/notes.md" in text
+
+
+def test_manifest_site_banner(proj):
+    from opsci import site
+    m = proj / "publish/manifest.yaml"
+    assert publish.load_manifest(proj).site_banner == site.DEFAULT_BANNER
+    base = m.read_text()
+    for val, want in (('"Published in PRD."', "Published in PRD."), ('""', ""), ("false", "")):
+        m.write_text(base + f"site_banner: {val}\n")
+        assert publish.load_manifest(proj).site_banner == want
+    m.write_text(base + "site_banner: [a]\n")
+    with pytest.raises(publish.PublishError, match="site_banner"):
+        publish.load_manifest(proj)

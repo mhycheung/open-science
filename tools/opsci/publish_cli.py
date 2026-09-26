@@ -73,7 +73,7 @@ def cmd_pull_public(args) -> int:
 
 
 def cmd_site_build(args) -> int:
-    problems = S.build(Path(args.src), Path(args.out))
+    problems = S.build(Path(args.src), Path(args.out), banner=args.banner)
     for p in problems:
         print(f"error: {p}", file=sys.stderr)
     if not problems:
@@ -88,6 +88,8 @@ def cmd_site_preview(args) -> int:
     except P.PublishError as exc:
         return _fail(exc)
     args.src = ex.tree
+    if args.banner is None:
+        args.banner = P.load_manifest(ex.snapshot).site_banner
     return cmd_site_build(args)
 
 
@@ -127,9 +129,12 @@ def add_parser(sub) -> None:
     b = st.add_parser("build", help="build the site of a public repo checkout with MkDocs")
     b.add_argument("src", nargs="?", default=".")
     b.add_argument("--out", default="_site")
+    b.add_argument("--banner", default=S.DEFAULT_BANNER,
+                   help='text of the banner at the top of every page; "" for none (default: the preliminary-work warning)')
     b.set_defaults(func=cmd_site_build)
     v = st.add_parser("preview", help="build the site of this project's current export, before publishing")
     v.add_argument("root", nargs="?", default=".")
     v.add_argument("--commit", default="HEAD")
     v.add_argument("--out", default="_site")
+    v.add_argument("--banner", help="banner text (default: site_banner in publish/manifest.yaml)")
     v.set_defaults(func=cmd_site_preview)

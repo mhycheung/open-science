@@ -35,6 +35,8 @@ def make_repo(r):
          "---\nid: r01-fit\ntitle: Fit result\ntype: result\nstatus: done\nprivacy: public\nsummary: s\n"
          "verification: human-verified\nevidence: tasks/t01-fit/provenance.yaml\n---\n# Fit result\n")
     page(r / "notes/extra.md", "# An extra page\n")
+    page(r / "notes/math.md", "# Math\n\nInline $\\iota_Q(0) - 90^\\circ$ and $M = 10\\,\\rm M_\\odot$.\n\n"
+         "$$\n\\langle h \\rangle = a_1 * b_2\n$$\n\n| q | value |\n|---|---|\n| $\\iota$ | $\\lvert\\cos\\iota\\rvert < 0.1$ |\n")
     return r
 
 
@@ -119,3 +121,41 @@ def test_workflow_installs_over_https_at_the_running_commit(tmp_path, monkeypatc
         (tmp_path / "config/framework.yaml").write_text(f'framework_repo: "{repo}"\ncopied_at_commit: "abc1234"\n')
         run = " ".join(s.get("run", "") for s in yaml.safe_load(site.workflow(tmp_path))["jobs"]["build"]["steps"])
         assert f'"opsci @ git+https://github.com/someone/open-science.git@{"f" * 40}#subdirectory=tools"' in run
+
+
+def test_math_is_typeset_by_mathjax(built):
+    problems, out = built
+    assert problems == []
+    html = (out / "notes/math.html").read_text()
+    # arithmatex keeps the TeX whole (no emphasis from `_` or `*`), in spans MathJax typesets
+    assert '<span class="arithmatex">\\(\\iota_Q(0) - 90^\\circ\\)</span>' in html
+    assert '<div class="arithmatex">\\[' in html and "a_1 * b_2" in html
+    assert re.search(r'<td><span class="arithmatex">\\\(\\lvert\\cos\\iota\\rvert &lt; 0.1\\\)</span></td>', html)
+    assert f'<script src="{site.MATHJAX}"' in html and 'processHtmlClass:"arithmatex"' in html
+
+
+def test_banner_on_every_page_by_default(built):
+    problems, out = built
+    assert problems == []
+    for f in ("index.html", "notes/math.html", "results/fit.html", "tasks/t01-fit/context.html"):
+        html = (out / f).read_text()
+        assert f'<strong class="opsci-banner">{site.DEFAULT_BANNER}</strong>' in html, f
+        assert "position:sticky" in html
+
+
+def test_banner_text_can_be_changed_or_turned_off(repo, tmp_path):
+    assert site.build(repo, tmp_path / "a", banner="Preprint: <arXiv> & friends") == []
+    assert 'class="opsci-banner">Preprint: &lt;arXiv&gt; &amp; friends</strong>' in (tmp_path / "a/index.html").read_text()
+    assert site.build(repo, tmp_path / "b", banner="") == []
+    assert 'class="md-banner"' not in (tmp_path / "b/index.html").read_text()
+
+
+def test_workflow_carries_the_banner(tmp_path, monkeypatch):
+    monkeypatch.setattr(site, "running_commit", lambda: "f" * 40)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/framework.yaml").write_text('framework_repo: "https://github.com/a/b"\n')
+    for banner in (site.DEFAULT_BANNER, 'Say "hi": $x$', ""):
+        step = [s for s in yaml.safe_load(site.workflow(tmp_path, banner))["jobs"]["build"]["steps"]
+                if "site build" in s.get("run", "")][0]
+        assert step["run"] == 'opsci site build . --out _site --banner "$OPSCI_SITE_BANNER"'
+        assert step["env"]["OPSCI_SITE_BANNER"] == banner

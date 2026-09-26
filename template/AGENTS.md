@@ -59,7 +59,8 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
 - **Mathematics in LaTeX.** Write every symbol, equation and formula in LaTeX, in every
   file and message: inline `$\iota_Q(t)$`, displayed `$$ ... $$` on lines of their own. This
   holds for context files, plans, logs, node summaries, captions, reports and messages.
-  Plain names such as `iota_Q` are for code identifiers only.
+  Plain names such as `iota_Q` are for code identifiers only. In a Markdown table cell write
+  `\lvert x \rvert`, not `|x|`: a bare `|` ends the cell.
 - **Plot captions.** Every plot saved in the project has a caption file beside it, with the
   plot's stem and `.caption.md` (`bands_2026-09-25.caption.md`). The caption stands on its
   own: what is plotted; each axis with units; every line, band, marker and colour; the data

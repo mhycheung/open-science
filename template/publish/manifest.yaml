@@ -38,6 +38,9 @@ never:
 #
 # Optional keys:
 # public_repo: <URL or path>  # where `opsci publish push` pushes; or pass --public-repo
+# site_banner: "<text>"       # the banner at the top of every page of the project site. The
+#                             # default warns that the work is ongoing, unpublished and
+#                             # preliminary; "" removes the banner (e.g. once it is published)
 # status_exempt:              # Markdown files that need no `status` header, in addition
 #   - <path or glob>          # to the defaults: README.md, **/README.md, **/*.caption.md,
 #                             # AGENTS.md, CLAUDE.md, PROJECT.md, context.md, log/**,

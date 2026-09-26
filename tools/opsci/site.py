@@ -44,6 +44,38 @@ VERIFICATION = {
     "human-verified": "Human-verified: the user checked this result.",
 }
 MKDOCS_PINS = "mkdocs==1.6.1 mkdocs-material==9.7.7"
+# Shown at the top of every page unless `site_banner:` in publish/manifest.yaml replaces it
+# (or turns it off with an empty string).
+DEFAULT_BANNER = ("Warning: this is an ongoing, unpublished project. Many results are very "
+                  "preliminary and unverified.")
+MATHJAX = "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"
+# The theme override of every page. MathJax typesets the \( \) and \[ \] spans that
+# pymdownx.arithmatex writes for $...$ and $$...$$ (also after Material's instant navigation).
+# Material's announcement bar holds the banner, kept in view: it sticks to the top of the window,
+# and the header, the sidebars and link targets move down by its height (set by the script, as
+# the text can wrap).
+PAGE_TEMPLATE = """{% extends "base.html" %}
+{% block announce %}{% if config.extra.opsci_banner %}<strong class="opsci-banner">\
+{{ config.extra.opsci_banner | e }}</strong>{% endif %}{% endblock %}
+{% block styles %}{{ super() }}
+<style>
+[data-md-component=announce]{position:sticky;top:0;z-index:5}
+.md-banner{background-color:#b3261e;color:#fff}
+.md-header{top:var(--opsci-banner-h,0px)}
+.md-typeset :target{scroll-margin-top:calc(var(--md-scroll-margin) - var(--md-scroll-offset) + var(--opsci-banner-h,0px)) !important}
+@media screen and (min-width:60em){.md-sidebar--secondary{top:calc(2.4rem + var(--opsci-banner-h,0px)) !important}}
+@media screen and (min-width:76.25em){.md-sidebar--primary{top:calc(2.4rem + var(--opsci-banner-h,0px)) !important}}
+</style>{% endblock %}
+{% block scripts %}{{ super() }}
+<script>(function(){var b=document.querySelector("[data-md-component=announce]");
+function h(){document.documentElement.style.setProperty("--opsci-banner-h",b.offsetHeight+"px")}
+h();window.addEventListener("resize",h)})();
+window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],displayMath:[["\\\\[","\\\\]"]],processEscapes:true,
+processEnvironments:true},options:{ignoreHtmlClass:".*|",processHtmlClass:"arithmatex"}};
+document$.subscribe(function(){if(window.MathJax.typesetPromise){MathJax.startup.output.clearCache();
+MathJax.typesetClear();MathJax.texReset();MathJax.typesetPromise()}});</script>
+<script src="MATHJAX_URL" async></script>{% endblock %}
+""".replace("MATHJAX_URL", MATHJAX)
 
 
 class SiteError(Exception):
@@ -212,15 +244,21 @@ def navigation(docs: Path, pages: list[str], result_pages: set[str]) -> list:
     return nav
 
 
-def config(title: str, nav: list, docs: Path) -> dict:
+def config(title: str, nav: list, docs: Path, banner: str | None = None) -> dict:
+    """The mkdocs.yml. The theme's custom_dir (PAGE_TEMPLATE) is ``docs``' sibling ``overrides``."""
+    theme = {"name": "material", "features": ["navigation.tabs", "navigation.sections",
+                                              "navigation.indexes", "search.highlight"]}
+    theme["custom_dir"] = str(Path(docs).parent / "overrides")
+    extra = {"opsci_banner": banner} if banner else {}
     return {
         "site_name": title,
         "docs_dir": str(docs),
         "use_directory_urls": False,
-        "theme": {"name": "material", "features": ["navigation.tabs", "navigation.sections",
-                                                   "navigation.indexes", "search.highlight"]},
+        "theme": theme,
+        **({"extra": extra} if extra else {}),
         "markdown_extensions": [
             "admonition", "tables", "toc",
+            {"pymdownx.arithmatex": {"generic": True}},
             {"pymdownx.superfences": {"custom_fences": [
                 {"name": "mermaid", "class": "mermaid",
                  "format": "!!python/name:pymdownx.superfences.fence_code_format"}]}},
@@ -239,8 +277,10 @@ def _dump(cfg: dict) -> str:
                         "!!python/name:pymdownx.superfences.fence_code_format")
 
 
-def build(src: Path, out: Path, keep_config: Path | None = None) -> list[str]:
-    """Build the site of public repo ``src`` into ``out``. Returns problems (empty = success)."""
+def build(src: Path, out: Path, keep_config: Path | None = None,
+          banner: str | None = DEFAULT_BANNER) -> list[str]:
+    """Build the site of public repo ``src`` into ``out``, with ``banner`` at the top of every
+    page (None or "" for none). Returns problems (empty = success)."""
     src, out = Path(src).resolve(), Path(out).resolve()
     work = Path(tempfile.mkdtemp(prefix="opsci-site-"))
     docs = work / "docs"
@@ -250,7 +290,10 @@ def build(src: Path, out: Path, keep_config: Path | None = None) -> list[str]:
         return ["no markdown files to build"]
     scan = nodes.scan(src)
     result_pages = {n.path for n in scan.nodes if n.get("type") in RESULT_TYPES and n.path.endswith(".md")}
-    cfg = config(_title(src), navigation(docs, pages, result_pages), docs)
+    banner = (banner or "").strip()
+    (work / "overrides").mkdir()
+    (work / "overrides/main.html").write_text(PAGE_TEMPLATE, encoding="utf-8")
+    cfg = config(_title(src), navigation(docs, pages, result_pages), docs, banner)
     cfg_path = work / "mkdocs.yml"
     cfg_path.write_text(_dump(cfg), encoding="utf-8")
     if keep_config:
@@ -323,10 +366,11 @@ def running_commit() -> str | None:
     return None
 
 
-def workflow(root: Path) -> str:
+def workflow(root: Path, banner: str | None = DEFAULT_BANNER) -> str:
     """The GitHub Actions workflow that builds the site on the public repo and deploys it to Pages.
     It installs opsci over https from the framework repo in config/framework.yaml, at the commit of
-    the opsci running this publish (else at the recorded copied_at_commit)."""
+    the opsci running this publish (else at the recorded copied_at_commit). The banner is written
+    into the workflow, as the manifest that sets it is not published."""
     repo, copied = _framework(root)
     url = _https(str(repo)) if repo else None
     commit = running_commit() or copied
@@ -359,7 +403,9 @@ jobs:
         with:
           python-version: "3.12"
       - run: {install}
-      - run: opsci site build . --out _site
+      - run: opsci site build . --out _site --banner "$OPSCI_SITE_BANNER"
+        env:
+          OPSCI_SITE_BANNER: {json.dumps((banner or "").strip())}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

@@ -216,10 +216,11 @@ manifest does not export.
 
 Every publish writes `.github/workflows/site.yml` into the public repository (edits to it
 are overwritten at the next publish). On each push to `main` the workflow installs `opsci`
-from the framework repository at the commit recorded in `config/framework.yaml`, runs
-`opsci site build . --out _site`, and deploys the result to GitHub Pages. It works only if
-`framework_repo` is a public URL (`https://`, `git@` or `ssh://`) and `copied_at_commit` is a
-commit hash; otherwise the workflow stops with a message.
+over https from the framework repository in `config/framework.yaml` (`git@` and `ssh://`
+addresses are converted), at the commit of the `opsci` that ran the publish (else at
+`copied_at_commit`), runs `opsci site build . --out _site`, and deploys the result to GitHub
+Pages. Without a public framework repository and a commit hash the workflow stops with a
+message.
 
 Once, after the first publish, open the public repository on github.com and set
 **Settings → Pages → Source: GitHub Actions**. Then every publish rebuilds the site.
@@ -234,12 +235,21 @@ checkout with MkDocs and the Material theme:
   level and evidence;
 - a link to a directory points to its `README.md`, or to a generated list of its files;
   `citations/*.bib` is shown on a Bibliography page;
+- a banner at the top of every page, which stays in view as the page scrolls, warns by
+  default: "Warning: this is an ongoing, unpublished project. Many results are very
+  preliminary and unverified." Set `site_banner:` in `publish/manifest.yaml` to change the
+  text, or to `""` to remove it (for example once the work is published). The manifest is
+  not exported: the publish writes the text into the site workflow, so a change shows on
+  the site after the next publish. `opsci site build --banner TEXT` sets it by hand;
+- LaTeX is typeset with MathJax: inline `$...$` and displayed `$$...$$` on lines of their
+  own. In a table cell write `\lvert x \rvert`, not `|x|`: a bare `|` ends the cell;
 - the site title comes from `CITATION.cff`, else the first heading of `README.md`;
 - the build runs in strict mode, so a broken link fails it, and the built site must pass the
   leak scan.
 
 `opsci site preview` builds the site of the export of `HEAD` into `_site/` without a public
-repository or a push, so you can look at it before publishing.
+repository or a push, so you can look at it before publishing. It uses the manifest's
+`site_banner` (or `--banner TEXT`). `opsci publish check` runs the same build, as its `site` check.
 
 ## Before the first publish
 
