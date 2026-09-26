@@ -67,7 +67,9 @@ limit of Notion's single-part upload).
 ## The Feed
 
 Each message is a coloured box: `result` green, `status` blue, `question` orange, `blocker`
-red, `note` gray. The first paragraph of the text is the title. A line under the title names
+red, `note` gray. The first paragraph of the text is the title. Notion's notification and inbox preview show
+only about the first ten words, so the title is written as a short headline with the main
+point first; the agent skill asks for this. A line under the title names
 the kind, the author, the task and the time. Attached plots appear inline with their
 captions. `--mention` @mentions you, so Notion notifies you, also on your phone if you have
 the app. The messages are written by your integration, not by your account; Notion does not

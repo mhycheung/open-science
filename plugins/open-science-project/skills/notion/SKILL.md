@@ -44,8 +44,8 @@ What is in Notion, under the project's page:
 
    | when | command |
    |---|---|
-   | a subtask finished, with its result | `opsci notion post --kind result --task <id> --mention --file <key plot> "<title>\n\n<result with numbers>"` |
-   | a plan to approve, a hold point, a question or decision for the user: anything the turn ends waiting on | `--kind question --task <id> --mention "<id>: <what is needed>\n\n<the choice or the plan in a few lines>"`, after a sync |
+   | a subtask finished, with its result | `opsci notion post --kind result --task <id> --mention --file <key plot> "<headline>\n\n<result with numbers>"` |
+   | a plan to approve, a hold point, a question or decision for the user: anything the turn ends waiting on | `--kind question --task <id> --mention "<headline: what is needed>\n\n<the choice or the plan in a few lines>"`, after a sync |
    | a blocker | `--kind blocker --mention` |
    | a long job submitted or finished | `--kind status` (no `--mention`) |
 
@@ -53,6 +53,16 @@ What is in Notion, under the project's page:
    seen. While work runs, post a `status` at least once per working session. Do not post
    routine steps. Set `--author` to who you are (`main:<task-id>`, `subagent:<name>`). The first
    paragraph is the title; the rest is the body. Both take markdown and `$LaTeX$`.
+
+   **The title is a headline.** The Notion notification and inbox preview show only about the
+   first ten words, so those words must carry the message on their own: the finding, the
+   number, or what the user must do. Write it in plain words, under about ten words, with the
+   main point first. Do not start with the task id, the kind, a greeting, "Update:" or
+   context: `--task`, `--kind` and the time are already on the line under the title. Keep
+   LaTeX, file paths and long identifiers out of the title; they preview badly. Examples:
+   `Inclination peaks at 20 degrees, not edge-on` (result); `Approve plan: rerun with 4
+   modes?` (question); `Blocked: GWOSC strain download fails` (blocker); `PE run 3 submitted,
+   done in ~6 h` (status). Details go in the body.
    `opsci notify` posts to the Feed too (kind `note`, with a mention).
 7. **Messages expire.** Feed messages are removed after 3 days. A result, decision or plot
    that must last goes in the project files first, and so in the task page.

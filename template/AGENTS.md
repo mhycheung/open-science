@@ -197,7 +197,9 @@ This project is mirrored to Notion, where the user reads it (skill
   "text"`: a finished subtask as `result` with its key plot and `--mention`; a question or
   blocker for the user as `question` or `blocker` with `--mention`; a long job submitted
   or finished as `status`. While work runs, post a `status` at least once per session. Do
-  not post routine steps.
+  not post routine steps. The first paragraph is the title, and a notification shows only
+  its first ~10 words: make it a plain headline with the main point first (the finding, or
+  what the user must do), not the task id, kind or context.
 - **Anything that waits on the user goes to the Feed**, unasked: a new plan to approve, a
   hold point, a decision, a question. Sync first, so the task page shows what the message
   is about, then post it as `question` with `--task` and `--mention` before ending the turn.

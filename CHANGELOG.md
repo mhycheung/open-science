@@ -11,6 +11,13 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Feed titles are headlines. Notion's notification preview shows only the first ~10 words
+  of a message, so the notion skill asks for a short title with the main point first (the
+  finding, or what the user must do) and no task id, kind or context, with examples; the
+  Feed table's templates no longer start the title with `<id>:`. The Notion section of
+  `AGENTS.md` (template and `opsci notion enable`) and `docs/notion.md` say the same. No
+  layout change: a project mirrored before this can add the sentence to its `AGENTS.md`
+  "Notion" section by hand.
 - Anything that waits on the user goes to the Feed without being asked: a new plan to
   approve, a hold point, a decision, a question. The agent syncs, then posts a `question`
   with `--task` and `--mention`. New bullet in the Notion section of `AGENTS.md` (template
