@@ -22,7 +22,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from . import leakscan, mapbuild, nodes, results, secretscan
+from . import leakscan, mapbuild, nodes, pdf, results, secretscan
 
 MANIFEST = "publish/manifest.yaml"
 LAST_PUBLISHED = "publish/LAST_PUBLISHED"
@@ -603,10 +603,17 @@ def check_copyright(root: Path, ex: Export) -> tuple[list[Problem], list[str]]:
     """(problems, notes). Refuses publisher formats, long quotes, text shared with lit_cache."""
     probs, notes = [], []
     papers = {n.path: n for n in ex.nodes if n.get("type") == "paper"}
+    figures = 0
     for f in ex.files:
         if f.lower().endswith(PUBLISHER_SUFFIXES) and not mapbuild._covered(f, "paper", papers):
+            # A one-page PDF is a figure, not someone else's text.
+            if f.lower().endswith(".pdf") and pdf.page_count((ex.tree / f).read_bytes()) == 1:
+                figures += 1
+                continue
             probs.append(Problem("copyright", f, "a PDF/ebook that is not covered by a `type: paper` node; "
                                  "the project's own papers need a paper node, other people's texts stay in lit_cache/"))
+    if figures:
+        notes.append(f"{figures} one-page PDF(s) outside paper nodes treated as figures")
     for f in ex.files:
         if not f.endswith(".md"):
             continue

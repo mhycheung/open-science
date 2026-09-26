@@ -11,6 +11,12 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Figure PDFs no longer fail the publish check. The leak scan reads a PDF's dictionaries and
+  strings (with object and metadata streams decompressed) instead of its raw bytes: glyph
+  lists such as `/CharSet` and compressed page content had produced false `absolute-path`
+  hits. Every pattern, email included, now applies to those strings. The copyright check
+  treats a one-page PDF as a figure and lists how many it accepted in the report notes; a
+  longer PDF still needs a `type: paper` node. New module `tools/opsci/pdf.py`.
 - Feed titles are headlines. Notion's notification preview shows only the first ~10 words
   of a message, so the notion skill asks for a short title with the main point first (the
   finding, or what the user must do) and no task id, kind or context, with examples; the

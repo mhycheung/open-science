@@ -53,7 +53,7 @@ the map and the node headers.
 | `citation` | a citation key (`[@key]` in markdown, `\cite{key}` in LaTeX) that is not in an exported `.bib` file |
 | `map` | node header errors, and a `map/graph.md` or `map/dead_ends.md` that is out of date |
 | `status` | an exported markdown file with no `status:` in a front-matter header, or a status that is not allowed, unless it is in `status_exempt` |
-| `copyright` | a PDF, EPUB or DjVu file not covered by a `type: paper` node; a quotation of more than 150 words; a run of 40 or more words shared with a file in `lit_cache/` |
+| `copyright` | a PDF of more than one page, or an EPUB or DjVu file, not covered by a `type: paper` node (a one-page PDF counts as a figure); a quotation of more than 150 words; a run of 40 or more words shared with a file in `lit_cache/` |
 | `evidence` | a `verified` or `human-verified` node whose `evidence` file is not exported |
 | `human-verified` | a node whose `verification: human-verified` line was last changed in a commit made by an agent (a commit message with a `Claude-Session:`, `Agent:` or Claude `Co-Authored-By:` line) |
 | `references` | a node header whose `depends_on`, `supersedes` or `related` names a hard-private node (an edge to a soft-private node is allowed; the public map shows it); a link in an exported markdown or HTML file to a file or directory of the commit that is not exported. For a soft-private target the fix is a plain mention in backticks instead of the link |

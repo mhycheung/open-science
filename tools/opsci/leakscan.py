@@ -1,7 +1,8 @@
 """The leak scan: refuse to publish anything that carries internal information.
 
 Generalised from a working project's site leak gate. It scans every file of a tree: the
-file's path, its bytes, and the text chunks of PNG images. Any hit refuses the publish,
+file's path, its bytes, the text chunks of PNG images, and the dictionaries and strings of
+PDFs. Any hit refuses the publish,
 names the file and prints the matching line.
 
 There is no override flag. If a legitimate string matches, change the string, not the scan.
@@ -26,6 +27,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
+
+from . import pdf
 
 # An absolute POSIX path: '/' + at least two path segments, not part of a URL or a relative
 # path. '~/...' is allowed (it names a per-user location without naming the user).
@@ -242,6 +245,10 @@ def scan_file(path: Path, rel: str, patterns) -> list[Hit]:
     if path.is_symlink() or not path.is_file():
         return hits
     data = path.read_bytes()
+    if pdf.is_pdf(data):
+        # Dictionaries and strings only: compressed streams are random bytes, and runs of PDF
+        # names look like paths. With those gone, every pattern applies.
+        return hits + scan_text(pdf.scan_text(data), rel, "content", patterns)
     try:
         text = data.decode("utf-8")
         binary = False

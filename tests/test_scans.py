@@ -131,6 +131,38 @@ def test_binary_data_skips_chance_patterns(tmp_path, site):
     assert names == {"absolute-path", "site-identifier (user name)"}
 
 
+def _pdf(info: bytes = b"(fig)", objstm: bytes = b"<< >>") -> bytes:
+    """A one-page PDF with the syntax that looks like a path: glyph-name runs in /CharSet and
+    /Differences, and a compressed stream whose bytes happen to contain '/ab/cd'."""
+    noise = zlib.compress(b"\x00" * 64)[:2] + b"\x93/t/5q\xa9/l\xce" + b"\x00" * 8
+    def stream(head: bytes, body: bytes) -> bytes:
+        return head + b" /Length " + str(len(body)).encode() + b" >>\nstream\n" + body + b"\nendstream"
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R >>",
+            b"<< /FontName /CMR10 /CharSet (/M/N/h/i/period/r/slash/t) >>",
+            b"<< /Differences[0/Gamma/Delta/Theta] >>",
+            stream(b"<<", noise), stream(b"<< /Type /ObjStm /Filter /FlateDecode", zlib.compress(objstm)),
+            b"<< /Title " + info + b" >>"]
+    return (b"%PDF-1.5\n" + b"".join(b"%d 0 obj\n" % i + o + b"\nendobj\n" for i, o in enumerate(objs, 1))
+            + b"%%EOF\n")
+
+
+def test_pdf_syntax_is_not_a_leak(tmp_path, site):
+    from opsci import pdf
+    assert pdf.page_count(_pdf()) == 1
+    (tmp_path / "fig.pdf").write_bytes(_pdf())
+    assert leakscan.scan_tree(tmp_path, leakscan.patterns_for(None)) == []
+
+
+@pytest.mark.parametrize("where", ["info", "objstm"])
+def test_pdf_strings_are_scanned(tmp_path, site, where):
+    leak = b"(/scratch/grp/fig.py by real.person@univ.edu)"
+    data = _pdf(info=leak) if where == "info" else _pdf(objstm=b"<< /Title " + leak + b" >>")
+    (tmp_path / "fig.pdf").write_bytes(data)
+    names = {h.pattern for h in leakscan.scan_tree(tmp_path, leakscan.patterns_for(None))}
+    assert names == {"absolute-path", "email"}
+
+
 def test_planted_marker_only_in_tests(tmp_path, site):
     (tmp_path / "tests").mkdir()
     (tmp_path / "tests/a.py").write_text(f"# {PLANTED_MARKER}\nx = '/scratch/a/b'\n")

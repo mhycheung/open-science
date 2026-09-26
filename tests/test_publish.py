@@ -150,6 +150,14 @@ def test_copyright_checks(proj):
     (proj / "paper/other.pdf").write_bytes(b"%PDF-1.4 someone else's paper")
     commit(proj)
     assert checks_of(proj) == ["copyright"]
+    # a one-page PDF is a figure
+    (proj / "paper/other.pdf").write_bytes(b"%PDF-1.4\n1 0 obj\n<< /Type /Page >>\nendobj\n")
+    commit(proj)
+    assert problems(proj)[0] == []
+    (proj / "paper/other.pdf").write_bytes(b"%PDF-1.4\n1 0 obj\n<< /Type /Page >>\nendobj\n"
+                                           b"2 0 obj\n<< /Type /Page >>\nendobj\n")
+    commit(proj)
+    assert checks_of(proj) == ["copyright"]
     # the project's own paper, covered by a paper node, may be published
     (proj / "paper/node.yaml").write_text("id: p01\ntitle: Our paper\ntype: paper\nstatus: active\n"
                                           "privacy: public\nsummary: Our paper.\n")
