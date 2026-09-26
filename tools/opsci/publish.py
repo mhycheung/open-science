@@ -275,16 +275,25 @@ def _exclusion(f: str, man: Manifest, tier) -> str | None:
     return None
 
 
-def unpublished_nodes(root: Path, node_list: list) -> set[str]:
-    """The ids of the nodes in ``node_list`` whose files the export leaves out (as ``select``
-    decides), for the "not published" labels of the graph images. Empty without a manifest."""
+def privacy_badges(root: Path, node_list: list) -> dict[str, str]:
+    """Node id -> ``public``, ``soft private`` or ``hard private`` for the nodes in
+    ``node_list``, the labels of the committed graph images. Hard private: the export's map
+    leaves the node out (``_map_nodes``); soft private: the map names it but the export
+    leaves out its files (as ``select`` decides); public: its files are exported. Empty
+    without a manifest."""
     try:
         man = load_manifest(root)
     except PublishError:
-        return set()
+        return {}
     tier = _tier_of(Path(root), man, {n.path: n for n in all_nodes(Path(root))})
-    return {n.id for n in node_list
-            if any(_matches(n.path, a) for a in ALWAYS_NEVER) or _exclusion(n.path, man, tier) is not None}
+
+    def badge(n):
+        if tier(n.path)[0] == "hard-private" or n.get("privacy") == "hard-private":
+            return "hard private"
+        if any(_matches(n.path, a) for a in ALWAYS_NEVER) or _exclusion(n.path, man, tier) is not None:
+            return "soft private"
+        return "public"
+    return {n.id: badge(n) for n in node_list}
 
 
 def select(snap: Path, man: Manifest) -> tuple[list[str], dict[str, str], list, set]:
@@ -437,9 +446,10 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
             if rel in files:
                 (tree / rel).write_text(text, encoding="utf-8")
                 rebuilt.append(rel)
-        # The committed graph images show every node: each exported one is redrawn, and one
-        # that cannot be redrawn stops the publish.
-        unexported = {n.id for n in map_nodes if n.path not in set(files)}
+        # The committed graph images show every node, labelled by privacy: each exported one
+        # is redrawn without the hard-private nodes, the unexported ones labelled "not
+        # published", and one that cannot be redrawn stops the publish.
+        unexported = {n.id: "not published" for n in map_nodes if n.path not in set(files)}
         for base, d in mapbuild.drawings(map_nodes, lambda sub: f"{sub}/map/graph.md" in files,
                                          results.read_bib(snap), unexported).items():
             if f"{base}.svg" not in files and f"{base}.png" not in files:

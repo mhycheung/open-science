@@ -35,6 +35,12 @@ PAD = 5.0             # space between a card's border and its text
 BAR = 3.0             # width of the status bar on a card's left edge
 TOOLS = ("dot", "pdflatex", "pdftocairo", "pdftoppm")
 SVG_MARK = "<!-- opsci-graph {} -->"
+BADGES = {  # the label on a card or box -> its colour, and the text after it in the legend
+    "public": ("publicB", "files published"),
+    "soft private": ("softB", "named in the public map, files not published"),
+    "hard private": ("hardB", "left out of the public map"),
+    "not published": ("black!65", "named here; its files are not published"),
+}
 _SOURCE = Path(__file__).read_bytes()
 
 PREAMBLE = r"""\usepackage[T1]{fontenc}\usepackage[utf8]{inputenc}\usepackage{lmodern}
@@ -42,8 +48,9 @@ PREAMBLE = r"""\usepackage[T1]{fontenc}\usepackage[utf8]{inputenc}\usepackage{lm
 \usetikzlibrary{arrows.meta}
 \definecolor{citeS}{HTML}{6d28d9}\definecolor{riskS}{HTML}{dc2626}
 \definecolor{brainF}{HTML}{fff7ed}\definecolor{brainS}{HTML}{c2410c}
-\newcommand\unpub{\tikz[baseline=(u.base)]\node[fill=black!65,text=white,rounded corners=1.5pt,
-  inner sep=1.3pt](u){\scriptsize\textsc{not published}};}"""
+\definecolor{publicB}{HTML}{15803d}\definecolor{softB}{HTML}{b45309}\definecolor{hardB}{HTML}{b91c1c}
+\newcommand\badge[2]{\tikz[baseline=(u.base)]\node[fill=#1,text=white,rounded corners=1.5pt,
+  inner sep=1.3pt](u){\scriptsize\textsc{#2}};}"""
 
 
 class DrawError(Exception):
@@ -56,10 +63,10 @@ def drawing(cards: list[dict], boxes: list[dict], edges: list[tuple], legend: st
     """A drawing. ``cards``: dicts with ``id``, ``title``, ``meta`` (the line under the
     title), ``status``, and optionally ``box`` (a box id), ``verification`` (drawn with a
     double border), ``at_risk`` (a thick red border), ``tags`` (citation keys),
-    ``unpublished`` (a "not published" label) and ``rank``: ``premise`` (an assumption or a
+    ``badge`` (a label on the card: a key of ``BADGES``) and ``rank``: ``premise`` (an assumption or a
     starting point, drawn quieter) or ``milestone`` (drawn stronger). ``boxes``: dicts with ``id``, ``kicker`` (the
     first line of the heading), ``title``, ``style`` (``task`` or ``brainstorm``) and
-    optionally ``unpublished``. ``edges``: ``(from, to, kind)``, with kind
+    optionally ``badge``. ``edges``: ``(from, to, kind)``, with kind
     ``dep`` (an arrow), ``superseded`` (old to new), ``verified`` (checked node to the
     verification task) or ``related`` (a dotted line); an end may be a box id. ``legend``:
     the name of a ``dep`` arrow."""
@@ -151,8 +158,8 @@ def _box_tex(b: dict, plain: bool = False) -> str:
     title = _plain(b.get("title")) if plain else tex_text(b.get("title"))
     colour = r"\color{brainS}\bfseries" if b.get("style") == "brainstorm" else ""
     s = r"{\small" + colour + r"\textsc{" + tex_text(b["kicker"]) + "}}"
-    if b.get("unpublished"):
-        s += r"\enspace\unpub"
+    if b.get("badge"):
+        s += r"\enspace" + _badge(b["badge"])
     if title:
         s += r"\\{\footnotesize\itshape " + (r"\color{brainS}" if colour else "") + title + "}"
     return r"\raggedright " + s
@@ -243,7 +250,7 @@ def layout(work: Path, d: dict, dims: dict) -> dict:
             lines.append(f"  {bid[b['id']]}_anchor [shape=point, width=0.01];")
         lines.append("}")
     for i, c in enumerate(d["cards"]):
-        h = dims[f"c{i}"][1] + 2 * PAD + 2 + (6 if c.get("unpublished") else 0)  # room for the label
+        h = dims[f"c{i}"][1] + 2 * PAD + 2 + (6 if c.get("badge") else 0)  # room for the label
         lines.append(f"c{i} [width={card_w / 72:.4f}, height={h / 72:.4f}];")
 
     def end(x):  # a card, or a box: an edge to a box goes to one of its cards, cut at the box
@@ -296,6 +303,10 @@ def layout(work: Path, d: dict, dims: dict) -> dict:
 def _colour_defs() -> list[str]:
     return [r"\definecolor{%sF}{HTML}{%s}\definecolor{%sS}{HTML}{%s}" % (s, f, s, st)
             for s, (f, st) in STATUS_COLOURS.items()]
+
+
+def _badge(k: str) -> str:
+    return r"\badge{%s}{%s}" % (BADGES[k][0], k)
 
 
 def _status(c: dict) -> str:
@@ -359,9 +370,10 @@ def tikz(d: dict, dims: dict, tex: dict, lay: dict) -> str:
         L.append(r"\fill[%s] (%.1f,%.1f) rectangle (%.1f,%.1f);"
                  % (bar, x - w / 2 + 0.9, y - h / 2 + 0.9, x - w / 2 + 0.9 + BAR, y + h / 2 - 0.9))
         L.append(r"\node[anchor=west,inner sep=0pt] at (%.1f,%.1f) {\parbox{%.1fpt}{%s}};"
-                 % (x - w / 2 + PAD + BAR + 2, y - (3 if c.get("unpublished") else 0), CARD_TEXT_PT, tex[f"c{i}"]))
-        if c.get("unpublished"):  # on the top border, at the right
-            L.append(r"\node[anchor=east,inner sep=0pt] at (%.1f,%.1f) {\unpub};" % (x + w / 2 - 6, y + h / 2))
+                 % (x - w / 2 + PAD + BAR + 2, y - (3 if c.get("badge") else 0), CARD_TEXT_PT, tex[f"c{i}"]))
+        if c.get("badge"):  # on the top border, at the right
+            L.append(r"\node[anchor=east,inner sep=0pt] at (%.1f,%.1f) {%s};" % (x + w / 2 - 6, y + h / 2,
+                                                                                 _badge(c["badge"])))
     L.append(_legend(d, lay))
     L += [r"\end{tikzpicture}", r"\end{document}"]
     return "\n".join(L)
@@ -394,8 +406,8 @@ def _legend(d: dict, lay: dict) -> str:
     if any(c.get("at_risk") for c in d["cards"]):
         items.append(r"\tikz[baseline=-0.5ex]{\draw[riskS,line width=1.8pt,rounded corners=1.5pt]"
                      r" (0,-4pt) rectangle (12pt,4pt);}~may no longer hold")
-    if any(c.get("unpublished") for c in d["cards"]) or any(b.get("unpublished") for b in d["boxes"]):
-        items.append(r"\unpub~named here; its files are not published")
+    used = {x.get("badge") for x in d["cards"] + d["boxes"]}
+    items += [_badge(k) + "~" + BADGES[k][1] for k in BADGES if k in used]
     if any(b.get("style") == "brainstorm" for b in d["boxes"]):
         items.append(r"\tikz[baseline=-0.5ex]{\draw[brainS,dash pattern=on 3pt off 2pt,line width=0.9pt,"
                      r"fill=brainF,rounded corners=1.5pt] (0,-4pt) rectangle (12pt,4pt);}~brainstorm: ideas, not yet project work")

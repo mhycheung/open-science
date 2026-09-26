@@ -101,8 +101,11 @@ LaTeX (a title whose LaTeX does not compile is set as plain text). Every arrow p
 forward: from a node to what depends on it ("used by"), from a node to the node that
 superseded it ("superseded by"), and from a node to the verification task that checked it
 ("verified by"). Task boxes have a solid grey border, brainstorm boxes a dashed orange one.
-A node that the export leaves out (its task or header is not public, or the manifest does
-not include it) is labelled "not published". In the claims graph, assumptions and the nodes
+The committed images, which the Notion mirror shows, label every node and task box by
+privacy: "public" (its files are exported), "soft private" (the public map names it, but its
+task or header is not public or the manifest does not include it) or "hard private" (the
+public map leaves it out). The exported images leave out the hard-private nodes and label
+the soft-private ones "not published". In the claims graph, assumptions and the nodes
 the results start from are drawn quieter and milestones stronger than other results. An
 image is redrawn only when its graph or the drawing code changed. Drawing needs Graphviz
 (`dot`), `pdflatex` with the TikZ, standalone, lmodern and xcolor packages, and Poppler

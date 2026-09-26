@@ -31,7 +31,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
   `supersedes` and `verifies`. An arrow that a longer path already implies is left out of
   the image. The claims graph shows the external works a result uses in brackets on its
   card, not as boxes with arrows. Brainstorm nodes sit in an orange dashed box, task boxes
-  have a solid grey border, and a node the export leaves out is labelled "not published".
+  have a solid grey border. The committed images, which the Notion mirror shows, label every
+  node and task box "public", "soft private" or "hard private"; the exported images, on the
+  public repo and site, leave out the hard-private nodes and label the soft-private ones
+  "not published".
   In the claims graph, assumptions and the nodes the results start from are drawn quieter,
   and milestones stronger, than other results. On the Notion Map page the node table is in
   a closed toggle.

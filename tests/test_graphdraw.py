@@ -9,14 +9,15 @@ from opsci import graphdraw as G
 
 CARDS = [
     {"id": "t01-noise", "title": r"Noise PSD $S_n(f)$ with 50% & #1_x", "meta": "task · done",
-     "status": "done", "box": "brainstorm"},
-    {"id": "t02-fit", "title": "Fit", "meta": "task · superseded", "status": "superseded"},
+     "status": "done", "box": "brainstorm", "badge": "public"},
+    {"id": "t02-fit", "title": "Fit", "meta": "task · superseded", "status": "superseded", "badge": "soft private"},
     {"id": "t03-fit-v2", "title": r"Fit, bad math $\frac{1}{$", "meta": "task · active", "status": "active",
-     "at_risk": True, "tags": ["Isi2019"]},
+     "at_risk": True, "tags": ["Isi2019"], "badge": "hard private"},
     {"id": "v01-audit", "title": "Audit", "meta": "verification · active", "status": "active",
-     "verification": True},
+     "verification": True, "badge": "not published"},
 ]
-BOXES = [{"id": "brainstorm", "kicker": "brainstorm", "title": "ideas, not yet project work", "style": "brainstorm"}]
+BOXES = [{"id": "brainstorm", "kicker": "brainstorm", "title": "ideas, not yet project work", "style": "brainstorm",
+          "badge": "soft private"}]
 EDGES = [("t01-noise", "t02-fit", "dep"), ("t01-noise", "t03-fit-v2", "dep"), ("t02-fit", "t03-fit-v2", "superseded"),
          ("t03-fit-v2", "v01-audit", "verified"), ("t02-fit", "v01-audit", "related")]
 
