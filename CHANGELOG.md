@@ -11,6 +11,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Publishing starts only when the user asks for it or says yes when asked: rule 3 of the
+  template's `AGENTS.md`, `open-science-publish:publish` and
+  `open-science-publish:zenodo-release` now say so, and that "push" alone means the private
+  remote. No layout change.
 - `open-science-project:migrate-project` now fills in each task's results (the claims
   graph), the task maps and `map/README.md`, and always tracks the migration in its own
   soft-private task, `tasks/t00-migration/`, with the pane registered for it, so that a

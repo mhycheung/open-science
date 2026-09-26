@@ -13,8 +13,11 @@ session.
    about people, no judgements of other people's work beyond normal technical criticism. A
    public document mentions soft-private material at most in passing, and never mentions
    hard-private material.
-3. **Nothing reaches the public repo except through the `open-science-publish:publish` skill**, and
-   only after the user approves the publish report.
+3. **Publish only when the user asks.** Nothing reaches the public repo, the project site or
+   Zenodo unless the user asks for that publication or says yes when asked. Finished work is
+   not a reason to start one, and "push" alone means the private remote. Every publication
+   goes through `open-science-publish:publish` or `open-science-publish:zenodo-release` and
+   waits for the user's approval of its report or file list.
 4. **No site-specific details in tracked files.** No absolute paths, usernames, hostnames,
    accounts, partitions or emails. Site settings live in `config/site.local.yaml`
    (git-ignored); scripts read them from there. Paths are relative to the repo root.

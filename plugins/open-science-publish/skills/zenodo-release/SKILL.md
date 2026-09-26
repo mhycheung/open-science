@@ -9,6 +9,10 @@ A production release is **public and permanent**: Zenodo never deletes a publish
 Release at publication points, not on every data change. The tool is `opsci zenodo`; its
 full reference is `docs/zenodo.md` in the framework repo.
 
+Start a release only when the user asks for one or says yes when you ask, never because data
+changed or a task ended. The sandbox release in step 3 is not public, but it too runs only
+within a release the user asked for.
+
 ## Procedure
 
 1. **Check what would be released.** Every dataset in `data/MANIFEST.yaml` that is meant to

@@ -50,7 +50,8 @@ guide covers the optional Claude Code plugins.
 
 ## Publishing
 
-Nothing becomes public until you approve a publish. When you ask for one
+Nothing becomes public until you approve a publish. An agent never starts one on its own; it
+may ask you. When you ask for one
 (`open-science-publish:publish`), the agent exports what `publish/manifest.yaml` allows, runs every
 check (leaks, secrets, citations, node status, verification level, your policy), and writes
 a report under `publish/`. The report lists the files exported, the check results, the

@@ -1,6 +1,6 @@
 ---
 name: publish
-description: Publish a project's public part - export the files the publish manifest allows, run every check, write a review report, stop for the user's approval, then push to the public repo and rebuild the project site. Use when the user asks to publish, release the code or notes, update the public repo, check what is unpublished, bring public changes back, or preview the project site.
+description: Publish a project's public part - export the files the publish manifest allows, run every check, write a review report, stop for the user's approval, then push to the public repo and rebuild the project site. Use when the user asks to publish, release the code or notes, update the public repo, check what is unpublished, bring public changes back, or preview the project site, or says yes when asked; never on the agent's own initiative.
 ---
 
 # Publish
@@ -10,6 +10,12 @@ the review report (`AGENTS.md` §0 rule 3). The project's `.claude/settings.json
 push to the public remote outside it. The tool is `opsci publish`; it exports only the files
 `publish/manifest.yaml` allows, from one commit, so the working tree and uncommitted changes
 never leak.
+
+Run this skill only when the user asks to publish, or says yes when you ask. Do not start it
+because a task is finished or another skill has ended, or because the user said "push": that
+means the private remote. You may ask whether to publish; a no, or no answer, means no.
+`opsci publish status`, `opsci publish check` and `opsci site preview` write nothing public
+and may be run whenever they help.
 
 ## Procedure
 
