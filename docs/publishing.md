@@ -242,7 +242,9 @@ checkout with MkDocs and the Material theme:
   not exported: the publish writes the text into the site workflow, so a change shows on
   the site after the next publish. `opsci site build --banner TEXT` sets it by hand;
 - LaTeX is typeset with MathJax: inline `$...$` and displayed `$$...$$` on lines of their
-  own. In a table cell write `\lvert x \rvert`, not `|x|`: a bare `|` ends the cell;
+  own, also in page titles in the navigation and table of contents. The browser tab and
+  search results show a plain-text title instead (`$\iota_Q(t)$` becomes `ι_Q(t)`). In a table
+  cell write `\lvert x \rvert`, not `|x|`: a bare `|` ends the cell;
 - the site title comes from `CITATION.cff`, else the first heading of `README.md`;
 - the build runs in strict mode, so a broken link fails it, and the built site must pass the
   leak scan.

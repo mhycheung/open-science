@@ -1,5 +1,6 @@
 # opsci: planted-leaks (a control case plants a path in a page)
 """Project site (the "project site" test row)."""
+import json
 import re
 
 import pytest
@@ -35,7 +36,7 @@ def make_repo(r):
          "---\nid: r01-fit\ntitle: Fit result\ntype: result\nstatus: done\nprivacy: public\nsummary: s\n"
          "verification: human-verified\nevidence: tasks/t01-fit/provenance.yaml\n---\n# Fit result\n")
     page(r / "notes/extra.md", "# An extra page\n")
-    page(r / "notes/math.md", "# Math\n\nInline $\\iota_Q(0) - 90^\\circ$ and $M = 10\\,\\rm M_\\odot$.\n\n"
+    page(r / "notes/math.md", "# Math of $\\iota_Q$ near $90^\\circ$\n\nInline $\\iota_Q(0) - 90^\\circ$ and $M = 10\\,\\rm M_\\odot$.\n\n"
          "$$\n\\langle h \\rangle = a_1 * b_2\n$$\n\n| q | value |\n|---|---|\n| $\\iota$ | $\\lvert\\cos\\iota\\rvert < 0.1$ |\n")
     return r
 
@@ -131,7 +132,7 @@ def test_math_is_typeset_by_mathjax(built):
     assert '<span class="arithmatex">\\(\\iota_Q(0) - 90^\\circ\\)</span>' in html
     assert '<div class="arithmatex">\\[' in html and "a_1 * b_2" in html
     assert re.search(r'<td><span class="arithmatex">\\\(\\lvert\\cos\\iota\\rvert &lt; 0.1\\\)</span></td>', html)
-    assert f'<script src="{site.MATHJAX}"' in html and 'processHtmlClass:"arithmatex"' in html
+    assert f'<script src="{site.MATHJAX}"' in html
 
 
 def test_banner_on_every_page_by_default(built):
@@ -159,3 +160,24 @@ def test_workflow_carries_the_banner(tmp_path, monkeypatch):
                 if "site build" in s.get("run", "")][0]
         assert step["run"] == 'opsci site build . --out _site --banner "$OPSCI_SITE_BANNER"'
         assert step["env"]["OPSCI_SITE_BANNER"] == banner
+
+
+def test_plain_title():
+    assert site.plain_title(r"Bands of $\iota_Q(t)$ near $90^\circ$") == "Bands of ι_Q(t) near 90°"
+    assert site.plain_title(r"On \(\langle h \rangle\), $M = 10\,\rm M_\odot$") == "On ⟨ h ⟩, M = 10 M_⊙"
+    assert site.plain_title(r"$\lvert\cos\iota\rvert < \frac{1}{2}$") == "|cos ι| < 1/2"
+    assert site.plain_title("Costs 5 dollars") == "Costs 5 dollars"
+
+
+def test_math_in_titles(built):
+    problems, out = built
+    assert problems == []
+    html = (out / "notes/math.html").read_text()
+    # no renderer runs in the browser tab's title or in search results: plain text there
+    assert "<title>Math of ι_Q near 90° - Demo project</title>" in html
+    index = json.loads((out / "search/search_index.json").read_text())
+    titles = {d["title"] for d in index["docs"] if d["location"].startswith("notes/math.html")}
+    assert "Math of ι_Q near 90°" in titles and not any("$" in t or "\\(" in t for t in titles)
+    # MathJax typesets the $...$ that the theme shows in navigation and header titles
+    assert re.search(r'class="md-ellipsis">\s*Math of \$\\iota_Q\$', html)
+    assert '["$","$"]' in html and 'processHtmlClass:"arithmatex|md-ellipsis"' in html

@@ -50,13 +50,19 @@ DEFAULT_BANNER = ("Warning: this is an ongoing, unpublished project. Many result
                   "preliminary and unverified.")
 MATHJAX = "https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-mml-chtml.js"
 # The theme override of every page. MathJax typesets the \( \) and \[ \] spans that
-# pymdownx.arithmatex writes for $...$ and $$...$$ (also after Material's instant navigation).
+# pymdownx.arithmatex writes for $...$ and $$...$$ (also after Material's instant navigation), and
+# the $...$ left in page titles where the theme shows them (navigation, table of contents,
+# header, previous/next links: its md-ellipsis elements). The browser tab's <title> gets a
+# plain-text title (config.extra.opsci_titles), as no renderer runs there.
 # Material's announcement bar holds the banner, kept in view: it sticks to the top of the window,
 # and the header, the sidebars and link targets move down by its height (set by the script, as
 # the text can wrap).
 PAGE_TEMPLATE = """{% extends "base.html" %}
 {% block announce %}{% if config.extra.opsci_banner %}<strong class="opsci-banner">\
 {{ config.extra.opsci_banner | e }}</strong>{% endif %}{% endblock %}
+{% block htmltitle %}{% set t = config.extra.opsci_titles.get(page.file.src_uri) if page and page.file %}\
+{% if t and ((page.meta and page.meta.title) or not page.is_homepage) %}<title>{{ t }} - {{ config.site_name }}</title>\
+{% else %}<title>{{ config.site_name }}</title>{% endif %}{% endblock %}
 {% block styles %}{{ super() }}
 <style>
 [data-md-component=announce]{position:sticky;top:0;z-index:5}
@@ -70,8 +76,8 @@ PAGE_TEMPLATE = """{% extends "base.html" %}
 <script>(function(){var b=document.querySelector("[data-md-component=announce]");
 function h(){document.documentElement.style.setProperty("--opsci-banner-h",b.offsetHeight+"px")}
 h();window.addEventListener("resize",h)})();
-window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"]],displayMath:[["\\\\[","\\\\]"]],processEscapes:true,
-processEnvironments:true},options:{ignoreHtmlClass:".*|",processHtmlClass:"arithmatex"}};
+window.MathJax={tex:{inlineMath:[["\\\\(","\\\\)"],["$","$"]],displayMath:[["\\\\[","\\\\]"]],processEscapes:true,
+processEnvironments:true},options:{ignoreHtmlClass:".*|",processHtmlClass:"arithmatex|md-ellipsis"}};
 document$.subscribe(function(){if(window.MathJax.typesetPromise){MathJax.startup.output.clearCache();
 MathJax.typesetClear();MathJax.texReset();MathJax.typesetPromise()}});</script>
 <script src="MATHJAX_URL" async></script>{% endblock %}
@@ -221,6 +227,42 @@ def html_path(page: str) -> str:
     return pp.with_suffix(".html").as_posix()
 
 
+TEX_TEXT = {
+    "alpha": "α", "beta": "β", "gamma": "γ", "delta": "δ", "epsilon": "ε", "varepsilon": "ε",
+    "zeta": "ζ", "eta": "η", "theta": "θ", "vartheta": "ϑ", "iota": "ι", "kappa": "κ",
+    "lambda": "λ", "mu": "μ", "nu": "ν", "xi": "ξ", "pi": "π", "rho": "ρ", "sigma": "σ",
+    "tau": "τ", "upsilon": "υ", "phi": "φ", "varphi": "φ", "chi": "χ", "psi": "ψ", "omega": "ω",
+    "Gamma": "Γ", "Delta": "Δ", "Theta": "Θ", "Lambda": "Λ", "Xi": "Ξ", "Pi": "Π", "Sigma": "Σ",
+    "Phi": "Φ", "Psi": "Ψ", "Omega": "Ω", "circ": "°", "langle": "⟨", "rangle": "⟩", "lvert": "|",
+    "rvert": "|", "vert": "|", "times": "×", "pm": "±", "mp": "∓", "leq": "≤", "le": "≤",
+    "geq": "≥", "ge": "≥", "neq": "≠", "approx": "≈", "sim": "~", "simeq": "≃", "propto": "∝",
+    "infty": "∞", "to": "→", "rightarrow": "→", "odot": "⊙", "cdot": "·", "partial": "∂",
+    "nabla": "∇", "sum": "Σ", "int": "∫", "ell": "ℓ", "hbar": "ħ", "prime": "′", "ldots": "…",
+    "dots": "…", "log": "log", "ln": "ln", "exp": "exp", "sin": "sin", "cos": "cos", "tan": "tan",
+}
+MATH_RE = re.compile(r"\$([^$]+)\$|\\\((.+?)\\\)")
+
+
+def _tex_text(tex: str) -> str:
+    """Readable plain text for a short TeX expression (`\\iota_Q(t)` -> `ι_Q(t)`)."""
+    t = re.sub(r"\^\{?\\circ\}?", "°", tex)
+    t = re.sub(r"\\frac\{([^{}]*)\}\{([^{}]*)\}", r"\1/\2", t)
+    t = re.sub(r"\\[,;:!> ]", lambda m: "" if m.group() == "\\!" else " ", t)
+    t = re.sub(r"\\(?:rm|mathrm|text|textrm|mathbf|mathit|mathcal|operatorname|left|right|big|Big)"
+               r"(?![A-Za-z])\s*", "", t)
+    def word(m):  # a function name (\\cos\\iota) keeps a space before what follows it
+        out = TEX_TEXT.get(m.group(1), m.group(1))
+        nxt = m.string[m.end():m.end() + 1]
+        return out + " " if out.isalpha() and len(out) > 1 and (nxt.isalpha() or nxt == "\\") else out
+    t = re.sub(r"\\([A-Za-z]+)", word, t)
+    return re.sub(r"\s+", " ", t.replace("{", "").replace("}", "")).strip()
+
+
+def plain_title(title: str) -> str:
+    """A title with its $...$ or \\(...\\) math turned into plain text, for where no renderer runs."""
+    return MATH_RE.sub(lambda m: _tex_text(m.group(1) or m.group(2)), title)
+
+
 def _page_title(docs: Path, rel: str) -> str:
     for line in (docs / rel).read_text(encoding="utf-8").splitlines():
         if line.startswith("# "):
@@ -294,6 +336,11 @@ def build(src: Path, out: Path, keep_config: Path | None = None,
     (work / "overrides").mkdir()
     (work / "overrides/main.html").write_text(PAGE_TEMPLATE, encoding="utf-8")
     cfg = config(_title(src), navigation(docs, pages, result_pages), docs, banner)
+    titles = {}
+    for p in pages:
+        h, _ = _header((docs / p).read_text(encoding="utf-8"))
+        titles[p] = plain_title(str(h["title"]) if h and h.get("title") else _page_title(docs, p))
+    cfg["extra"] = {**cfg.get("extra", {}), "opsci_titles": titles}
     cfg_path = work / "mkdocs.yml"
     cfg_path.write_text(_dump(cfg), encoding="utf-8")
     if keep_config:
@@ -308,6 +355,12 @@ def build(src: Path, out: Path, keep_config: Path | None = None,
         msgs = [l for l in out_lines if l.startswith(("WARNING", "ERROR", "Aborted"))] or out_lines
         problems += [f"mkdocs: {m}" for m in msgs] or [f"mkdocs failed with exit code {r.returncode}"]
         return problems
+    index = out / "search/search_index.json"
+    if index.is_file():  # search results show titles as text
+        data = json.loads(index.read_text(encoding="utf-8"))
+        for d in data.get("docs", []):
+            d["title"] = plain_title(d.get("title", ""))
+        index.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     for p in pages:
         if not (out / html_path(p)).is_file():
             problems.append(f"page {p} was not built ({html_path(p)} missing)")

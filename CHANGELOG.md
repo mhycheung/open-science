@@ -16,7 +16,9 @@ layout 1) and the framework's, in order, before it applies the other template ch
   `site_banner:` in `publish/manifest.yaml` changes the text, and `""` removes it. The
   manifest is not exported, so `opsci publish push` writes the text into the site workflow.
   `opsci site build` and `site preview` take `--banner`. The site also typesets LaTeX with
-  MathJax (`pymdownx.arithmatex`): inline `$...$` and displayed `$$...$$`. The template's
+  MathJax (`pymdownx.arithmatex`): inline `$...$` and displayed `$$...$$`, also in the
+  titles shown in the navigation, table of contents and header; the browser tab and the
+  search results get a plain-text title (`ι_Q(t)`). The template's
   `AGENTS.md` says to write `\lvert x \rvert` in table cells, as a bare `|` ends the cell.
   No layout change: without `site_banner` a project gets the default banner.
 - The site workflow installs `opsci` over https (a `git@` or `ssh://` framework repo is
