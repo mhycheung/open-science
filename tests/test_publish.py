@@ -357,6 +357,21 @@ def test_status_reports_pending_and_drift(proj, public, tmp_path):
         publish.push(proj, ex.export_id, str(public))
 
 
+def test_status_ignores_a_changed_export_of_the_last_publish(proj, public, monkeypatch):
+    # a newer opsci exports the last published commit differently: not drift, only pending
+    publish_now(proj, public)
+    real = publish.export
+
+    def export(root, out, commit="HEAD"):
+        ex = real(root, out, commit)
+        (ex.tree / "new-generated-file.md").write_text("drawn by a newer opsci\n")
+        return ex
+
+    monkeypatch.setattr(publish, "export", export)
+    drift, pending = publish.status(proj, str(public))
+    assert drift == [] and pending == ["only in export: new-generated-file.md"]
+
+
 def test_pull_public_carries_edit_into_a_branch(proj, public, tmp_path):
     publish_now(proj, public)
     private_only = (proj / "contracts/main.md").read_text()

@@ -11,6 +11,11 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- `opsci publish status` and `opsci publish push` no longer report drift when the public
+  repo is still at the last published commit. They compared it with a fresh export of the
+  last published private commit, so a newer opsci that exports differently (a file no longer
+  exported, maps drawn as images) blocked every push with no public-side change to pull.
+  Such differences are listed as pending. No layout change.
 - The public repo's README links to the project site: a new `opsci publish check` check,
   `site-link`, refuses an export whose `README.md` lacks the site URL, which is the GitHub
   Pages URL of `public_repo`, or the new manifest key `site_url` (a custom domain; `""` for

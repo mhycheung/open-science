@@ -1340,9 +1340,11 @@ def status(root: Path, public_repo: str | None = None, commit: str = "HEAD") -> 
     elif head is None:
         drift.append(f"{LAST_PUBLISHED} records public commit {last['public'][:12]}, but the public repo has no main branch")
     elif head == last["public"]:
-        published = export(root, work / "last", last["private"])
-        drift += [f"{d} (public repo differs from the export of {last['private'][:12]})"
-                  for d in _compare(public, _tree_files(published.tree))]
+        # Public main is the commit the last publish pushed, so it holds nothing the private repo
+        # lacks. Its tree is not compared with a fresh export of the last published commit: a
+        # newer opsci exports that commit differently (a file no longer exported, a map drawn
+        # another way), which is not a public-side change. Such differences show as pending.
+        pass
     elif not _pulled(root, resolve(root, commit), head):
         drift.append(f"public main is at {head[:12]}, the last publish was {last['public'][:12]}: "
                      "public-side changes are not in the private repo; run `opsci publish pull-public`")
