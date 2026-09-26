@@ -12,7 +12,8 @@ layout 1) and the framework's, in order, before it applies the other template ch
 ## Unreleased
 
 - `open-science-project:migrate-project` now moves every note to `private-docs/` by default
-  and asks only which notes should be public instead. No layout change.
+  and asks only which notes should be public instead. A task whose work is writing notes is
+  soft-private by default. No layout change.
 - Publishing starts only when the user asks for it or says yes when asked: rule 3 of the
   template's `AGENTS.md`, `open-science-publish:publish` and
   `open-science-publish:zenodo-release` now say so, and that "push" alone means the private
