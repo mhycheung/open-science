@@ -79,11 +79,12 @@ and commit in the worktree. Another session resumes with
    The mapping says which existing directories become `tasks/<id>/`; what goes to `src/`,
    `data/` (plus `data/MANIFEST.yaml`), `paper/`, `citations/`; what stays where it is;
    where each git-ignored file goes. Old context documents and plans move unchanged into
-   their task's `subcontext/`; a pitfalls or rules file becomes `rules/`. Ask which notes
-   are private (meeting notes, correspondence, drafts, remarks about people): they go to
-   `private-docs/`, committed but never exported (soft-private: other files may name them
-   in passing, but not link to them). Documentation for readers goes to `docs/`, which is
-   published, so nothing private may stay there. Ideas not yet started as work may go to
+   their task's `subcontext/`; a pitfalls or rules file becomes `rules/`. By default
+   every note (meeting notes, correspondence, drafts, working notes, remarks about people)
+   goes to `private-docs/`, committed but never exported (soft-private: other files may
+   name them in passing, but not link to them). Ask whether any note should be public
+   instead; only the ones the user names go to `docs/` or their task. Documentation for
+   readers goes to `docs/`, which is published, so nothing private may stay there. Ideas not yet started as work may go to
    `brainstorm/`; what fits nowhere goes to `archive/`. Ask the privacy tier of each task
    (`public`, `soft-private` or `hard-private`; definitions in
    `open-science-project:new-task`, "Privacy tier"); hard-private material outside a task
