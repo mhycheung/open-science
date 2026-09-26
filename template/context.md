@@ -25,6 +25,10 @@ Start the first task with the `open-science-project:new-task` skill.
 
 ## Waiting on the user
 
+<!-- Wrap housekeeping items ("commit the plots?") in omission markers so the published
+context leaves them out: the context-files skill, "Housekeeping stays out of the published
+context". -->
+
 Nothing.
 
 ## Open questions

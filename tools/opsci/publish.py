@@ -29,9 +29,10 @@ MANIFEST = "publish/manifest.yaml"
 LAST_PUBLISHED = "publish/LAST_PUBLISHED"
 REPORT_DIR = "publish/reports"
 CHECKOUT = ".opsci/public"  # the private repo's checkout of the public repo (git-ignored)
-# Never exported, whatever the manifest says.
+# Never exported, whatever the manifest says. The list of works consulted but not used is
+# soft-private: it may be mentioned, not published.
 ALWAYS_NEVER = ("publish", "lit_cache", "data", "config/site.local.yaml", ".opsci", ".env",
-                "messages")
+                "messages", "citations/consulted.md")
 # Public-repo infrastructure (site workflow, issue templates). Not part of the export, kept
 # on the public side, ignored by the consistency check and by pull-public.
 PUBLIC_ONLY = (".github",)
@@ -56,6 +57,11 @@ OVERRIDE_ID_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
 # "[redacted (<reason>)]".
 REDACT_RE = re.compile(r"<!--\s*redact:(.*?)-->(.*?)<!--\s*/redact\s*-->", re.S)
 REDACT_LEFT_RE = re.compile(r"<!--\s*/?redact\b")
+# Omission marker, for private housekeeping in a published file (a context file's "Waiting on
+# the user" item such as "commit the plots?"): the export drops the span without a trace, and
+# drops the lines it covered when they hold nothing else.
+OMIT_RE = re.compile(r"[ \t]*<!--\s*omit\s*-->(.*?)<!--\s*/omit\s*-->[ \t]*(\n)?", re.S)
+OMIT_LEFT_RE = re.compile(r"<!--\s*/?omit\b")
 # Copyright check.
 PUBLISHER_SUFFIXES = (".pdf", ".epub", ".djvu")
 MAX_QUOTE_WORDS = 150
@@ -121,6 +127,7 @@ class Export:
     hard: set = field(default_factory=set)  # snapshot paths that are hard-private
     redacted: dict = field(default_factory=dict)  # exported path -> number of redacted spans
     redaction_problems: list = field(default_factory=list)
+    omitted: dict = field(default_factory=dict)  # exported path -> number of omitted spans
 
 
 # --------------------------------------------------------------------------- git helpers
@@ -294,6 +301,38 @@ def redact(text: str) -> tuple[str, int, list[str]]:
     return out, n, probs
 
 
+def _empty_sections(text: str) -> set[str]:
+    """The `## ` headings of the sections of ``text`` that hold no text."""
+    parts = re.split(r"(?m)^(## .*)$", text)
+    return {parts[i] for i in range(1, len(parts), 2) if not parts[i + 1].strip()}
+
+
+def omit(text: str) -> tuple[str, int, list[str]]:
+    """(text with every omission span removed, number of spans, problems). A span that fills
+    its lines removes them; a `## ` section that the omission leaves empty loses its heading."""
+    out, pos = [], 0
+    spans = list(OMIT_RE.finditer(text))
+    for m in spans:
+        line_start = text.rfind("\n", 0, m.start()) + 1
+        if not text[line_start:m.start()].strip() and m.group(2) is not None:
+            out.append(text[pos:line_start])  # whole lines
+        else:
+            out.append(text[pos:m.start()] + (m.group(2) or ""))
+        pos = m.end()
+    new = "".join(out) + text[pos:]
+    probs = []
+    left = OMIT_LEFT_RE.search(new)
+    if left:
+        probs.append(f"line {new.count(chr(10), 0, left.start()) + 1}: omission marker that is not "
+                     "closed (`<!-- omit -->text<!-- /omit -->`)")
+    if spans:
+        emptied = _empty_sections(new) - _empty_sections(text)
+        parts = re.split(r"(?m)^(## .*)$", new)
+        new = parts[0] + "".join(parts[i] + parts[i + 1] for i in range(1, len(parts), 2)
+                                 if parts[i] not in emptied)
+    return new, len(spans), probs
+
+
 def _reparse(node, text: str):
     """The node with its header read from redacted text, or None if the header broke."""
     raw = text if PurePosixPath(node.path).name == "node.yaml" else nodes.read_front_matter(text)[0]
@@ -327,7 +366,7 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
     snapshot(root, sha, snap)
     man = load_manifest(snap) if (snap / MANIFEST).is_file() else load_manifest(root)
     files, excluded, exported_nodes, hard = select(snap, man)
-    redacted, rprobs = {}, []
+    redacted, omitted, rprobs = {}, {}, []
     by_path = {n.path: i for i, n in enumerate(exported_nodes)}
     for f in files:
         src = snap / f
@@ -336,13 +375,19 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
         (tree / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src, tree / f)
         text = _read(src)
-        if text is None or "redact" not in text:
+        if text is None or ("redact" not in text and "omit" not in text):
             continue
-        new, n, probs = redact(text)
+        new, k, probs = omit(text) if f.endswith(".md") else (text, 0, [])
+        rprobs += [Problem("omission", f, p) for p in probs]
+        if k:
+            omitted[f] = k
+        new, n, probs = redact(new)
         rprobs += [Problem("redaction", f, p) for p in probs]
-        if n:
+        if n or k:
             (tree / f).write_text(new, encoding="utf-8")
+        if n:
             redacted[f] = n
+        if n or k:
             if f in by_path:
                 node = _reparse(exported_nodes[by_path[f]], new)
                 if node is None:
@@ -376,7 +421,7 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
             except (graphdraw.DrawError, OSError, subprocess.SubprocessError) as exc:
                 rprobs.append(Problem("map", f"{base}.svg", f"cannot redraw the graph image for the export: {exc}"))
     return Export(sha, files, excluded, export_id(tree, files), tree, snap, exported_nodes, rebuilt,
-                  map_nodes, map_private if rebuilt else [], hard, redacted, rprobs)
+                  map_nodes, map_private if rebuilt else [], hard, redacted, rprobs, omitted)
 
 
 def apply_map_overrides(map_nodes: list, exported: set, path: Path) -> tuple[list, list[Problem], list[str]]:
@@ -987,6 +1032,9 @@ def check_redaction(ex: Export) -> tuple[list[Problem], list[str]]:
     if ex.redacted:
         notes.append(f"redaction: {sum(ex.redacted.values())} span(s) redacted in "
                      + ", ".join(f"{f} ({n})" for f, n in sorted(ex.redacted.items())))
+    if ex.omitted:
+        notes.append(f"omission: {sum(ex.omitted.values())} span(s) left out of "
+                     + ", ".join(f"{f} ({n})" for f, n in sorted(ex.omitted.items())))
     return list(ex.redaction_problems), notes
 
 

@@ -111,7 +111,7 @@ a dispatch names their id, not before.
 | `verifications/<vid>/` | verification tasks (audits, checks, adverse reviews of finished work) that check more than one task; the same layout as a task | that task's agents |
 | `src/` | shared code; never an output path | via worktree branches |
 | `data/` | git-ignored; `data/<task-id>/` holds each task's outputs; `data/MANIFEST.yaml` is tracked | the producing task |
-| `citations/` | `used.bib` (works and software used), `consulted.md` (read but not used) | anyone |
+| `citations/` | `used.bib` (works and software used, each with a `usage` field), `consulted.md` (read but not used; soft-private, never exported) | anyone |
 | `rules/` | one line per rule in `README.md` (R01…); long rules in `R07-*.md` | user, agents |
 | `contracts/` | how the main agent and subagents work | user |
 | `docs/` | documentation for readers and users; published | anyone |

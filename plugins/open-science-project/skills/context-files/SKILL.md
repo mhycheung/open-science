@@ -27,6 +27,20 @@ A PostToolUse hook checks the cap after every edit to one of these files and ref
 over-cap file. `opsci context check` checks the whole project. Pruning means whole finished
 items leave the file (to `subcontext/` or the log), not rewording.
 
+**Housekeeping stays out of the published context.** The context files are published with
+the project, while everything stays in the private files. In "Waiting on the user", "Next
+step" and "Open questions", wrap each item that is housekeeping for the user and not part of
+the task's or project's goal in an omission marker, for example "commit the plots?", "redo
+the figure with larger labels?", "which file name?":
+
+```
+<!-- omit -->- Whether to commit `lit_cache/2609.07873/` (28 MB, untracked).<!-- /omit -->
+```
+
+The export drops the span (and a section it empties). Keep unmarked what a reader of the
+project needs: a scientific decision, the choice of the next task, "next: compute $X$ for
+the task goal".
+
 Only the main agent edits the project and task `context.md`. Every pointer states when to
 read it ("read only if the fit is re-run"). Dates are absolute, numbers carry units and are
 labelled MEASURED or ESTIMATED, commands are copy-pasteable.

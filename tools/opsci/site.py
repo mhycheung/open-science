@@ -1,8 +1,9 @@
 """`opsci site`: build the project site from a public repo with MkDocs (Material theme).
 
-Every markdown file becomes a page and appears in the navigation. Tabs: Results, Map, Dead
-ends, Tasks, Citations, Context, Log, and Other for the rest. Pages with a node header get a
-status banner (active, failed, superseded, ...) and a verification line. The build runs in
+Tabs: Home, Results, Map, Dead ends, Tasks, Citations, Context, Log; `sitepages` assembles
+the pages (one per task, one map page, the citations table, the log). Markdown files that
+are not pages of the site are left out. Pages with a node header get a status banner
+(active, failed, superseded, ...) and a verification line. The build runs in
 strict mode, so a broken link fails it, and the built site must pass the leak scan.
 """
 
@@ -14,22 +15,16 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 import yaml
 
-from . import leakscan, nodes
+from . import leakscan, nodes, sitepages
 
 SKIP = (".git", ".github", ".opsci", "site", "_site")
-TABS = (  # (tab title, predicate on the page path)
-    ("Results", lambda p: p.startswith(("results/", "paper/"))),
-    ("Map", lambda p: p in ("map/README.md", "map/graph.md") or (p.startswith("map/") and p != "map/dead_ends.md")),
-    ("Dead ends", lambda p: p == "map/dead_ends.md"),
-    ("Tasks", lambda p: p.startswith(("tasks/", "verifications/"))),
-    ("Citations", lambda p: p.startswith("citations/")),
-    ("Context", lambda p: p == "context.md"),
-    ("Log", lambda p: p.startswith("log/")),
-)
+# Files never copied into the site: the list of works consulted but not used is private.
+DROP = {"citations/consulted.md"}
 RESULT_TYPES = ("result", "page", "paper", "dataset")
 BANNERS = {
     "active": ("warning", "Work in progress", "This is active work. Its results may change."),
@@ -67,6 +62,8 @@ PAGE_TEMPLATE = """{% extends "base.html" %}
 <style>
 [data-md-component=announce]{position:sticky;top:0;z-index:5}
 .md-banner{background-color:#b3261e;color:#fff}
+.opsci-unverified{color:#b3261e;font-weight:700}
+.opsci-caption{font-size:.7rem;color:var(--md-default-fg-color--light);margin:0 0 1.5em}
 .md-header{top:var(--opsci-banner-h,0px)}
 .md-typeset :target{scroll-margin-top:calc(var(--md-scroll-margin) - var(--md-scroll-offset) + var(--opsci-banner-h,0px)) !important}
 @media screen and (min-width:60em){.md-sidebar--secondary{top:calc(2.4rem + var(--opsci-banner-h,0px)) !important}}
@@ -136,7 +133,9 @@ def _decorate(text: str, rel: str, ids: dict[str, str], superseded_by: dict[str,
     if h.get("type") in RESULT_TYPES or level != "unverified":
         ev = h.get("evidence")
         ev_txt = f" Evidence: [`{ev}`]({_rel_link(rel, ev)})." if ev else ""
-        lines += [f"**{VERIFICATION.get(level, level)}**{ev_txt}", ""]
+        label = VERIFICATION.get(level, level)
+        label = (sitepages.UNVERIFIED.format(label) if level == "unverified" else f"**{label}**")
+        lines += [f"{label}{ev_txt}", ""]
     if not lines:
         return text
     body_lines = body.splitlines()
@@ -152,71 +151,97 @@ def _rel_link(from_page: str, target: str) -> str:
     return up + target
 
 
-LINK_RE = re.compile(r"(\]\()([^)\s#?]+)((?:[#?][^)\s]*)?(?:\s+\"[^\"]*\")?\))")
+@dataclass
+class Staged:
+    pages: list[str]  # the markdown pages of the site
+    nav: list  # the navigation (tabs)
 
 
-def _fix_dir_links(text: str, rel: str, src: Path, listings: set[str]) -> str:
-    """Point links at directories to the directory's README, or to a generated listing page."""
-    def sub(m):
-        target = m.group(2)
-        if re.match(r"^[a-z][a-z0-9+.-]*:", target, re.I) or target.startswith("/"):
-            return m.group(0)
-        path = (src / PurePosixPath(rel).parent / target).resolve()
-        if not path.is_dir() or not path.is_relative_to(src.resolve()):
-            return m.group(0)
-        for name in ("README.md", "index.md"):
-            if (path / name).is_file():
-                return m.group(1) + target.rstrip("/") + "/" + name + m.group(3)
-        listings.add(path.relative_to(src.resolve()).as_posix())
-        return m.group(1) + target.rstrip("/") + "/index.md" + m.group(3)
-    return LINK_RE.sub(sub, text)
-
-
-def _listing(src: Path, d: str) -> str:
-    rows = [f"# `{d}/`", "", "Files in this directory:", ""]
-    for p in sorted((src / d).iterdir()):
-        if p.name.startswith("."):
-            continue
-        rows.append(f"- [`{p.name}{'/' if p.is_dir() else ''}`]({p.name}{'/index.md' if p.is_dir() else ''})"
-                    if not p.is_dir() else f"- `{p.name}/`")
-    return "\n".join(rows) + "\n"
-
-
-def stage(src: Path, docs: Path) -> list[str]:
-    """Copy the public repo into a MkDocs docs directory. Returns the markdown pages."""
+def stage(src: Path, docs: Path) -> Staged:
+    """Copy the public repo into a MkDocs docs directory and assemble the site's pages (see
+    `sitepages`): the files that are not pages of the site stay as files that pages link to."""
     src = Path(src)
-    pages = []
     ids: dict[str, str] = {}
     superseded_by: dict[str, list[str]] = {}
-    listings: set[str] = set()
-    for n in nodes.scan(src).nodes:
+    scan = nodes.scan(src)
+    for n in scan.nodes:
         if n.path.endswith(".md"):
             ids[n.id] = n.path
         for old in n.get("supersedes") or []:
             superseded_by.setdefault(old, []).append(n.id)
+    md = []
     for p in sorted(src.rglob("*")):
         rel = p.relative_to(src).as_posix()
         if any(rel == s or rel.startswith(s + "/") for s in SKIP) or not p.is_file():
             continue
+        if rel in DROP:
+            continue
         dest = docs / rel
         dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(p, dest)
         if rel.endswith(".md"):
-            text = _fix_dir_links(p.read_text(encoding="utf-8"), rel, src, listings)
-            dest.write_text(_decorate(text, rel, ids, superseded_by), encoding="utf-8")
-            pages.append(rel)
+            md.append(rel)
+    site = sitepages.Site(docs)
+    tdirs = sitepages.task_dirs(docs, scan)
+    site.task_ids = {n.id: f"{d}/context.md" for d, n in tdirs.items()}
+    result_pages = {n.path for n in scan.nodes if n.get("type") in RESULT_TYPES and n.path.endswith(".md")}
+    home = next((p for p in ("index.md", "README.md") if p in md), None)
+
+    def is_result_page(p: str) -> bool:
+        return p in result_pages or p.startswith(("results/", "paper/"))
+    sitepages.plan_moves(docs, tdirs, site)
+    for p in md:
+        if p in site.moved and not is_result_page(p):
+            continue
+        if (p == home or p == "context.md" or is_result_page(p) or p == "map/dead_ends.md"
+                or p in ("map/README.md",)):
+            site.pages.add(p)
+    for p in ("map/claims.md", "map/graph.md"):
+        if p in md:
+            site.moved[p] = ("map/README.md", "claims-graph" if "claims" in p else "project-graph")
+    generated = {}
+    if any(p.startswith("map/") for p in site.moved) or "map/README.md" in md:
+        site.pages.add("map/README.md")
+    keys = sitepages.bib_keys(docs)
+    if keys:
+        site.pages.add("citations/README.md")
+    if any(p.startswith("log/") for p in md):
+        site.pages.add("log/README.md")
+    if tdirs:
+        site.pages.add("tasks/README.md")
+    site.dropped = {p for p in md if p not in site.pages and p not in site.moved}
+    # the pages that are assembled from several files
+    for tdir in tdirs:
+        page = f"{tdir}/context.md"
+        text = _decorate((docs / page).read_text(encoding="utf-8"), page, ids, superseded_by)
+        generated[page] = sitepages.task_page(tdir, text, tdirs, site)
+    m = sitepages.map_page(docs, site)
+    if m:
+        generated["map/README.md"] = m
+    if tdirs:
+        generated["tasks/README.md"] = sitepages.tasks_index(tdirs, site)
+    c = sitepages.citations_page(docs, scan, site) if keys else None
+    if c:
+        generated["citations/README.md"] = c
+    lg = sitepages.project_log(docs, site)
+    if lg:
+        generated["log/README.md"] = lg
+    site.pages = {p for p in site.pages if p in generated or (docs / p).is_file()}
+    for p in sorted(site.pages):
+        if p in generated:
+            text = generated[p]
         else:
-            shutil.copy2(p, dest)
-    for d in sorted(listings):
-        (docs / d / "index.md").write_text(_listing(src, d), encoding="utf-8")
-        pages.append(f"{d}/index.md")
-    bibs = sorted(p for p in docs.glob("citations/*.bib"))
-    if bibs:
-        out = ["# Bibliography", ""]
-        for b in bibs:
-            out += [f"## `{b.name}`", "", "```bibtex", b.read_text(encoding="utf-8").rstrip(), "```", ""]
-        (docs / "citations/bibliography.md").write_text("\n".join(out), encoding="utf-8")
-        pages.append("citations/bibliography.md")
-    return sorted(pages)
+            text = _decorate((docs / p).read_text(encoding="utf-8"), p, ids, superseded_by)
+            text = sitepages.fix_links(text, p, p, site)
+            if p == "results/README.md":  # the milestone results
+                text = re.sub(r"(?m)^# Results\s*$", "# Main results", text, count=1)
+        text = sitepages.mark_unverified(sitepages.cite_links(text, p, keys))
+        (docs / p).write_text(text, encoding="utf-8")
+    for p in md:
+        if p not in site.pages:
+            (docs / p).unlink()
+    pages = sorted(site.pages)
+    return Staged(pages, navigation(docs, pages, home, tdirs, is_result_page))
 
 
 def html_path(page: str) -> str:
@@ -270,19 +295,36 @@ def _page_title(docs: Path, rel: str) -> str:
     return PurePosixPath(rel).stem.replace("-", " ").replace("_", " ")
 
 
-def navigation(docs: Path, pages: list[str], result_pages: set[str]) -> list:
-    nav: list = []
-    home = next((p for p in ("index.md", "README.md") if p in pages), None)
-    left = [p for p in pages if p != home]
-    if home:
-        nav.append({"Home": home})
-    for tab, pred in TABS:
-        members = [p for p in left if pred(p) or (tab == "Results" and p in result_pages)]
-        if members:
-            nav.append({tab: [{_page_title(docs, p): p} for p in members]})
-            left = [p for p in left if p not in members]
-    if left:
-        nav.append({"Other": [{_page_title(docs, p): p} for p in left]})
+def navigation(docs: Path, pages: list[str], home: str | None, tdirs: dict, is_result_page) -> list:
+    """Tabs: Home, Results, Map, Dead ends, Tasks, Citations, Context, Log."""
+    def entry(p: str, title: str | None = None) -> dict:
+        return {title or _page_title(docs, p): p}
+    nav: list = [{"Home": home}] if home else []
+    results = [p for p in pages if is_result_page(p)]
+    if results:
+        top = [entry(p, "Main results" if p == "results/README.md" else None)
+               for p in results if not nodes.task_dirs(p)]
+        by_task: dict[str, list] = {}
+        for p in results:
+            if nodes.task_dirs(p):
+                by_task.setdefault(sitepages.owner(p, tdirs) or nodes.task_dirs(p)[-1], []).append(p)
+        for tdir, ps in sorted(by_task.items()):
+            n = tdirs.get(tdir)
+            top.append({(n.get("title") if n else None) or tdir: [entry(p) for p in ps]})
+        nav.append({"Results": top})
+    if "map/README.md" in pages:
+        nav.append({"Map": "map/README.md"})
+    if "map/dead_ends.md" in pages:
+        nav.append({"Dead ends": "map/dead_ends.md"})
+    if "tasks/README.md" in pages:
+        nav.append({"Tasks": [{"Overview": "tasks/README.md"}]
+                    + [entry(f"{d}/context.md", str(n.get("title") or n.id)) for d, n in sorted(tdirs.items())]})
+    if "citations/README.md" in pages:
+        nav.append({"Citations": "citations/README.md"})
+    if "context.md" in pages:
+        nav.append({"Context": "context.md"})
+    if "log/README.md" in pages:
+        nav.append({"Log": "log/README.md"})
     return nav
 
 
@@ -299,7 +341,7 @@ def config(title: str, nav: list, docs: Path, banner: str | None = None) -> dict
         "theme": theme,
         **({"extra": extra} if extra else {}),
         "markdown_extensions": [
-            "admonition", "tables", "toc",
+            "admonition", "tables", "toc", "attr_list", "md_in_html",
             {"pymdownx.arithmatex": {"generic": True}},
             {"pymdownx.superfences": {"custom_fences": [
                 {"name": "mermaid", "class": "mermaid",
@@ -327,15 +369,14 @@ def build(src: Path, out: Path, keep_config: Path | None = None,
     work = Path(tempfile.mkdtemp(prefix="opsci-site-"))
     docs = work / "docs"
     docs.mkdir()
-    pages = stage(src, docs)
+    staged = stage(src, docs)
+    pages = staged.pages
     if not pages:
         return ["no markdown files to build"]
-    scan = nodes.scan(src)
-    result_pages = {n.path for n in scan.nodes if n.get("type") in RESULT_TYPES and n.path.endswith(".md")}
     banner = (banner or "").strip()
     (work / "overrides").mkdir()
     (work / "overrides/main.html").write_text(PAGE_TEMPLATE, encoding="utf-8")
-    cfg = config(_title(src), navigation(docs, pages, result_pages), docs, banner)
+    cfg = config(_title(src), staged.nav, docs, banner)
     titles = {}
     for p in pages:
         h, _ = _header((docs / p).read_text(encoding="utf-8"))

@@ -23,12 +23,14 @@ the map and the node headers.
    `privacy: public`; a node whose header says `soft-private` or `hard-private` stays
    private (see [Privacy tiers](project-template.md#privacy-tiers)). Some paths are never
    exported whatever the manifest says: `publish/`, `lit_cache/`, `data/`, `messages/`,
-   `.opsci/`, `.env`, `config/site.local.yaml`.
+   `.opsci/`, `.env`, `config/site.local.yaml`, and `citations/consulted.md` (the works read
+   but not used, soft-private).
 2. **The export is a snapshot of one commit.** `opsci publish export` takes the committed
    tree of one commit (default `HEAD`), so uncommitted changes and the working tree never
    leak. It copies the allowed files and computes an **export id**, a hash of every exported
    path and its content. It refuses a symbolic link among the exported files. It replaces
-   each redaction marker with `[redacted (<reason>)]` (see [Redaction](#redaction)). It
+   each redaction marker with `[redacted (<reason>)]` (see [Redaction](#redaction)), and
+   drops each omission span (see [Omission](#omission)). It
    rebuilds `map/graph.md` and `map/dead_ends.md`: hard-private nodes are left out, and
    every other node whose files are not exported is named without a link (see
    [Unpublished nodes in the map](#unpublished-nodes-in-the-map)).
@@ -59,6 +61,7 @@ the map and the node headers.
 | `references` | a node header whose `depends_on`, `supersedes` or `related` names a hard-private node (an edge to a soft-private node is allowed; the public map shows it); a link in an exported markdown or HTML file to a file or directory of the commit that is not exported. For a soft-private target the fix is a plain mention in backticks instead of the link |
 | `private-content` | exported text that contains, from hard-private material only: the id of a hard-private node (only ids containing `-`, `_` or a digit are matched); its title, if the title has 3 or more words; the path of a hard-private task directory or file; a run of 12 words shared with a hard-private prose file. Text of the template and of the task skeleton is ignored in that comparison. Mentions of soft-private material are allowed; the report lists them as notes |
 | `redaction` | a redaction marker with no closing `<!-- /redact -->`, or one with an empty reason |
+| `omission` | an omission marker with no closing `<!-- /omit -->` |
 | `site` | the project site of the export, built as the public repository's workflow builds it (`opsci site build`), fails: a broken link in strict mode, or a leak in the built pages and search index. Skipped with a note if `mkdocs` is not installed |
 | `map-overrides` | in `publish/map_overrides.yaml`: a group or node entry that names a published, hard-private or unknown node, a group with fewer than two members or an id already in use, a node in two entries, a missing title or summary, an unknown key |
 
@@ -81,7 +84,7 @@ since the last publish as `.diff` (the whole export on the first publish). The r
   `hard_private`, the task's or node's `privacy` tier);
 - notes: the mentions of soft-private material in the export (a count and the first few,
   with file and line), for the reviewer to check that each is in passing, and the number of
-  redactions in each file;
+  redactions and omissions in each file;
 - a section "Review (tone, claims)" that the agent fills in.
 
 The review follows the rubric in the skill (`reference/review-rubric.md`). It reads only
@@ -159,6 +162,22 @@ rebuilt map run on the redacted text. The standard reasons are "proprietary data
 "unpublished work by collaborators" and "private information". The `redaction` check
 refuses a marker that is not closed and one with an empty reason.
 
+## Omission
+
+Housekeeping that the context files carry for you, such as "commit the plots?" in "Waiting
+on the user", is not published. The agent that writes the context file, or the publish
+skill before the approval, wraps each such item in an omission marker:
+
+```
+<!-- omit -->- Whether to commit the new figures?<!-- /omit -->
+```
+
+The export drops the span, markers included, and the lines it filled; a `## ` section left
+empty loses its heading. Unlike a redaction it leaves no trace, and the agent adds it without
+asking, listing each omission for your approval. Only markdown files are affected. An item
+about the task's or the project's goal ("next: compute $X$ for the task goal", a scientific
+decision you owe) stays unmarked. The private file keeps every item.
+
 `opsci publish pull-public` cannot apply cleanly a public edit next to a redacted span,
 because the public text differs from the private text there; bring such an edit in by hand.
 
@@ -228,16 +247,28 @@ Once, after the first publish, open the public repository on github.com and set
 `opsci site build [SRC] --out DIR` (default `_site`) builds the site of a public repository
 checkout with MkDocs and the Material theme:
 
-- every markdown file becomes a page; the navigation has the tabs Results, Map, Dead ends,
-  Tasks, Citations, Context, Log, and Other for the rest;
+- the tabs are Home (`README.md`), Results, Map, Dead ends, Tasks, Citations, Context and
+  Log. Results starts with "Main results" (`results/README.md`), then each result page,
+  grouped by task. Map is one page: the hand-written `map/README.md`, the claims graph and
+  the project graph. Tasks has an overview table and one page per task holding the whole
+  task: its context, results (each figure with its caption), the other figures with their
+  captions, plan, map, working notes (`S*/*.md`, `subcontext/*.md`) and log. Citations is a
+  table made from `citations/*.bib`: each reference in journal style (`B. P. Abbott et al.
+  (LIGO Scientific, Virgo), Phys. Rev. D 93, 122003 (2016), arXiv:1602.03839 [gr-qc].`),
+  linked to the DOI or URL and to arXiv, with the entry's `usage` field (else the results
+  that use it); `[@key]` in a page links to its row. Log lists the entries of every
+  `log/YYYY-MM.md` grouped by date, newest first, with task ids linked to their pages;
+- other markdown files (`AGENTS.md`, `PROJECT.md`, `rules/`, `docs/`, `src/README.md`) are
+  not pages; a link to one becomes plain text, a link to a file merged into a page points to
+  its section there, and a link to a directory points to its page if it has one;
 - a page with a node header gets a banner for its status (active, paused, failed, superseded,
   abandoned; a superseded page links to what replaces it) and a line with its verification
   level and evidence;
-- a link to a directory points to its `README.md`, or to a generated list of its files;
-  `citations/*.bib` is shown on a Bibliography page;
+- `Not verified` and `unverified` labels are red and bold;
 - a banner at the top of every page, which stays in view as the page scrolls, warns by
   default: "Warning: this is an ongoing, unpublished project. Many results are very
-  preliminary and unverified." Set `site_banner:` in `publish/manifest.yaml` to change the
+  preliminary and unverified." Before the first publish the publish skill asks you whether
+  to keep it, and recommends it. Set `site_banner:` in `publish/manifest.yaml` to change the
   text, or to `""` to remove it (for example once the work is published). The manifest is
   not exported: the publish writes the text into the site workflow, so a change shows on
   the site after the next publish. `opsci site build --banner TEXT` sets it by hand;

@@ -34,6 +34,29 @@ layout 1) and the framework's, in order, before it applies the other template ch
   Poppler; `pixi.toml` now includes Graphviz. `opsci publish` redraws each exported image
   from the published nodes, and refuses the export if it cannot. No layout change: the
   next `opsci map build` in a project writes the images; commit them.
+- The project site after the pilot's first publish. The tabs are Home, Results, Map, Dead
+  ends, Tasks, Citations, Context and Log; the "Other" tab is gone, and markdown files that
+  are not pages of the site (`AGENTS.md`, `PROJECT.md`, `rules/`, `docs/`, READMEs written
+  for agents) are left out, a link to one becoming plain text. Results opens with "Main
+  results" and groups the result pages by task. Map is one page with the claims graph and
+  the project graph. Each task is one page with its context, results (each figure with its
+  caption under it), its other figures with their captions, plan, map, working notes and
+  log; the caption files no longer appear as pages of their own. Citations is a table made
+  from `citations/used.bib`: the reference in journal style, linked to the DOI or URL and to
+  arXiv, and the entry's new `usage` field (else the results that use it); `[@key]` links to
+  its row. The log is one page, grouped by date, newest first. `Not verified` and
+  `unverified` labels are red and bold. New modules `tools/opsci/sitepages.py` and
+  `tools/opsci/bibfmt.py`.
+- `citations/consulted.md` is soft-private: never exported, whatever the manifest says.
+- Omission markers, `<!-- omit -->...<!-- /omit -->`: the export drops the span without a
+  trace (and a `## ` section it empties), for housekeeping in a published context file
+  ("commit the plots?"). The new `omission` check refuses an unclosed marker; the report
+  notes count the omitted spans. The context-files skill marks such items as it writes
+  them, and the publish skill checks the context files before the approval. The publish
+  skill also asks the user, before the first publish, whether to keep the site's warning
+  banner (it recommends it), and proposes missing `usage`, `doi` and `eprint` fields. The
+  template's `log/README.md` gives the entry format the site reads and asks for LaTeX, and
+  `citations/used.bib` names the fields the site uses. No layout change.
 - The project site shows a banner at the top of every page that stays in view as the page
   scrolls. By default it warns that the project is ongoing, unpublished and preliminary;
   `site_banner:` in `publish/manifest.yaml` changes the text, and `""` removes it. The

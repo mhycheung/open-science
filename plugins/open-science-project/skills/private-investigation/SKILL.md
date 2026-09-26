@@ -106,6 +106,6 @@ few lower-case words joined by hyphens. For a hard-private investigation it is n
    the restatement must not reveal the private material.
 6. **Commit** the investigation directory, the index and the task pointer line.
 
-Sources read in full still go in `lit_cache/` and the citation files (`AGENTS.md` §2), but
-`citations/consulted.md` is published: for a hard-private investigation, list them in the
-investigation's `context.md` instead.
+Sources read in full still go in `lit_cache/` and the citation files (`AGENTS.md` §2).
+`citations/consulted.md` is soft-private (never exported), but it names what was read: for
+a hard-private investigation, list them in the investigation's `context.md` instead.

@@ -54,7 +54,7 @@ keeping `data/MANIFEST.yaml`, `messages/README.md` and `config/site.example.yaml
 | `verifications/` | verification tasks that check the work of several tasks, one `<vid>/` each (see [Verification tasks](#verification-tasks)) | that task's agents |
 | `src/` | shared code; never an output path | via worktree branches |
 | `data/` | git-ignored; `data/<task-id>/` holds each task's large outputs; `data/MANIFEST.yaml` is tracked | the producing task |
-| `citations/` | `used.bib` (works and software used) and `consulted.md` (read but not used) | anyone |
+| `citations/` | `used.bib` (works and software used, each with a `usage` field) and `consulted.md` (read but not used; soft-private, never exported) | anyone |
 | `rules/` | the project's rules, one line each in `README.md` (R01, R02, ...), long ones in their own file | user, agents |
 | `contracts/` | `main.md` (how the main agent works) and `subagent.md` (how dispatched agents work) | user |
 | `paper/` | optional, laid out by the user | user |

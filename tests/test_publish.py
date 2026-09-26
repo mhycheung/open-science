@@ -459,3 +459,45 @@ def test_manifest_site_banner(proj):
     m.write_text(base + "site_banner: [a]\n")
     with pytest.raises(publish.PublishError, match="site_banner"):
         publish.load_manifest(proj)
+
+
+def test_omitted_housekeeping_leaves_the_export(proj):
+    ctx = proj / "context.md"
+    text = ctx.read_text()
+    text = text.replace("## Waiting on the user\n", "## Waiting on the user\n\n"
+                        "<!-- omit -->- Whether to commit the new plots?<!-- /omit -->\n", 1)
+    text = text.replace("## Next step\n", "## Next step\n\nCompute the fit for the task goal. "
+                        "<!-- omit -->Then redo the plot?<!-- /omit -->\n", 1)
+    ctx.write_text(text.replace("## Waiting on the user\n", "## Waiting on the user\n", 1))
+    # a section holding only housekeeping loses its heading in the export
+    with open(proj / "tasks/t01-fit/context.md", "a") as f:
+        f.write("\n## Waiting on the user\n\n<!-- omit -->- Commit `lit_cache/x/`?\n- Rename the figure?<!-- /omit -->\n\n"
+                "## Pointers\n\nNone.\n")
+    commit(proj)
+    probs, ex = problems(proj)
+    assert probs == [], [str(p) for p in probs]
+    out = (ex.tree / "context.md").read_text()
+    assert "commit the new plots" not in out and "redo the plot" not in out
+    assert "Compute the fit for the task goal." in out and "## Waiting on the user" in out
+    task = (ex.tree / "tasks/t01-fit/context.md").read_text()
+    assert "Commit `lit_cache" not in task and "Rename the figure" not in task
+    assert task.count("## Waiting on the user") == 0 and "## Pointers" in task
+    assert ex.omitted == {"context.md": 2, "tasks/t01-fit/context.md": 1}
+    assert "commit the new plots" in ctx.read_text()  # the private file keeps it
+    _, notes = publish.check_redaction(ex)
+    assert any(n.startswith("omission: 3 span(s)") for n in notes)
+
+
+def test_unclosed_omission_marker_is_refused(proj):
+    with open(proj / "context.md", "a") as f:
+        f.write("\n<!-- omit -->- Commit the plots?\n")
+    commit(proj)
+    probs, _ = problems(proj)
+    assert any(p.check == "omission" and "not closed" in p.message for p in probs), [str(p) for p in probs]
+
+
+def test_consulted_list_is_never_exported(proj):
+    (proj / "citations/consulted.md").write_text("# Consulted, not used\n\n- arXiv:0000.00000, skimmed\n")
+    commit(proj)
+    probs, ex = problems(proj)
+    assert "citations/consulted.md" not in ex.files and "citations/used.bib" in ex.files
