@@ -11,7 +11,8 @@ project). This skill only says how to get there safely.
 ## Procedure
 
 1. **Branch and inventory.** Work in a worktree on a new branch, so the original stays
-   untouched until the user merges. If the project is not a git repo, `git init` it.
+   untouched until the user merges. If the project is not a git repo, `git init -b main` it
+   (the default branch is `main` unless the user asks for another name).
    Before the first commit, write a `.gitignore` for large and generated files (data,
    chains, outputs, caches), and ask the user where to draw the line. Then commit the rest.
    A worktree holds only committed files, so commit any untracked file worth keeping
@@ -40,6 +41,10 @@ project). This skill only says how to get there safely.
    Notion (`opsci notion check` prints `backend=notion`), use `--notion` there, and after the
    migration is approved and committed run `opsci notion enable` (it also adds the hook to a
    settings file the project already had) and `opsci notion init`.
+   Ask the user whether the README may name the framework (the line and the rule are in
+   `open-science-project:new-project`, step 1). With a yes, use `--framework-line`; if the
+   project keeps its own README, add the line from the scratch copy's README below its
+   opening paragraph. Without a yes, add nothing.
 
 3. **Propose a mapping and get the user's approval before moving anything.** Ask the user
    first whether the project lives in more than one place (a code repo, data on scratch, a

@@ -28,7 +28,9 @@ name, and what the project is about, then runs the same command.
 
 `--no-context-management` leaves out the lines about session jumps (for projects without the
 `open-science-context` plugin) and records `context_management: false`. `--date` sets the
-creation date and `--framework-repo` the repository URL to record.
+creation date and `--framework-repo` the repository URL to record. `--framework-line` adds
+the README line "This project is run in the open with the open-science framework: <link>",
+linking the framework's web page; the new-project skill passes it only when the user agrees.
 
 `opsci template check [ROOT]` checks an existing project: every required file is present, no
 placeholder or component marker is left, no text file holds an absolute path, and

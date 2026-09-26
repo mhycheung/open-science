@@ -45,7 +45,7 @@ def cmd_template_instantiate(args) -> int:
                                     template=args.template, date=date,
                                     framework_repo=args.framework_repo,
                                     context_management=not args.no_context_management,
-                                    notion=args.notion)
+                                    notion=args.notion, framework_line=args.framework_line)
     except template.TemplateError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -89,6 +89,9 @@ def main(argv=None) -> int:
     i.add_argument("--notion", action="store_true",
                    help="mirror the project to Notion: AGENTS.md section 10 and the auto-sync hook "
                         "(then run opsci notion init)")
+    i.add_argument("--framework-line", action="store_true",
+                   help="add the README line that says the project is run with the open-science "
+                        "framework, linking to it (only with the user's consent)")
     i.set_defaults(func=cmd_template_instantiate)
     c = t.add_parser("check", help="check a project made from the template")
     c.add_argument("root", nargs="?", default=".")

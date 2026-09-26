@@ -2,10 +2,12 @@
 
 <!-- One paragraph, written by the user: what this project studies and why. -->
 
-This project is run in the open with the open-science framework
-({{FRAMEWORK_REPO}}): its plans, results, failed routes and
-sources are all written down, so that the work can be reproduced and checked.
+<!-- opsci:framework-line -->
+This project is run in the open with the open-science framework: <{{FRAMEWORK_URL}}>. Its
+plans, results, failed routes and sources are all written down, so that the work can be
+reproduced and checked.
 
+<!-- /opsci:framework-line -->
 | where | what |
 |---|---|
 | [`PROJECT.md`](PROJECT.md) | what the project is about, in the user's words |

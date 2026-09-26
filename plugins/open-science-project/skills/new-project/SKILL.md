@@ -21,6 +21,12 @@ one-line `TODO:` and goes in your report.
    answer is fine and that any part can be left for later. Do not block on it: if the user
    skips it, create the project anyway and leave the `TODO:` lines.
 
+   **Ask whether the README may name the framework.** With consent, the README gets the
+   line "This project is run in the open with the open-science framework: <link>. Its
+   plans, results, failed routes and sources are all written down, so that the work can be
+   reproduced and checked." Show the user the line and ask; do not add it without a yes, as
+   it would read as an advertisement the user did not choose.
+
 2. **Find the template.** The plugin ships inside the framework repo:
 
    ```bash
@@ -45,12 +51,15 @@ one-line `TODO:` and goes in your report.
    Add `--notion` if `opsci notion check` prints `backend=notion` (the user chose Notion in
    onboarding, even if its setup is not finished): it adds the Notion section to `AGENTS.md`
    and the auto-sync hook, and records `notion: true`.
+   Add `--framework-line` only if the user agreed to the README line in step 1. It links
+   the framework's web page (`https://...`, derived from the recorded repo, never a
+   `git@` address).
    It refuses a non-empty directory, fills every placeholder, records the framework commit in
    `config/framework.yaml`, writes the first log entry, builds the map and checks the result.
    A non-zero exit leaves nothing behind; report its message.
 
 4. **Make it a git repo** and commit everything:
-   `git -C <dir> init -q && git -C <dir> add -A && git -C <dir> commit -qm "Create project from the open-science template"`.
+   `git -C <dir> init -q -b main && git -C <dir> add -A && git -C <dir> commit -qm "Create project from the open-science template"`.
    With `--notion`: if `opsci notion check` printed no `problem` and no `missing`, run
    `opsci notion init` in `<dir>`, which creates the project's pages under the user's
    Notion page, and report the link it prints. Otherwise tell the user that messages go to
@@ -78,6 +87,9 @@ one-line `TODO:` and goes in your report.
    first piece of work is started with `open-science-project:new-task`.
 
 ## Rules
+
+- The default branch is `main`, here and in every repo the framework creates, unless the
+  user asks for another name.
 
 - Never copy the template over an existing project: that is `open-science-project:migrate-project`
   (a project without the layout) or `open-science-project:update-from-template` (a project that has it).

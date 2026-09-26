@@ -60,8 +60,10 @@ this itself; the judgement is per hunk.
    if `config/framework.yaml` has `context_management: true`; text between
    `<!-- opsci:no-context -->` markers only if it is false. In the same way,
    `<!-- opsci:notion -->` text applies only with `notion: true` and `<!-- opsci:no-notion -->`
-   text only without it (a project with no `notion:` key is not mirrored). Never copy the
-   marker lines. To start mirroring a project to Notion, use `open-science-project:notion`
+   text only without it (a project with no `notion:` key is not mirrored).
+   `<!-- opsci:framework-line -->` text is the README line naming the framework: keep it if
+   the project's README has it, and add it to one that lacks it only after the user says
+   yes. Never copy the marker lines. To start mirroring a project to Notion, use `open-science-project:notion`
    (`opsci notion enable`), not this skill.
 
 6. **Apply by editing the project's files.** Never copy template files over them, and never

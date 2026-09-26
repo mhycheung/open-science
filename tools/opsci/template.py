@@ -21,6 +21,7 @@ PLACEHOLDERS = (
     "DATE",              # YYYY-MM-DD, the day the project was created
     "MONTH",             # YYYY-MM, names the first log file
     "FRAMEWORK_REPO",    # where the framework came from (URL), or "local copy"
+    "FRAMEWORK_URL",     # the framework's web page (https), for links in the README
     "FRAMEWORK_COMMIT",  # framework commit the template was copied at
     "CONTEXT_MANAGEMENT",  # "true" if the project uses the open-science-context plugin
     "NOTION",            # "true" if the project is mirrored to Notion (opsci notion)
@@ -29,16 +30,23 @@ PLACEHOLDERS = (
 # Template text that depends on the optional components. A block runs from its opening marker
 # line to its closing marker line and is kept only when its condition holds: `context` with
 # the context-management component (plugin open-science-context), `no-context` without it,
-# `notion` when the project is mirrored to Notion, `no-notion` when not. The marker lines
-# themselves are always removed.
-COMPONENTS = ("no-context", "context", "no-notion", "notion")
-BLOCK_RE = re.compile(r"^[ \t]*<!-- opsci:(no-context|context|no-notion|notion) -->[ \t]*\n(.*?)^[ \t]*<!-- /opsci:\1 -->[ \t]*\n",
+# `notion` when the project is mirrored to Notion, `no-notion` when not, `framework-line` when
+# the user agreed to the README line naming the framework. The marker lines themselves are
+# always removed.
+COMPONENTS = ("no-context", "context", "no-notion", "notion", "framework-line")
+BLOCK_RE = re.compile(r"^[ \t]*<!-- opsci:(no-context|context|no-notion|notion|framework-line) -->[ \t]*\n(.*?)^[ \t]*<!-- /opsci:\1 -->[ \t]*\n",
                       re.M | re.S)
-MARKER_RE = re.compile(r"<!-- /?opsci:(?:no-context|context|no-notion|notion) -->")
+MARKER_RE = re.compile(r"<!-- /?opsci:(?:no-context|context|no-notion|notion|framework-line) -->")
+
+# The framework's home, linked when the recorded repo has no web address (a local copy).
+FRAMEWORK_HOME = "https://github.com/mhycheung/open-science"
 
 
-def apply_components(text: str, context_management: bool, notion: bool = False) -> str:
+def apply_components(text: str, context_management: bool, notion: bool = False,
+                     framework_line: bool = False) -> str:
     keep = {"context" if context_management else "no-context", "notion" if notion else "no-notion"}
+    if framework_line:
+        keep.add("framework-line")
     return BLOCK_RE.sub(lambda m: m.group(2) if m.group(1) in keep else "", text)
 
 # Files a fresh project must have.
@@ -93,6 +101,14 @@ def framework_origin(template_dir: Path) -> tuple[str, str]:
     return url, commit
 
 
+def web_url(repo: str) -> str:
+    """The https page of a git remote (`git@host:a/b.git` -> `https://host/a/b`), or FRAMEWORK_HOME."""
+    m = (re.fullmatch(r"git@([^:/]+):(.+?)(?:\.git)?/?", repo)
+         or re.fullmatch(r"ssh://(?:[^@/]+@)?([^:/]+)(?::\d+)?/(.+?)(?:\.git)?/?", repo)
+         or re.fullmatch(r"https?://(?:[^@/]+@)?([^/]+)/(.+?)(?:\.git)?/?", repo))
+    return f"https://{m.group(1)}/{m.group(2)}" if m else FRAMEWORK_HOME
+
+
 def text_files(root: Path):
     for p in sorted(root.rglob("*")):
         if p.is_file() and ".git" not in p.relative_to(root).parts:
@@ -104,7 +120,8 @@ def text_files(root: Path):
 
 def instantiate(dest: Path, name: str, title: str, author: str, template: Path | None = None,
                 date: dt.date | None = None, framework_repo: str | None = None,
-                context_management: bool = True, notion: bool = False) -> Path:
+                context_management: bool = True, notion: bool = False,
+                framework_line: bool = False) -> Path:
     template = Path(template) if template else default_template_dir()
     if template is None or not (template / "AGENTS.md").exists():
         raise TemplateError("template directory not found; pass --template <framework>/template")
@@ -118,7 +135,8 @@ def instantiate(dest: Path, name: str, title: str, author: str, template: Path |
         raise TemplateError(f"destination '{dest}' exists and is not empty")
     created = not dest.exists()
     try:
-        return _fill(dest, template, name, title, author, date, framework_repo, context_management, notion)
+        return _fill(dest, template, name, title, author, date, framework_repo, context_management, notion,
+                     framework_line)
     except BaseException:
         # Leave nothing half-made behind.
         if created:
@@ -130,13 +148,14 @@ def instantiate(dest: Path, name: str, title: str, author: str, template: Path |
 
 
 def _fill(dest, template, name, title, author, date, framework_repo, context_management=True,
-          notion=False) -> Path:
+          notion=False, framework_line=False) -> Path:
     date = date or dt.date.today()
     repo, commit = framework_origin(template)
     values = {
         "PROJECT_NAME": name, "PROJECT_TITLE": title, "AUTHOR": author,
         "YEAR": f"{date.year:04d}", "DATE": date.isoformat(), "MONTH": date.strftime("%Y-%m"),
         "FRAMEWORK_REPO": framework_repo or repo, "FRAMEWORK_COMMIT": commit,
+        "FRAMEWORK_URL": web_url(framework_repo or repo),
         "CONTEXT_MANAGEMENT": "true" if context_management else "false",
         "NOTION": "true" if notion else "false",
     }
@@ -150,7 +169,7 @@ def _fill(dest, template, name, title, author, date, framework_repo, context_man
                 unknown.append(f"{p.relative_to(dest)}: {{{{{key}}}}}")
                 return m.group(0)
             return values[key]
-        new = PLACEHOLDER_RE.sub(sub, apply_components(text, context_management, notion))
+        new = PLACEHOLDER_RE.sub(sub, apply_components(text, context_management, notion, framework_line))
         if new != text:
             p.write_text(new, encoding="utf-8")
     if unknown:

@@ -11,6 +11,15 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- The README line naming the framework is opt-in. The new-project and migrate-project
+  skills show the user the line and add it only with their consent (`opsci template
+  instantiate --framework-line`, a new `framework-line` component). It now links the
+  framework's web page (`https://github.com/...`, derived from the recorded repo, new
+  placeholder `{{FRAMEWORK_URL}}`) instead of printing the raw remote, which could be a
+  `git@` address. New projects and migrated repos start on a branch named `main`
+  (`git init -b main`) unless the user asks for another name. No layout change: a project
+  that has the old line keeps it.
+
 - Figure PDFs no longer fail the publish check. The leak scan reads a PDF's dictionaries and
   strings (with object and metadata streams decompressed) instead of its raw bytes: glyph
   lists such as `/CharSet` and compressed page content had produced false `absolute-path`

@@ -261,3 +261,24 @@ def test_template_layout_version_is_the_framework_constant(tmp_path):
     proj = make(tmp_path)
     assert f"\nlayout_version: {LAYOUT_VERSION}\n" in (proj / "config" / "framework.yaml").read_text()
     assert read_layout_version("copied_on: x\n") == 1   # control: no key means layout 1
+
+
+def test_framework_line_only_on_request(tmp_path):
+    line = "This project is run in the open with the open-science framework"
+    plain = (make(tmp_path / "a").joinpath("README.md")).read_text()
+    assert line not in plain and "\n\n\n" not in plain
+    text = (make(tmp_path / "b", framework_line=True, framework_repo="git@github.com:someone/open-science.git")
+            / "README.md").read_text()
+    assert f"{line}: <https://github.com/someone/open-science>." in text
+    assert "reproduced and checked.\n\n| where" in text
+
+
+@pytest.mark.parametrize("repo, url", [
+    ("git@github.com:a/b.git", "https://github.com/a/b"),
+    ("ssh://git@github.com/a/b.git", "https://github.com/a/b"),
+    ("https://github.com/a/b.git", "https://github.com/a/b"),
+    ("https://github.com/a/b", "https://github.com/a/b"),
+    ("local copy", T.FRAMEWORK_HOME),
+])
+def test_web_url(repo, url):
+    assert T.web_url(repo) == url

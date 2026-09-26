@@ -35,6 +35,7 @@ current directory.
 opsci template instantiate DEST --name NAME --title TITLE --author AUTHOR
                            [--template TEMPLATE] [--date DATE]
                            [--framework-repo FRAMEWORK_REPO] [--no-context-management]
+                           [--notion] [--framework-line]
 opsci template check [ROOT]
 ```
 
@@ -43,7 +44,9 @@ opsci template check [ROOT]
   directory (default: the one next to the installed `opsci`, if there is one). `--date` is
   the creation date, `YYYY-MM-DD` (default today). `--framework-repo` is the repository URL
   to record (default: the template checkout's `origin`, or `local copy`).
-  `--no-context-management` leaves out the context-management component. It refuses a
+  `--no-context-management` leaves out the context-management component.
+  `--framework-line` adds the README line naming the framework, with a link to its web
+  page; pass it only with the user's consent. It refuses a
   non-empty `DEST` and leaves nothing behind on failure.
 - `check` reports missing required files, unfilled placeholders, leftover component markers,
   absolute paths, and `.gitignore` rules that do not ignore what they should.
