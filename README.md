@@ -33,7 +33,7 @@ because the prompt cache expires while the session sits idle: waking a session t
 holds a long conversation would resend all of it uncached, which costs far more than a
 fresh start from the context file.
 
-**Start with the [Get started](docs/index.md) page** of the documentation,
+**Start with the [tutorial](docs/tutorial.md).** The full documentation is at
 <https://mhycheung.github.io/open-science/> (source in `docs/`).
 
 ## Install

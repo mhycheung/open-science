@@ -33,6 +33,9 @@ because the prompt cache expires while the session sits idle: waking a session t
 holds a long conversation would resend all of it uncached, which costs far more than a
 fresh start from the context file.
 
+**Start with the [tutorial](tutorial.md).** The rest of this documentation covers each part
+in full; see the navigation menu.
+
 ## Install
 
 If you use Claude Code, install the plugin and start Claude Code:
