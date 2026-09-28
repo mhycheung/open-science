@@ -88,16 +88,16 @@ def test_changelog_versions_match_the_plugins():
 
 # ---- brainstorm/ ------------------------------------------------------------------------
 
-def test_project_task_cannot_name_a_brainstorm_node(project):
-    # (the other direction is in test_tasks.py)
+def test_project_task_may_depend_on_a_brainstorm_node(project):
+    # brainstorm nodes are part of the project graph (test_tasks.py has the other direction)
     b = project / "brainstorm"
     assert run_opsci("task", "new", "b01", "--title", "x", "--root", b).returncode == 0
     r = run_opsci("task", "new", "t01", "--title", "x", "--depends-on", "b01", "--root", project)
-    assert r.returncode == 1 and "not nodes" in r.stderr
-    assert not (project / "tasks" / "t01").exists()
-    # control: the same edge from another brainstorm task is accepted
-    r = run_opsci("task", "new", "b02", "--title", "x", "--depends-on", "b01", "--root", b)
     assert r.returncode == 0, r.stderr
+    assert (project / "tasks" / "t01").is_dir()
+    # control: an id that is not a node is refused
+    r = run_opsci("task", "new", "t02", "--title", "x", "--depends-on", "b99", "--root", project)
+    assert r.returncode == 1 and "not nodes" in r.stderr
 
 
 def test_brainstorm_map_works_in_git(project):

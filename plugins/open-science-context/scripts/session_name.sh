@@ -86,7 +86,7 @@ cmd_hook() {
   fi
 
   # Keep the base (and so its number) the session already holds, unless Claude derived it
-  # (`proj-3f`) or it is a slurm-resurrect pane name (`rr-0-w0p1`).
+  # (`proj-3f`) or it is a pane name given by a resurrected batch job (`rr-0-w0p1`).
   base="${cur%%"$SEP"*}"
   if [ -z "$base" ] || [ "$src" = derived ] || [[ "$base" == rr-* ]]; then
     base=$(pick "$(project_of "$cwd")" "$sid")

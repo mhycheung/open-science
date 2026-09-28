@@ -19,7 +19,7 @@ layout 1) and the framework's, in order, before it applies the other template ch
   `task` and `results`. The record's description names the public repo and site and lists
   each tar with its tasks, and a known public repo is added as `related_identifiers`
   (`isSupplementTo`). A release now keeps the manifest's comments outside the `zenodo:`
-  section. `open-science-publish` 0.3.1. No layout change.
+  section. No layout change.
 - `opsci publish status` and `opsci publish push` no longer report drift when the public
   repo is still at the last published commit. They compared it with a fresh export of the
   last published private commit, so a newer opsci that exports differently (a file no longer

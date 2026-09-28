@@ -123,32 +123,19 @@ and may be run whenever they help.
 
 12. **Record it:** add one line to the log, and report the public commit to the user.
 
-## Public-side changes
+## Public-side changes and the site preview
 
 Collaborators may change the public repo directly (a merged pull request, an edit on the
-web). Bring those changes into the private repo before the next publish:
+web). Before the next publish, `opsci publish pull-public` puts the public changes since the
+last publish on a new private branch `pull-public/<date>-<commit>`, and refuses changes to
+paths the manifest does not export. Show the branch to the user; the user reviews and
+merges it into `main`. Then run `opsci publish status` again.
 
-```bash
-opsci publish pull-public
-```
-
-It puts the public changes since the last publish on a new private branch
-`pull-public/<date>-<commit>` and refuses changes to paths the manifest does not export.
-Show the branch to the user; the user reviews and merges it into `main`. Then run
-`opsci publish status` again.
-
-## Site preview
-
-To see the project site of the current export without a public repo or a push:
-
-```bash
-opsci site preview
-```
-
-It builds the site of the export of `HEAD` into `_site/` (gitignored; `--out <dir>` to
-change it), in strict mode, and leak-scans the built site. What the site shows:
-`reference/public-pages.md`. Change `site_banner` only when the user asks (for example once
-the work is published); the push writes it into the site workflow.
+`opsci site preview` builds the site of the export of `HEAD` into `_site/` (gitignored;
+`--out <dir>` to change it), without a public repo or a push, in strict mode, and
+leak-scans the built site. What the site shows: `reference/public-pages.md`. Change
+`site_banner` only when the user asks (for example once the work is published); the push
+writes it into the site workflow.
 
 ## Rules
 

@@ -5,19 +5,17 @@ description: Move an existing research project, ongoing or completed, into the o
 
 # Migrate a project
 
-The template and the other skills define the target layout (`AGENTS.md` §5 of any new
-project). This skill only says how to get there safely.
+The target layout is `AGENTS.md` §5 of any new project; this skill says how to get there.
 
 ## The migration context file
 
 Every migration, small or large, is a task in the migrated project, `tasks/t00-migration/`
-(step 2), so that another session can take it over. Its `context.md` names the original
-checkout, the worktree (the working directory for every step), the branch, the inventory,
-running job ids, the user's answers and the next step. Its `plan.md` holds the approved
-mapping and subtasks S1 to S6, one per step below (a large step split into S4a, S4b, ...).
-After every subtask, update `context.md` and `log.md` (`open-science-project:context-files`)
-and commit in the worktree. Another session resumes with
-`open-science-context:continue-context` on that file.
+(step 2), so that another session can take it over (`open-science-context:continue-context`
+on its `context.md`). Its `context.md` names the original checkout, the worktree (the
+working directory for every step), the branch, the inventory, running job ids, the user's
+answers and the next step. Its `plan.md` holds the approved mapping and subtasks S1 to S6,
+one per step below (a large step split into S4a, S4b, ...). After every subtask, update
+`context.md` and `log.md` (`open-science-project:context-files`) and commit in the worktree.
 
 ## Procedure
 
@@ -37,9 +35,9 @@ and commit in the worktree. Another session resumes with
    Files git ignores are not in the worktree or the inventory. List them (`git -C <project>
    status --ignored --short`) with their size (`du -sh`) for the mapping in step 3, and ask
    whether, after the merge, the user wants them copied to their new paths (the originals
-   stay; this needs the space twice) or moved; do not touch them before. List each dataset
-   that ends up under `data/` in `data/MANIFEST.yaml`. Nothing ignored is deleted. Note the
-   ids of running jobs or subagents for the migration context; do not wait for them.
+   stay; this needs the space twice) or moved; do not touch them before. Nothing ignored is
+   deleted. Note the ids of running jobs or subagents for the migration context; do not wait
+   for them.
 
 2. **Add the scaffolding and the migration task** without overwriting any existing file:
    instantiate the template into a scratch directory (`opsci template instantiate`, as in
@@ -48,7 +46,7 @@ and commit in the worktree. Another session resumes with
    `config/framework.yaml` it wrote: it records the framework commit. Ask the user whether
    the README may name the framework (`open-science-project:new-project`, step 1). With a
    yes, use `--framework-line`, or, if the project keeps its own README, add the scratch
-   copy's line below its opening paragraph. Without a yes, add nothing.
+   copy's line below its opening paragraph.
 
    Then create the migration task in the worktree, and write into it what step 1 recorded:
 
@@ -66,9 +64,9 @@ and commit in the worktree. Another session resumes with
    so on a large project it costs many more tokens. Lighter options:
    - **Tasks without details**: each task gets its directory and node header (status, a
      one-sentence summary), but no `map.md` of its subtasks and routes.
-   - **No results graph**: no result files, so no claims graph (`map/claims.md`: each
-     figure, value or statement the work established, or assumption it took, with what it
-     rests on and what uses it, milestones marked). Results can be added later.
+   - **No results graph**: no result files, so no claims graph (`map/claims.md`: what the
+     work established or assumed, what each item rests on and what uses it, milestones
+     marked). Results can be added later.
 
 3. **Propose a mapping and get the user's approval before moving anything.** Ask the user
    first whether the project lives in more than one place (a code repo, data on scratch, a
@@ -81,30 +79,27 @@ and commit in the worktree. Another session resumes with
    where each git-ignored file goes. Old context documents and plans move unchanged into
    their task's `subcontext/`; a pitfalls or rules file becomes `rules/`. Every note
    (meeting notes, correspondence, drafts, working notes, remarks about people) goes to
-   `private-docs/`, committed but never exported (soft-private: other files may name them in
-   passing, but not link to them). Do not ask about this; the mapping says that the notes
-   will be soft-private by default, and only notes the user explicitly asks to make public
-   go to `docs/` or their task. Documentation for readers goes to `docs/`, which is
-   published, so nothing private may stay there. Ideas not yet started as work may go to
-   `brainstorm/`; what fits nowhere goes to `archive/`. Ask the privacy tier of each other
-   task (`public`, `soft-private` or `hard-private`; definitions in
-   `open-science-project:new-task`, "Privacy tier"). A task whose work is writing notes
-   (lecture or reading notes, write-ups, a notes document) is `soft-private`, like the notes
-   themselves: do not ask its tier, state in the mapping that it will be soft-private by
-   default, and change it only if the user explicitly asks. Hard-private material outside a
-   task goes under `hard_private:` in `publish/manifest.yaml`. Unless the user declined
-   results (step 2), the mapping also lists each task's results: title, kind, the file that
-   shows it, and whether you propose it as a milestone (ask when unsure). Write the approved
-   mapping into the migration task's `plan.md`, split so that each subtask fits in one
-   session. Then move with `git mv`, so history follows the files.
+   `private-docs/`, committed but never exported, and every task whose work is writing notes
+   (lecture or reading notes, write-ups, a notes document) is `soft-private`: other files
+   may name them in passing, but not link to them. Do not ask about either; the mapping
+   states that they will be soft-private by default, and only what the user explicitly asks
+   to make public is made public (such a note goes to `docs/` or its task). Documentation
+   for readers goes to `docs/`, which is published, so nothing private may stay there. Ideas
+   not yet started as work may go to `brainstorm/`; what fits nowhere goes to `archive/`.
+   Ask the privacy tier of each other task (`public`, `soft-private` or `hard-private`;
+   definitions in `open-science-project:new-task`, "Privacy tier"). Hard-private material
+   outside a task goes under `hard_private:` in `publish/manifest.yaml`. Unless the user
+   declined results (step 2), the mapping also lists each task's results: title, kind, the
+   file that shows it, and whether you propose it as a milestone (ask when unsure). Write
+   the approved mapping into the migration task's `plan.md`, split so that each subtask fits
+   in one session. Then move with `git mv`, so history follows the files.
 
    Moving files breaks references: search the code, scripts, notebooks, configs and job
    scripts for the old paths and imports of moved modules, and fix them. Run the project's
    tests, or one short script, if any; report every reference you could not check.
 
-4. **Write the new documents from what is there**, as far as step 2 chose. If the history
-   or roadmap cannot be worked out from the files, write the current state and stop: the
-   aim is that the project follows the framework from now on.
+4. **Write the new documents from what is there**, as far as step 2 chose. If the history or
+   roadmap cannot be worked out from the files, write only the current state.
 
    - A node header per task (`opsci task new` for the directory skeleton where it helps,
      with `--privacy` as the user chose; status from the old context documents, else from
