@@ -4,6 +4,7 @@ claims graph (map/claims.md) that `opsci map build` writes from their headers.""
 import time
 
 import pytest
+import yaml
 
 from conftest import git, run_opsci
 from opsci import nodes, results
@@ -200,3 +201,46 @@ def test_artifact_changed_after_its_result_is_reported(project):
     git(project, "add", "-A")
     git(project, "-c", "user.name=U", "-c", "user.email=u@example.org", "commit", "-qm", "new figure")
     assert "'tasks/t01-noise/S1/psd.png' changed after this result file" in build(project).stderr
+
+
+def _releases(project, server, doi, groups=None):
+    """Append a Zenodo release of the tar t02-fit.tar.gz to the data manifest."""
+    p = project / "data" / "MANIFEST.yaml"
+    m = yaml.safe_load(p.read_text())
+    entry = {"version": "1.0", "date": "2026-01-02", "record_id": 1, "doi": doi,
+             "files": {"t02-fit.tar.gz": {"sha256": "x"}, "FILES.tsv": {"sha256": "y"}}}
+    if groups is not None:
+        entry["groups"] = groups
+    m.setdefault("zenodo", {}).setdefault(server, {"releases": []})["releases"].append(entry)
+    p.write_text(yaml.safe_dump(m, sort_keys=False))
+
+
+def test_released_data_artifact_shows_its_doi(project):
+    psd(project)
+    mass(project, artifacts=["tasks/t02-fit/S2/corner.png", "data/t02-fit/chain.h5"])
+    assert build(project).returncode == 0
+    before = {f: read(project, f) for f in ("map/claims.md", "tasks/t02-fit/results/README.md",
+                                            "results/README.md")}
+    # control: a sandbox release (10.5072, does not resolve) changes nothing
+    _releases(project, "sandbox", "10.5072/zenodo.7")
+    assert build(project).returncode == 0
+    assert {f: read(project, f) for f in before} == before
+    _releases(project, "production", "10.5281/zenodo.8")
+    assert build(project).returncode == 0
+    note = "(Zenodo [10.5281/zenodo.8](https://doi.org/10.5281/zenodo.8), `t02-fit.tar.gz`)"
+    page = read(project, "tasks/t02-fit/results/README.md")
+    assert f"[`data/t02-fit/chain.h5`](../../../data/t02-fit/chain.h5) {note}" in page
+    assert "corner.png`](../S2/corner.png) (Zenodo" not in page  # not under data/: no DOI
+    assert note in read(project, "results/README.md")
+    claims = read(project, "map/claims.md")
+    row = next(line for line in claims.splitlines() if line.startswith("| [r-mass]"))
+    assert note in row
+    # the exported pages (paths not published) name the release instead of "not published"
+    ns = nodes.scan(project).nodes
+    out = results.outputs(ns, lambda sub: False, set(), None, results.read_data_manifest(project))
+    assert f"`data/t02-fit/chain.h5` {note}" in out["map/claims.md"]
+    assert "`tasks/t02-fit/S2/corner.png` (not published)" in out["map/claims.md"]
+    # a newer release whose recorded groups do not hold the file: the older one is shown
+    _releases(project, "production", "10.5281/zenodo.9", groups={"t02-fit.tar.gz": ["data/t02-fit/other"]})
+    assert build(project).returncode == 0
+    assert note in read(project, "map/claims.md") and "zenodo.9" not in read(project, "map/claims.md")

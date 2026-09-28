@@ -178,18 +178,102 @@ def read_manifest(root: Path) -> dict:
 
 
 def write_manifest(root: Path, data: dict) -> None:
-    """Rewrite the manifest, keeping its leading comment block."""
+    """Rewrite the manifest, keeping its comments where it can.
+
+    A release changes only the top-level ``zenodo:`` section and the ``zenodo:`` field of
+    ``datasets`` entries. Those are replaced in the text, so every other line (and its
+    comments) is kept. If the result does not parse back to ``data`` (the manifest changed in
+    some other way), the file is dumped whole, keeping only its leading comment block.
+    """
     p = Path(root) / MANIFEST
-    head = []
-    for line in p.read_text().splitlines():
-        if line.startswith("#") or not line.strip():
-            head.append(line)
-        else:
-            break
-    body = yaml.safe_dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True)
+    text = p.read_text() if p.exists() else ""
+    new = _patch_manifest(text, data)
+    if new is None:
+        head = []
+        for line in text.splitlines():
+            if line.startswith("#") or not line.strip():
+                head.append(line)
+            else:
+                break
+        body = yaml.safe_dump(data, sort_keys=False, default_flow_style=False, allow_unicode=True)
+        new = "\n".join(head + [body.rstrip("\n")]) + "\n"
     tmp = p.with_name(".MANIFEST.yaml.tmp")  # dot name: never taken for a tar group
-    tmp.write_text("\n".join(head + [body.rstrip("\n")]) + "\n")
+    tmp.write_text(new)
     tmp.replace(p)
+
+
+_TOP_KEY = re.compile(r"^[^\s#-][^:]*:")
+
+
+def _top_block(lines: list[str], key: str) -> tuple[int, int] | None:
+    """[start, end) of the top-level ``key:`` block: its key line and every line up to the
+    next top-level key, less the comment and blank lines just before that key."""
+    start = next((i for i, l in enumerate(lines) if l.startswith(key + ":")), None)
+    if start is None:
+        return None
+    end = next((i for i in range(start + 1, len(lines)) if _TOP_KEY.match(lines[i])), len(lines))
+    while end > start + 1 and (not lines[end - 1].strip() or lines[end - 1].startswith("#")):
+        end -= 1
+    return start, end
+
+
+def _scalar(v) -> str:
+    return yaml.safe_dump(v, default_flow_style=True, allow_unicode=True).split("\n...")[0].strip()
+
+
+def _patch_manifest(text: str, data: dict) -> str | None:
+    """``text`` with its ``zenodo:`` section and the datasets' ``zenodo:`` fields set from
+    ``data``; None if that does not give ``data``."""
+    try:
+        old = yaml.safe_load(text) if text.strip() else None
+    except yaml.YAMLError:
+        return None
+    if not isinstance(old, dict):
+        return None
+    lines = text.splitlines()
+    # datasets[i].zenodo, by entry, edited in place so that comments on other lines stay
+    new_ds, old_ds = data.get("datasets") or [], old.get("datasets") or []
+    if len(new_ds) == len(old_ds):
+        blk = _top_block(lines, "datasets")
+        items: list[int] = []
+        if blk is not None:
+            ind = None
+            for i in range(blk[0] + 1, blk[1]):
+                m = re.match(r"^(\s*)- ", lines[i])
+                if m and (ind is None or len(m.group(1)) == ind):
+                    ind = len(m.group(1))
+                    items.append(i)
+        for k, (a, b) in enumerate(zip(old_ds, new_ds)):
+            if not (isinstance(a, dict) and isinstance(b, dict)) or a.get("zenodo") == b.get("zenodo") \
+                    or "zenodo" not in b or k >= len(items):
+                continue
+            lo, hi = items[k], items[k + 1] if k + 1 < len(items) else blk[1]
+            col = len(lines[lo]) - len(lines[lo].lstrip()) + 2
+            done = False
+            for i in range(lo, hi):
+                m = re.match(r"^(\s*(?:- )?)zenodo:(\s*)([^#]*?)(\s+#.*)?$", lines[i])
+                if m and len(m.group(1)) == col:
+                    lines[i] = f"{m.group(1)}zenodo: {_scalar(b['zenodo'])}{m.group(4) or ''}"
+                    done = True
+                    break
+            if not done:
+                last = max(i for i in range(lo, hi) if lines[i].strip() and not lines[i].lstrip().startswith("#"))
+                lines.insert(last + 1, " " * col + f"zenodo: {_scalar(b['zenodo'])}")
+                items = [j + 1 if j > last else j for j in items]
+                blk = (blk[0], blk[1] + 1)
+    # the zenodo: section, replaced whole (the tool writes it)
+    blk = _top_block(lines, "zenodo")
+    dump = [] if "zenodo" not in data else yaml.safe_dump(
+        {"zenodo": data["zenodo"]}, sort_keys=False, default_flow_style=False, allow_unicode=True).rstrip("\n").split("\n")
+    if blk is not None:
+        lines[blk[0]:blk[1]] = dump
+    else:
+        lines += dump
+    new = "\n".join(lines) + "\n"
+    try:
+        return new if yaml.safe_load(new) == data else None
+    except yaml.YAMLError:
+        return None
 
 
 @dataclass
@@ -250,6 +334,89 @@ def groups_from_manifest(root: Path, manifest: dict) -> tuple[list[Group], list[
     return groups, uncovered
 
 
+# --------------------------------------------------------------------------- tasks and results of a file
+
+def _within(path: str, top: str) -> bool:
+    """Whether ``path`` is ``top`` or lies under it."""
+    path, top = path.rstrip("/"), top.rstrip("/")
+    return path == top or path.startswith(top + "/")
+
+
+@dataclass
+class Owners:
+    """The task ids and the result artifacts of a project, from its node headers."""
+    tasks: set[str] = field(default_factory=set)
+    artifacts: dict[str, list[str]] = field(default_factory=dict)  # result id -> artifacts
+
+    def task(self, path: str) -> str:
+        """The task whose data directory ``data/<id>/`` holds ``path``, or ""."""
+        parts = PurePosixPath(path).parts
+        return parts[1] if len(parts) >= 2 and parts[0] == "data" and parts[1] in self.tasks else ""
+
+    def results(self, path: str) -> list[str]:
+        """The results whose ``artifacts`` hold ``path`` (the file, or a directory above it)."""
+        return sorted(r for r, arts in self.artifacts.items() if any(_within(path, a) for a in arts))
+
+
+def file_owners(root: Path) -> Owners:
+    """The task ids and result artifacts of the project at ``root`` (``nodes.scan``)."""
+    from . import nodes
+    res = nodes.scan(Path(root))
+    own = Owners()
+    for n in res.nodes:
+        if n.get("type") == "task" and nodes.is_task_context(n.path):
+            own.tasks.add(n.id)
+        elif n.get("type") == "result":
+            own.artifacts[n.id] = [str(a) for a in n.get("artifacts") or []]
+    return own
+
+
+# --------------------------------------------------------------------------- releases covering a path
+
+def release_groups(entry: dict, manifest: dict) -> dict[str, list[str]]:
+    """Tar file name -> project paths, for one release entry of the manifest.
+
+    Entries written since 0.3.1 record ``groups``. For an older entry, the manifest's current
+    ``zenodo.groups`` is used, else the default rule (``<name>.tar.gz`` holds ``data/<name>``);
+    either way only the tars the release holds (its ``files``) count.
+    """
+    if isinstance(entry.get("groups"), dict):
+        return {str(k): [str(p) for p in (v or [])] for k, v in entry["groups"].items()}
+    files = set((entry.get("files") or {}).keys()) - {FILE_LIST}
+    raw = (manifest.get("zenodo") or {}).get("groups") if isinstance(manifest.get("zenodo"), dict) else None
+    if isinstance(raw, list):
+        out = {}
+        for g in raw:
+            if isinstance(g, dict) and g.get("name") and f"{g['name']}.tar.gz" in files:
+                ps = g.get("paths") or []
+                out[f"{g['name']}.tar.gz"] = [str(p).rstrip("/") for p in (ps if isinstance(ps, list) else [ps])]
+        return out
+    return {f: [f"data/{f[:-len('.tar.gz')]}"] for f in sorted(files) if f.endswith(".tar.gz")}
+
+
+def production_location(path: str, manifest: dict | None) -> tuple[str, list[str]] | None:
+    """(DOI, tar file names) of the newest production release holding ``path``, or None.
+
+    A tar holds ``path`` if one of its group paths is ``path``, lies above it or lies under it
+    (``path`` is a directory holding the group). Sandbox releases are never used: their DOIs
+    (10.5072/...) do not resolve.
+    """
+    if not isinstance(manifest, dict) or not str(path).startswith("data/"):
+        return None
+    z = manifest.get("zenodo")
+    prod = z.get("production") if isinstance(z, dict) else None
+    rels = prod.get("releases") if isinstance(prod, dict) else None
+    for entry in reversed(rels if isinstance(rels, list) else []):
+        doi = str((entry or {}).get("doi") or "") if isinstance(entry, dict) else ""
+        if not doi or doi.startswith("10.5072/"):
+            continue
+        tars = sorted(t for t, ps in release_groups(entry, manifest).items()
+                      if any(_within(path, p) or _within(p, path) for p in ps))
+        if tars:
+            return doi, tars
+    return None
+
+
 # --------------------------------------------------------------------------- plan
 
 @dataclass
@@ -272,6 +439,7 @@ class Plan:
     uncovered: list[str] = field(default_factory=list)
     previous: dict | None = None
     errors: list[str] = field(default_factory=list)
+    owners: Owners | None = None  # tasks and results of the files, for FILES.tsv and the metadata
 
     @property
     def total_bytes(self) -> int:
@@ -332,6 +500,7 @@ def make_plan(root: Path, server: str, api_url: str, build_dir: Path | None) -> 
     if build_dir is not None:
         build_dir.mkdir(parents=True, exist_ok=True)
     listing = []
+    owners = plan.owners = file_owners(root)
     for g in groups:
         local = None
         if build_dir is None:
@@ -346,7 +515,9 @@ def make_plan(root: Path, server: str, api_url: str, build_dir: Path | None) -> 
         plan.files.append(FileInfo(g.filename, sink.sha256.hexdigest(), sink.md5.hexdigest(),
                                    size, local))
         listing += [(p, s, h, g.filename) for p, s, h in rows]
-    text = "# path\tsize\tsha256\ttar\n" + "".join(f"{p}\t{s}\t{h}\t{t}\n" for p, s, h, t in sorted(listing))
+    text = "# path\tsize\tsha256\ttar\ttask\tresults\n" + "".join(
+        f"{p}\t{s}\t{h}\t{t}\t{owners.task(p)}\t{','.join(owners.results(p))}\n"
+        for p, s, h, t in sorted(listing))
     blob = text.encode()
     local = None
     if build_dir is not None:
@@ -522,7 +693,25 @@ def read_citation(root: Path) -> dict:
     return (yaml.safe_load(p.read_text()) or {}) if p.exists() else {}
 
 
-def build_metadata(root: Path, manifest: dict, version: str, date: dt.date) -> dict:
+def project_links(root: Path) -> tuple[str | None, str | None]:
+    """(public repo URL, project site URL) from ``publish/manifest.yaml``: ``public_repo``,
+    and ``site_url`` or the GitHub Pages URL of the repo (``publish.site_url``). None for
+    what is not known, or when there is no valid publish manifest."""
+    from . import publish
+    try:
+        man = publish.load_manifest(Path(root))
+    except publish.PublishError:
+        return None, None
+    repo = publish.repo_web_url(str(man.public_repo)) if man.public_repo else None
+    return repo, publish.site_url(man)
+
+
+def _esc(text: str) -> str:
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def build_metadata(root: Path, manifest: dict, version: str, date: dt.date,
+                   groups: list[Group] | None = None, owners: Owners | None = None) -> dict:
     cff = read_citation(root)
     creators = []
     for a in cff.get("authors") or []:
@@ -538,15 +727,36 @@ def build_metadata(root: Path, manifest: dict, version: str, date: dt.date) -> d
                 c["orcid"] = str(a["orcid"]).rsplit("/", 1)[-1]
             creators.append(c)
     title = cff.get("title") or Path(root).resolve().name
+    repo, site = project_links(root)
+    desc = [f"<p>Data for {_esc(title)}. Each .tar.gz holds one group of datasets; "
+            f"{FILE_LIST} lists every file with its size, sha256 checksum, tar, the task that "
+            f"made it and the results that rest on it.</p>"]
+    links = []
+    if repo:
+        links.append(f'Project repository: <a href="{_esc(repo)}">{_esc(repo)}</a>.')
+    if site:
+        links.append(f'Project site: <a href="{_esc(site)}">{_esc(site)}</a>.')
+    if links:
+        desc.append("<p>" + " ".join(links) + "</p>")
+    if groups:
+        owners = owners if owners is not None else file_owners(root)
+        items = []
+        for g in groups:
+            tasks = sorted({t for t in (owners.task(p) for p in g.paths) if t})
+            where = f" (task{'s' if len(tasks) > 1 else ''} {', '.join(tasks)})" if tasks else ""
+            items.append(f"<li>{_esc(g.filename)}: {_esc(', '.join(g.paths))}{_esc(where)}</li>")
+        desc.append("<p>Files:</p><ul>" + "".join(items) + "</ul>")
     md = {
         "upload_type": "dataset",
         "title": f"{title}: data",
         "creators": creators,
-        "description": (f"Data for {title}. Each .tar.gz holds one group of datasets; "
-                        f"{FILE_LIST} lists every file with its size, sha256 checksum and tar."),
+        "description": "".join(desc),
         "access_right": "open",
         "license": "cc-by-4.0",
     }
+    if repo:
+        md["related_identifiers"] = [{"identifier": repo, "relation": "isSupplementTo",
+                                      "resource_type": "software"}]
     md.update((manifest.get("zenodo") or {}).get("metadata") or {})
     md["version"] = version
     md["publication_date"] = date.isoformat()
@@ -627,7 +837,7 @@ def release(root: Path, version: str, *, production: bool = False, api_url: str 
     if plan.previous and not plan.changed:
         raise ZenodoError("nothing changed since the previous release; no new version made")
     date = date or dt.datetime.now(dt.timezone.utc).date()
-    metadata = build_metadata(root, manifest, version, date)
+    metadata = build_metadata(root, manifest, version, date, plan.groups, plan.owners)
     cite = (server == "production") if cite is None else cite
 
     api = API(base, token)
@@ -685,6 +895,7 @@ def release(root: Path, version: str, *, production: bool = False, api_url: str 
         "doi": doi,
         "files": {f.filename: {"sha256": f.sha256, "md5": f.md5, "size": f.size}
                   for f in plan.files},
+        "groups": {g.filename: list(g.paths) for g in plan.groups},
     }
     sec["releases"].append(entry)
     sec.pop("draft_id", None)

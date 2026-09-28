@@ -153,11 +153,12 @@ def render_dead_ends(nodes: list[Node], linked: set[str] | None = None) -> str:
 
 
 def outputs(all_nodes: list[Node], root_has, linked: set[str] | None = None,
-            bib: dict[str, str] | None = None) -> dict[str, str]:
+            bib: dict[str, str] | None = None, zenodo: dict | None = None) -> dict[str, str]:
     """The generated map files: the project map of every node, and for each sub-root that
     exists (``root_has(name)``) a map of its nodes alone, with paths relative to it; then the
     claims graph and the results pages (``results.outputs``). ``bib``: the titles of the
-    keys in citations/used.bib."""
+    keys in citations/used.bib. ``zenodo``: the data manifest, whose production releases the
+    results pages name beside the data artifacts."""
     out = {"map/graph.md": render_graph(all_nodes, linked),
            "map/dead_ends.md": render_dead_ends(all_nodes, linked)}
     for sub in SUBROOTS:
@@ -168,7 +169,7 @@ def outputs(all_nodes: list[Node], root_has, linked: set[str] | None = None,
         sub_linked = None if linked is None else {p[len(pre):] for p in linked if p.startswith(pre)}
         out[f"{sub}/map/graph.md"] = render_graph(mine, sub_linked)
         out[f"{sub}/map/dead_ends.md"] = render_dead_ends(mine, sub_linked)
-    out.update(results.outputs(all_nodes, root_has, linked, bib))
+    out.update(results.outputs(all_nodes, root_has, linked, bib, zenodo))
     return out
 
 
@@ -305,7 +306,8 @@ def build(root: Path, check: bool = False) -> tuple[ScanResult, list[str]]:
     check_manifest(root, res)
     check_verification_privacy(root, res)
     results.check(root, res)
-    files = outputs(res.nodes, lambda sub: (root / sub).is_dir(), bib=results.read_bib(root))
+    files = outputs(res.nodes, lambda sub: (root / sub).is_dir(), bib=results.read_bib(root),
+                    zenodo=results.read_data_manifest(root))
     files.update(node_tables(root))
     files.update(task_maps(root, res))
     from .publish import privacy_badges  # local import: publish imports this module

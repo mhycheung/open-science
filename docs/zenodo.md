@@ -67,8 +67,15 @@ header.
 
    Groups may not overlap. Entries of `data/` that no group covers are reported and not
    released.
-2. **File list.** `FILES.tsv` is uploaded next to the tars. It lists every file: path, size,
-   sha256 and the tar that holds it.
+2. **File list.** `FILES.tsv` is uploaded next to the tars. It lists every file, one per line,
+   in six tab-separated columns: `path`, `size`, `sha256`, `tar` (the tar that holds it),
+   `task` (the task id when the file lies under `data/<id>/` and `<id>` is a task of the
+   project, in `tasks/`, `brainstorm/tasks/` or a `verifications/` directory; else empty) and
+   `results` (the ids of the result nodes whose `artifacts` name the file or a directory above
+   it, comma-separated). The tasks and results come from the node headers (`opsci map build`
+   reads the same ones), so `FILES.tsv` also changes when a header changes. A change to
+   `FILES.tsv` alone does not make a new version: with no tar changed, the release is
+   still refused as "nothing changed".
 3. **Limits.** A Zenodo record holds at most 100 files and 50 GB. The tool counts the groups
    plus `FILES.tsv` before it builds anything, and adds up the sizes after the tars are built.
    If either limit is exceeded it stops before any network call.
@@ -89,15 +96,58 @@ header.
    If a run stops before publishing, the draft id is kept in the manifest and the next run
    continues with that draft (Zenodo allows only one unpublished draft per record).
 7. **Write-back.** The version DOI, the concept DOI (which always resolves to the newest
-   version) and the checksum of every uploaded file are written to `data/MANIFEST.yaml`, under
-   `zenodo.sandbox` or `zenodo.production`. For production (or with `--write-citation`), each
-   dataset inside a released group gets `zenodo: <version DOI>`, and `CITATION.cff` gets two
-   `identifiers` entries: the concept DOI and the version DOI.
+   version), the checksum of every uploaded file and the paths each tar holds are written to
+   `data/MANIFEST.yaml`, under `zenodo.sandbox` or `zenodo.production`:
+
+   ```yaml
+   zenodo:
+     production:
+       releases:
+         - version: '1.0'
+           date: '2026-09-28'
+           record_id: 1234567
+           doi: 10.5281/zenodo.1234567
+           files: {t04.tar.gz: {sha256: ..., md5: ..., size: ...}, FILES.tsv: {...}}
+           groups: {t04.tar.gz: [data/t04]}
+       concept_doi: 10.5281/zenodo.1234566
+   ```
+
+   For production (or with `--write-citation`), each dataset inside a released group gets
+   `zenodo: <version DOI>`, and `CITATION.cff` gets two `identifiers` entries: the concept DOI
+   and the version DOI.
+
+   The tool rewrites only the `zenodo:` section and the `zenodo:` field of the datasets, in
+   place, so comments elsewhere in the manifest (a note after a `sha256:`, a comment line
+   between datasets) are kept. Comments inside the `zenodo:` section are not kept: the tool
+   writes that section. If a manifest cannot be edited in place (the rewrite would not read
+   back as the intended data), it is written whole and only its leading comment block is kept.
+
+## Results pages
+
+After a production release, run `opsci map build`. Every result `artifacts` path under
+`data/` that a production release holds is then shown with that release, in the result's
+"stored in" row on the results pages and in the "stored in" column of `map/claims.md`:
+
+```markdown
+`data/t04/x.npz` (Zenodo [10.5281/zenodo.1234567](https://doi.org/10.5281/zenodo.1234567), `t04.tar.gz`)
+```
+
+The release shown is the newest production release with a tar whose group path is the
+artifact path, lies above it, or lies under it (an artifact that is a directory holding a
+group). Sandbox releases are never shown: their DOIs (10.5072/...) do not resolve. Release
+entries written before the tool recorded `groups` are matched with the current
+`zenodo.groups`, or with the default one-group-per-`data/` entry rule. The public pages that
+`opsci publish` exports show the same release, in place of "(not published)".
 
 ## Metadata
 
 The title and creators come from `CITATION.cff`. Defaults: `upload_type: dataset`,
-`access_right: open`, `license: cc-by-4.0`. Override any field under `zenodo.metadata` in
+`access_right: open`, `license: cc-by-4.0`. The description names the project's public repo
+and site when `publish/manifest.yaml` gives them (`public_repo`; `site_url`, else the GitHub
+Pages URL of a github.com repo, as `opsci publish` derives it), and lists each tar with the
+paths it holds and the task(s) they come from. With a public repo, the record also gets
+`related_identifiers: [{identifier: <repo URL>, relation: isSupplementTo, resource_type:
+software}]`, which links the record back to the project. Override any field under `zenodo.metadata` in
 `data/MANIFEST.yaml`. The project ships no `.zenodo.json`: Zenodo ignores `CITATION.cff` when
 one exists, so metadata is sent through the API instead.
 

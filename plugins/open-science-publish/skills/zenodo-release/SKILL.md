@@ -48,7 +48,10 @@ within a release the user asked for.
    Needs `~/.config/opsci/zenodo.token` (mode 600). The tool writes the version DOI and the
    concept DOI to `data/MANIFEST.yaml` and `CITATION.cff`.
 
-5. **Record it:** commit the manifest and `CITATION.cff`, add one line to the log, update
+5. **Record it:** after a production release, run `opsci map build`: the results pages and
+   `map/claims.md` then show the DOI and tar beside every result artifact under `data/` that
+   the release holds. Commit the manifest, `CITATION.cff` and the rebuilt pages, run
+   `opsci notion sync` if the project is mirrored to Notion, add one line to the log, update
    the dataset node's header if it has one, and report the DOIs to the user.
 
 ## Rules

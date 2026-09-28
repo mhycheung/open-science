@@ -446,7 +446,7 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
         map_nodes, oprobs, map_private = apply_map_overrides(map_nodes, set(files), snap / MAP_OVERRIDES)
         rprobs += mprobs + oprobs
         texts = mapbuild.outputs(map_nodes, lambda sub: f"{sub}/map/graph.md" in files, set(files),
-                                 results.read_bib(snap))
+                                 results.read_bib(snap), results.read_data_manifest(snap))
         for rel, text in texts.items():
             if rel in files:
                 (tree / rel).write_text(text, encoding="utf-8")
@@ -1097,6 +1097,20 @@ def pages_url(repo: str) -> str | None:
         return None
     owner, name = m.group(1).lower(), m.group(2)
     return f"https://{name.lower()}/" if name.lower() == f"{owner}.github.io" else f"https://{owner}.github.io/{name}/"
+
+
+def repo_web_url(repo: str) -> str | None:
+    """The web URL of a public repo: ``https://github.com/<owner>/<repo>`` for a github.com
+    remote (https or ssh), the URL itself (less ``.git``) for another http(s) remote, None for
+    a local path."""
+    repo = repo.strip()
+    m = re.fullmatch(r"(?:https://(?:[^@/]+@)?|ssh://(?:[^@/]+@)?|git@)github\.com[:/]([^/]+)/([^/]+?)(?:\.git)?/?",
+                     repo)
+    if m:
+        return f"https://github.com/{m.group(1)}/{m.group(2)}"
+    if re.match(r"https?://", repo):
+        return re.sub(r"(?:\.git)?/?$", "", repo)
+    return None
 
 
 def site_url(man: Manifest) -> str | None:

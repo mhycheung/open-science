@@ -15,6 +15,7 @@ import yaml
 
 from conftest import TEMPLATE, run_opsci
 from opsci import zenodo as Z
+from map_project import header
 from zenodo_mock import MockZenodo
 
 CFF = """# How to cite this project.
@@ -376,6 +377,120 @@ def test_explicit_groups_and_overlap_refused(proj):
     Z.write_manifest(proj, m)
     with pytest.raises(Z.ZenodoError, match="inside data/"):
         Z.groups_from_manifest(proj, manifest(proj))
+
+
+# ------------------------------------------------------------------ links to the project
+
+def add_nodes(root: Path):
+    """A task t01 with a result on data/t01/sub; no task for t02."""
+    (root / "tasks" / "t01" / "results").mkdir(parents=True)
+    (root / "tasks" / "t01" / "context.md").write_text(header(
+        id="t01", title="Setup", type="task", status="active", summary="Setup."))
+    (root / "tasks" / "t01" / "results" / "r-b.md").write_text(header(
+        id="r-b", title="B", type="result", status="done", summary="B.", artifacts=["data/t01/sub"]))
+    (root / "tasks" / "t01" / "results" / "r-b-file.md").write_text(header(
+        id="r-b-file", title="B file", type="result", status="done", summary="B.",
+        artifacts=["data/t01/sub/b.bin"]))
+
+
+def test_release_records_group_contents(proj, mock, token):
+    m = manifest(proj)
+    m["zenodo"] = {"groups": [{"name": "all", "paths": ["data/t01", "data/t02/sub"]}]}
+    Z.write_manifest(proj, m)
+    assert release(proj, mock, token, "1.0").returncode == 0
+    [entry] = manifest(proj)["zenodo"]["sandbox"]["releases"]
+    assert entry["groups"] == {"all.tar.gz": ["data/t01", "data/t02/sub"]}
+
+
+def test_files_list_names_task_and_results(proj, mock, token):
+    add_nodes(proj)
+    assert release(proj, mock, token, "1.0").returncode == 0
+    [dep] = mock.published()
+    rows = [l.split("\t") for l in next(f for f in dep["files"] if f["filename"] == "FILES.tsv")["data"]
+            .decode().splitlines()]
+    assert rows[0] == ["# path", "size", "sha256", "tar", "task", "results"]
+    by = {r[0]: r for r in rows[1:]}
+    assert by["data/t01/sub/b.bin"][3:] == ["t01.tar.gz", "t01", "r-b,r-b-file"]
+    assert by["data/t01/a.txt"][3:] == ["t01.tar.gz", "t01", ""]
+    assert by["data/t02/sub/b.bin"][3:] == ["t02.tar.gz", "", ""]  # no task t02: empty
+    # unchanged data and unchanged headers: everything reused, the release refused
+    server, base = Z.resolve_server(False, mock.base)
+    plan = Z.make_plan(proj, server, base, build_dir=None)
+    assert {f.decision for f in plan.files} == {"reuse"}
+    r = release(proj, mock, token, "1.1")
+    assert r.returncode == 1 and "nothing changed" in r.stderr
+
+
+def test_metadata_links_the_project(proj):
+    add_nodes(proj)
+    groups, _ = Z.groups_from_manifest(proj, manifest(proj))
+    # control: no publish manifest, no links
+    md = Z.build_metadata(proj, manifest(proj), "1.0", Z.dt.date(2026, 1, 2), groups)
+    assert "related_identifiers" not in md and "github" not in md["description"]
+    assert "<li>t01.tar.gz: data/t01 (task t01)</li>" in md["description"]
+    assert "<li>t02.tar.gz: data/t02</li>" in md["description"]
+    (proj / "publish").mkdir()
+    (proj / "publish" / "manifest.yaml").write_text("public_repo: git@github.com:Owner/demo.git\n")
+    md = Z.build_metadata(proj, manifest(proj), "1.0", Z.dt.date(2026, 1, 2), groups)
+    assert md["related_identifiers"] == [{"identifier": "https://github.com/Owner/demo",
+                                          "relation": "isSupplementTo", "resource_type": "software"}]
+    assert "https://github.com/Owner/demo" in md["description"]
+    assert "https://owner.github.io/demo/" in md["description"]
+    (proj / "publish" / "manifest.yaml").write_text(
+        "public_repo: https://github.com/Owner/demo\nsite_url: https://example.org/demo/\n")
+    m = manifest(proj)
+    m["zenodo"] = {"metadata": {"description": "Mine."}}
+    md = Z.build_metadata(proj, m, "1.0", Z.dt.date(2026, 1, 2), groups)
+    assert md["description"] == "Mine."  # overrides win
+    md = Z.build_metadata(proj, manifest(proj), "1.0", Z.dt.date(2026, 1, 2), groups)
+    assert "https://example.org/demo/" in md["description"] and "github.io" not in md["description"]
+
+
+def test_production_location():
+    rel = lambda doi, **k: {"version": "1", "doi": doi, "files": {"t01.tar.gz": {}, "FILES.tsv": {}}, **k}
+    # sandbox only: nothing (its DOIs do not resolve)
+    m = {"zenodo": {"sandbox": {"releases": [rel("10.5072/zenodo.1")]}}}
+    assert Z.production_location("data/t01/x.npz", m) is None
+    assert Z.production_location("data/t01/x.npz", None) is None
+    # an old entry without groups: the default rule
+    m["zenodo"]["production"] = {"releases": [rel("10.5281/zenodo.5")]}
+    assert Z.production_location("data/t01/x.npz", m) == ("10.5281/zenodo.5", ["t01.tar.gz"])
+    assert Z.production_location("data/t02/x.npz", m) is None
+    assert Z.production_location("tasks/t01/x.png", m) is None
+    # the current zenodo.groups
+    m["zenodo"]["groups"] = [{"name": "t01", "paths": ["data/t01/keep"]}]
+    assert Z.production_location("data/t01/x.npz", m) is None
+    assert Z.production_location("data/t01", m) == ("10.5281/zenodo.5", ["t01.tar.gz"])  # a directory above
+    # recorded groups win, and the newest release that holds the path is used
+    m["zenodo"]["production"]["releases"].append(
+        rel("10.5281/zenodo.9", groups={"t01.tar.gz": ["data/t01/keep"], "b.tar.gz": ["data/t01/other"]}))
+    assert Z.production_location("data/t01/keep/a", m) == ("10.5281/zenodo.9", ["t01.tar.gz"])
+    assert Z.production_location("data/t01", m) == ("10.5281/zenodo.9", ["b.tar.gz", "t01.tar.gz"])
+    assert Z.production_location("data/t01/x.npz", m) is None
+
+
+# ------------------------------------------------------------------ manifest comments
+
+def test_manifest_comments_survive_a_release(proj, mock, token):
+    p = proj / "data" / "MANIFEST.yaml"
+    text = p.read_text()
+    text = text.replace("sha256: x\n", "sha256: x  # tar checksum of t01\n")
+    text = text.replace("- path: data/elsewhere", "# the external set\n- path: data/elsewhere")
+    text = text.replace("  zenodo: none\n", "  zenodo: none  # set by the tool\n", 1)
+    p.write_text(text)
+    assert manifest(proj)["datasets"][0]["sha256"] == "x"
+    assert release(proj, mock, token, "1.0", "--write-citation").returncode == 0
+    (proj / "data" / "t01" / "a.txt").write_text("v2\n")
+    assert release(proj, mock, token, "1.1", "--write-citation").returncode == 0
+    after = p.read_text()
+    assert "sha256: x  # tar checksum of t01\n" in after
+    assert "# the external set\n- path: data/elsewhere" in after
+    v2 = max(mock.published(), key=lambda d: d["id"])
+    assert f"  zenodo: {v2['doi']}  # set by the tool\n" in after
+    assert after.startswith("# Every dataset the project keeps")
+    m = manifest(proj)
+    assert m["datasets"][0]["zenodo"] == v2["doi"] and m["datasets"][1]["zenodo"] == "none"
+    assert [r["version"] for r in m["zenodo"]["sandbox"]["releases"]] == ["1.0", "1.1"]
 
 
 # ------------------------------------------------------------------ real sandbox

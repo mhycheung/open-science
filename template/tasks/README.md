@@ -115,7 +115,9 @@ evidence: tasks/t07-mode-fit-v2/S3/provenance.yaml
 
 `opsci map build` checks that every `artifacts` and `code` path exists (a missing path under
 `data/`, which git ignores, is only a warning) and that every `uses` key is in
-`citations/used.bib`. It writes, never to be edited by hand:
+`citations/used.bib`. An `artifacts` path under `data/` that a production Zenodo release
+holds (`opsci zenodo release`) is shown on the pages below with that release's DOI and tar.
+It writes, never to be edited by hand:
 
 - `tasks/<id>/results/README.md`: the task's results, each with its figure, where it is
   stored, the code, what it rests on and what uses it; withdrawn results in a table below;

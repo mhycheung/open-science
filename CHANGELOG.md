@@ -11,6 +11,15 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Zenodo data releases are linked to the project's results. Each release entry in
+  `data/MANIFEST.yaml` records the paths each tar holds (`groups`). `opsci map build` shows,
+  beside every result `artifacts` path under `data/`, the newest production release that
+  holds it (DOI and tar), on the results pages and in `map/claims.md`, and so do the pages
+  `opsci publish` exports; sandbox releases are not shown. `FILES.tsv` gains the columns
+  `task` and `results`. The record's description names the public repo and site and lists
+  each tar with its tasks, and a known public repo is added as `related_identifiers`
+  (`isSupplementTo`). A release now keeps the manifest's comments outside the `zenodo:`
+  section. `open-science-publish` 0.3.1. No layout change.
 - `opsci publish status` and `opsci publish push` no longer report drift when the public
   repo is still at the last published commit. They compared it with a fresh export of the
   last published private commit, so a newer opsci that exports differently (a file no longer
