@@ -17,7 +17,8 @@
 # the new session, and types the resume prompt. The agent never
 # types into its own pane, and a jump is detected by this action, never by wording.
 #
-# Refusals (exit 1): not in tmux; context file missing; context file not modified
+# Refusals (exit 1): jumps switched off by $OPSCI_JUMPS (`off`: every jump; `wait`:
+# active jumps); not in tmux; context file missing; context file not modified
 # in the last $OPSCI_JUMP_FRESH_MIN minutes (default 15: the state was not saved);
 # the session's state file cannot be found (a clear could not be confirmed);
 # active jump below $OPSCI_ACTIVE_JUMP_FLOOR tokens (default 100000) without
@@ -116,6 +117,7 @@ REQ=$(cm_request_path "$KEY")
 
 case "$CMD" in
   status)
+    echo "jumps allowed: $(cm_jump_mode) (OPSCI_JUMPS)"
     if [ -f "$REQ" ]; then jq . "$REQ"; else echo "no jump pending for pane $TMUX_PANE"; fi; exit 0 ;;
   cancel)
     if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" = requested ]; then rm -f "$REQ"; echo "jump request cancelled"
@@ -124,6 +126,10 @@ case "$CMD" in
     exit 0 ;;
   active|wait) ;;
   *) usage ;;
+esac
+case "$(cm_jump_mode)" in
+  off) die "session jumps are switched off (OPSCI_JUMPS=off). Keep the context file current and carry on in this session." ;;
+  wait) [ "$CMD" = active ] && die "active jumps are switched off (OPSCI_JUMPS=wait); only wait jumps are allowed. Carry on in this session." ;;
 esac
 
 CTX="${1:-}"; [ -n "$CTX" ] || usage; shift

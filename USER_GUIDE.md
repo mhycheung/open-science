@@ -32,7 +32,8 @@ guide covers the optional Claude Code plugins.
   wrong pane resumes the wrong work; it prints which file it uses, so check that line.
 - **Agents clear their own conversation and type a prompt into their own pane.** This is
   called a jump. It keeps the context small; they resume from the context files and the
-  log. Anything meant for you is sent before the jump.
+  log. Anything meant for you is sent before the jump. Jumps are optional: onboarding asks
+  which ones you want (`OPSCI_JUMPS`).
 
 ## What to read, and what you may edit
 

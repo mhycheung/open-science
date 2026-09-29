@@ -20,6 +20,9 @@
 # session, in an unregistered pane or a registered pane it did not register, only
 # gets its pane's stale timer killed.
 #
+# $OPSCI_JUMPS (the user's choice in onboarding) limits this: `off` makes the hook do
+# nothing but kill a stale timer; `wait` skips step 3. Unset or `all`: all three steps.
+#
 # It never reads `last_assistant_message`: jumps are detected by the request file.
 # Outside tmux it does nothing. It never fails the stop on its own error.
 set -uo pipefail
@@ -31,6 +34,9 @@ THRESHOLD="${OPSCI_JUMP_THRESHOLD:-250000}"
 REPEAT="${OPSCI_JUMP_REPEAT:-50000}"
 IN=$(cat)
 KEY=$(cm_pane_key) || exit 0
+MODE=$(cm_jump_mode)
+# Jumps off: no request can exist (jump.sh refuses), no timer, no size notice.
+[ "$MODE" = off ] && { cm_timer_kill "$KEY"; exit 0; }
 command -v jq >/dev/null 2>&1 || exit 0
 
 block() { jq -n --arg r "$1" '{decision:"block", reason:$r}'; exit 0; }
@@ -78,7 +84,7 @@ else
   cm_timer_kill "$KEY"
 fi
 
-if [ "$ACTIVE" != true ]; then
+if [ "$ACTIVE" != true ] && [ "$MODE" = all ]; then
   TP=$(printf '%s' "$IN" | jq -r '.transcript_path // empty')
   if [ -n "$TP" ] && command -v python3 >/dev/null 2>&1; then
     tokens=$(python3 "$HERE/ctx_usage.py" --transcript "$TP" 2>/dev/null) || tokens=""

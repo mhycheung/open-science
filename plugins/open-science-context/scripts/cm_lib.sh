@@ -22,6 +22,13 @@ OS_BUSY_RE='esc to interrupt'
 
 cm_log() { mkdir -p "$OS_STATE" 2>/dev/null; echo "[$(date -Iseconds)] $*" >> "$OS_LOG"; }
 
+# Which jumps the user allows: all (default), wait (wait and cache-cold jumps only) or off.
+# Set as OPSCI_JUMPS in the "env" block of the Claude settings.json (onboarding asks).
+# An unknown value counts as all, so a typo does not silently switch jumps off.
+cm_jump_mode() {
+  case "${OPSCI_JUMPS:-all}" in off|wait) echo "$OPSCI_JUMPS" ;; *) echo all ;; esac
+}
+
 cm_key() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'; }
 
 # Key for this pane: tmux socket + pane id. Pane ids are unique only per server.

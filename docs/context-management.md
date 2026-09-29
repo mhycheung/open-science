@@ -6,6 +6,20 @@ work stands in the project's context files, clears its own conversation, and car
 those files. This is called a **jump**. You will see the agent type into its own tmux pane;
 that is expected.
 
+![Two agents clearing their context and resuming on their own](figures/context_jumps.svg)
+
+Left: the context is over 250k tokens, so the agent saves its state to the task's context
+file and the plugin clears the session and resumes it from that file. Right: the agent
+submits a SLURM job, saves its state and clears; the idle session is woken when the job
+leaves the queue and resumes from the context file. Clearing before a long wait matters
+because the prompt cache expires while the session sits idle: waking a session that still
+holds a long conversation would resend all of it uncached, which costs far more than a
+fresh start from the context file.
+
+**Jumps are optional.** Without them, the plugin still registers each pane to its context
+file, the agents still keep the context files current, and any session can take over a task
+with `open-science-context:continue-context`. See [Choosing which jumps](#choosing-which-jumps).
+
 ```bash
 claude plugin install open-science-context@open-science
 ```
@@ -78,6 +92,7 @@ exiting, or a Monitor event. For SLURM jobs the agent starts a waker before a wa
 
 | refusal | why |
 |---|---|
+| `OPSCI_JUMPS` is `off`, or `wait` for an active jump | you switched these jumps off |
 | not in tmux | the jump types into the pane |
 | the context file is missing, or was not saved in the last 15 minutes | the state to resume from was not written |
 | the session's state file cannot be found | the clear could not be confirmed |
@@ -99,7 +114,25 @@ At every stop of a main session inside tmux, the Stop hook:
    after its context has grown by another 50k tokens, so a session waiting for you is not
    stopped at every reply.
 
-Outside tmux it does nothing.
+Outside tmux it does nothing. With `OPSCI_JUMPS=wait` it skips step 3; with
+`OPSCI_JUMPS=off` it only stops a leftover timer.
+
+### Choosing which jumps
+
+Onboarding asks which jumps you want and records the answer as `OPSCI_JUMPS` in the `env`
+block of the Claude `settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` or
+`~/.claude/settings.json`). Edit it there to change it; new sessions pick it up.
+
+| `OPSCI_JUMPS` | what happens |
+|---|---|
+| `all` (the default, recommended) | active, wait and cache-cold jumps |
+| `wait` | no active jumps and no size notice from the Stop hook: the conversation grows as long as it needs to. Wait jumps and the cache-cold notice still clear the session before a long wait, when resending the conversation uncached would cost the most |
+| `off` | no jumps: `jump.sh` refuses every jump, and the Stop hook does nothing but stop a leftover cache-cold timer. Nothing types into your panes |
+
+Jumps are recommended: they reduce usage and keep the agent working from the current state
+of the work. Newer models cost less and work well with a long conversation, so keeping the
+conversation (`wait` or `off`) is a reasonable choice. With every setting, pane registration,
+the context files, `continue-context` and subagent checkpoints work as described on this page.
 
 ## Settings
 
@@ -107,6 +140,7 @@ Environment variables read by the scripts:
 
 | variable | default | what |
 |---|---|---|
+| `OPSCI_JUMPS` | `all` | which jumps are allowed: `all`, `wait` or `off` ([Choosing which jumps](#choosing-which-jumps)) |
 | `OPSCI_JUMP_THRESHOLD` | 250000 | context size (tokens) at which the Stop hook asks for an active jump |
 | `OPSCI_JUMP_REPEAT` | 50000 | growth (tokens) before the hook asks the same session again |
 | `OPSCI_ACTIVE_JUMP_FLOOR` | 100000 | below this, an active jump needs `--force` |

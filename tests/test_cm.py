@@ -237,6 +237,26 @@ def test_threshold_is_a_setting(env, tmp_path):
     assert stop(env, payload(transcript=transcript(tmp_path, 150_000)))["decision"] == "block"
 
 
+# ---- Stop hook: the user's jump setting (OPSCI_JUMPS) ---------------------------------
+
+def test_jumps_off_makes_the_stop_hook_harmless(env, tmp_path):
+    env["OPSCI_JUMPS"] = "off"
+    assert stop(env, payload(tasks=[SUBAGENT], transcript=transcript(tmp_path, 300_000))) is None
+    assert not timer_file(env).exists()
+    assert not (Path(env["OPSCI_STATE_DIR"]) / "jump").exists()
+
+
+def test_jumps_wait_keeps_the_timer_and_drops_the_size_notice(env, tmp_path):
+    env["OPSCI_JUMPS"] = "wait"
+    assert stop(env, payload(tasks=[SUBAGENT], transcript=transcript(tmp_path, 300_000))) is None
+    assert alive(int(timer_file(env).read_text()))
+
+
+def test_unknown_jump_setting_counts_as_all(env, tmp_path):
+    env["OPSCI_JUMPS"] = "offf"
+    assert stop(env, payload(transcript=transcript(tmp_path, 300_000)))["decision"] == "block"
+
+
 # ---- Stop hook: only a registered session is managed ------------------------------------
 
 def test_unregistered_pane_gets_no_timer_and_no_size_notice(env, tmp_path):
@@ -361,6 +381,18 @@ def test_jump_refusals(env, session, tmp_path, case):
     r = jump(env, *args, fake_claude=fake)
     assert r.returncode != 0, r.stdout
     assert request(env) is None
+
+
+@pytest.mark.parametrize("mode,kind,ok", [("off", "active", False), ("off", "wait", False),
+                                          ("wait", "active", False), ("wait", "wait", True),
+                                          ("all", "active", True)])
+def test_jump_setting_limits_jumps(env, session, mode, kind, ok):
+    env["OPSCI_JUMPS"] = mode
+    r = jump(env, kind, session["ctx"])
+    assert (r.returncode == 0) == ok, r.stderr
+    assert (request(env) is not None) == ok
+    if not ok:
+        assert "OPSCI_JUMPS" in r.stderr
 
 
 def test_force_overrides_the_floor(env, session):

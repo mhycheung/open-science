@@ -11,6 +11,13 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Session jumps are optional. A new setting, `OPSCI_JUMPS` in the `env` block of the Claude
+  `settings.json`, allows `all` jumps (the default), only `wait` jumps (no active jumps and no
+  size notice), or none (`off`: `jump.sh` refuses every jump and the Stop hook does nothing
+  but stop a leftover cache-cold timer). Pane registration, the context files,
+  `continue-context` and subagent checkpoints work with every setting. Onboarding asks which
+  jumps the user wants. The README and the docs home no longer show the jump animation; it
+  is on the context-management page. No layout change.
 - Zenodo data releases are linked to the project's results. Each release entry in
   `data/MANIFEST.yaml` records the paths each tar holds (`groups`). `opsci map build` shows,
   beside every result `artifacts` path under `data/`, the newest production release that

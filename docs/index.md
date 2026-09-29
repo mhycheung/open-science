@@ -18,20 +18,10 @@ open-science is a framework for doing research in the open:
 ![How a project is organised and published](figures/project_flow.svg)
 
 - **Context management for agentic work.** Agents keep a short context file for the project
-  and for each task. They clear their conversation on their own and resume from that
-  file, so a long session is not resent in full on every turn or after the prompt cache
-  expires, which reduces usage. The same files let collaborators and other researchers
-  pick up an ongoing project straight away.
-
-![Two agents clearing their context and resuming on their own](figures/context_jumps.svg)
-
-Left: the context is over 250k tokens, so the agent saves its state to the task's context
-file and the plugin clears the session and resumes it from that file. Right: the agent
-submits a SLURM job, saves its state and clears; the idle session is woken when the job
-leaves the queue and resumes from the context file. Clearing before a long wait matters
-because the prompt cache expires while the session sits idle: waking a session that still
-holds a long conversation would resend all of it uncached, which costs far more than a
-fresh start from the context file.
+  and for each task, so any new session, a collaborator or another researcher can pick up
+  an ongoing project straight away. Optionally, agents also clear their conversation on
+  their own and resume from that file ("session jumps"), so a long session is not resent in
+  full on every turn or after the prompt cache expires, which reduces usage.
 
 **Start with the [tutorial](tutorial.md).** The rest of this documentation covers each part
 in full; see the navigation menu.
@@ -65,7 +55,7 @@ the onboarding skill.
 | # | component | what it does | pages |
 |---|---|---|---|
 | 1 | project management: the project template and the `open-science-project` plugin | the layout every project is copied from (description, tasks, map, rules, citations, context files, publish settings), and skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project template and layout](project-template.md), [Project skills](project-skills.md) |
-| 2 | context management: the `open-science-context` plugin, for agents | Claude Code agents clear their own conversation and resume from the context files ("session jumps"); Claude Code must run inside tmux | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
+| 2 | context management: the `open-science-context` plugin, for agents | Claude Code agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files ("session jumps"); Claude Code must run inside tmux | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
 | 3 | publishing: `opsci publish` and the `open-science-publish` plugin | the checked, user-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
 
 Also part of the framework:

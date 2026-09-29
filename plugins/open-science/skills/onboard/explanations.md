@@ -43,12 +43,14 @@ later by running this again."
   without the other parts; with publishing, each task's record also says whether it may go
   public, and the publish check also looks at the map and the records.
 - **Context management**: An AI agent can only hold a limited amount of conversation. On long
-  work it would otherwise forget things or slow down. With this part, when its memory gets
-  full, or before a long wait, the agent saves where the work stands in the project's
-  records, clears its own conversation and carries on from the records. You will see the
-  agent type into its own window; that is expected. It never does this while waiting for
-  your answer. **Needs the project management part** (the records it resumes from) and tmux,
-  a program that keeps terminal windows alive and lets the agent type into its own window.
+  work it would otherwise forget things or slow down. With this part, the agent keeps where
+  the work stands in the project's records, so a new session can take over at any time.
+  Optionally (you choose later in the setup), when its memory gets full or before a long
+  wait, the agent clears its own conversation and carries on from the records; you will then
+  see the agent type into its own window, which is expected. It never does this while
+  waiting for your answer. **Needs the project management part** (the records it resumes
+  from) and tmux, a program that keeps terminal windows alive and lets the agent type into
+  its own window.
 - **Publishing**: Each project gets two copies. The private one is where you work; it can
   hold drafts, notes and data. The public one is what the world sees. You never copy files
   to it by hand: publishing collects only the files you allowed in a list, checks them for
@@ -146,6 +148,30 @@ session works on a task, the task's short name after it (`quad-ratio-2 · pp-rea
 task name appears after your next message. Turn this on?"
 - **Yes (recommended)**: sessions are named after their project and task.
 - **No**: Claude Code keeps its own names, such as `quad-ratio-3f`.
+
+**1f — session jumps** (skip if the check found a setting): "With context management, the
+agent always keeps a short context file for each task, records which task each tmux pane
+works on, and can take over a task from its file in a new session. On top of that, it can
+clear its own conversation and carry on from the context file. This is called a jump, and it
+is optional. There are three kinds:
+- an **active jump**, when the conversation has grown large (about 250k tokens) or a piece of
+  work is finished: the agent saves where it stands, clears, and resumes from the file.
+  Without it, the whole conversation is sent again on every turn;
+- a **wait jump**, before a long wait on work that runs in the background, such as a SLURM
+  job: the agent saves, clears, and the finished job wakes the fresh session;
+- a **cache-cold jump**: if the agent has been idle for 45 minutes with work still running,
+  the plugin reminds it to do a wait jump. Claude keeps a recent conversation cheap to resend
+  for about an hour; waking a long conversation after that sends all of it again at full
+  price, which costs far more than a fresh start from the context file.
+
+Jumps are recommended: they reduce usage and keep each agent focused on the current state of
+the work. Newer models cost less and work well with a long conversation, so you may prefer
+to keep the conversation and not jump; you can change this later. Which jumps do you want?"
+- **All jumps (recommended)**: active, wait and cache-cold jumps.
+- **Only wait jumps**: the agent keeps its conversation however long it grows, but clears it
+  before a long wait, when resending it would cost the most.
+- **No jumps**: the agent never clears its own conversation. The context files, pane
+  records and taking over a task still work; nothing types into your panes.
 
 **1d — older skills with the same names** (skip if the check found none)
 - **Move them to an archive folder (recommended)**: they are moved, not deleted, and can be

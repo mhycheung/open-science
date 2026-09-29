@@ -36,6 +36,13 @@ new task a short name (`opsci task new --short-name`) and register the pane.
 
 ## Jumps
 
+**Jumps are optional; the user chose which in onboarding.** Check once per session:
+`echo "${OPSCI_JUMPS:-all}"`. `all`: everything below. `wait`: no active jumps (ignore the
+active row and keep working in this session however large it grows); wait and cache-cold
+jumps as below. `off`: no jumps at all; skip the rest of this section, but still register
+the pane, keep the context files current, and checkpoint subagents. `jump.sh` refuses what
+the setting does not allow.
+
 A jump clears this session and resumes from the context file. Jumping costs one context
 reload; not jumping costs the whole conversation re-read on every turn. Three kinds:
 
@@ -74,8 +81,9 @@ the wait jump: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/wait_slurm.sh" <jobid> [<job
 **Do not jump** while an optional component owns the pane (`jump.sh` says so), and a
 subagent never jumps. `jump.sh cancel` drops a pending request; `jump.sh status` shows it.
 
-Settings (environment): `OPSCI_JUMP_THRESHOLD` (250000), `OPSCI_ACTIVE_JUMP_FLOOR` (100000),
-`OPSCI_CACHE_COLD_MIN` (45), `OPSCI_JUMP_FRESH_MIN` (15), `OPSCI_STATE_DIR`.
+Settings (environment): `OPSCI_JUMPS` (all), `OPSCI_JUMP_THRESHOLD` (250000),
+`OPSCI_ACTIVE_JUMP_FLOOR` (100000), `OPSCI_CACHE_COLD_MIN` (45), `OPSCI_JUMP_FRESH_MIN` (15),
+`OPSCI_STATE_DIR`.
 
 ## Subagents
 

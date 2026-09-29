@@ -74,6 +74,19 @@ def test_check_bare_machine_reports_everything_missing(tmp_path):
     assert kv["deny_rule"] == "absent" and kv["github_ssh"] == "skipped"
 
 
+@pytest.mark.skipif(shutil.which("jq") is None, reason="jq not installed")
+def test_check_reports_the_jump_setting(tmp_path):
+    b = make_bin(tmp_path)
+    (b / "jq").symlink_to(shutil.which("jq"))
+    kv, _ = check(tmp_path, b)
+    assert kv["jumps"] == "unset"                  # onboarding asks
+    cfg = tmp_path / "home" / ".claude"
+    cfg.mkdir(parents=True)
+    (cfg / "settings.json").write_text('{"env": {"OPSCI_JUMPS": "off"}}')
+    kv, _ = check(tmp_path, b)
+    assert kv["jumps"] == "off"
+
+
 def test_check_configured_machine_and_never_prints_secrets(tmp_path):
     b = make_bin(tmp_path)
     stub(b, "tmux", 'case "$1" in -V) echo "tmux 9.9";; show) echo on;; esac')

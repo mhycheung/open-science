@@ -121,6 +121,9 @@ if have jq && [ "$(jq -r '.env.OPSCI_SESSION_NAMES // empty' "$CFG/settings.json
 else
     kv session_names off
 fi
+# Which session jumps the user allows (context management): unset until onboarding asks
+jm=""; have jq && jm=$(jq -r '.env.OPSCI_JUMPS // empty' "$CFG/settings.json" 2>/dev/null)
+kv jumps "${jm:-unset}"
 
 # GitHub over SSH: exit 1 with "successfully authenticated" means the key works
 if [ "$NETWORK" = 1 ] && have ssh; then

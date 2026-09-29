@@ -34,8 +34,8 @@ question also put the longer text in its `preview`. Do not shorten the texts int
 
 4. **Q1, components, and Q2, optional extras** (both multi-select, in one widget call; the
    options and their order are in `explanations.md`). The SLURM extra in Q2 follows the
-   three cases in `explanations.md` (in a job, cluster outside a job, no SLURM). Context management without project management: ask the
-   follow-up in `explanations.md`. Nothing chosen in either: stop here.
+   three cases there (in a job, cluster outside a job, no SLURM). Context management without
+   project management: ask the follow-up there. Nothing chosen in either: stop here.
 
 5. **Install the chosen plugins.** Tell the user the commands, then run them:
 
@@ -71,12 +71,13 @@ question also put the longer text in its `preview`. Do not shorten the texts int
        user will work on first (`tmux rename-window <name>`).
      - 1c, where tmux runs, only if `in_tmux=no`. With `slurm=present` and `batch_job=no`:
        say the "1c, cluster" text and offer to write `~/tmux-job.sh` from the job script in
-       `explanations.md`, with the account, partition and time limit the user gives
-       (`sbatch` it only after a yes), then give the connect steps of that text. Otherwise say the "1c, local" text.
+       `explanations.md`, with the account, partition and time limit the user gives (`sbatch`
+       it only after a yes), then the connect steps of that text. Else the "1c, local" text.
      - 1e, session names, only if `session_names=off`: ask with the "1e" text. After a yes,
        set `"OPSCI_SESSION_NAMES": "1"` in the `env` object of `<config>/settings.json`
        (`<config>` = `$CLAUDE_CONFIG_DIR` or `~/.claude`; create `env` if absent, keep every
        other key). It takes effect in new Claude Code sessions.
+     - 1f, only if `jumps=unset`: ask the "1f" text; set `OPSCI_JUMPS` (`all`/`wait`/`off`) as in 1e.
      - 1d, only if `same_name_skills` is not `none`: move the named directories to
        `<config>/skills-archive/` after a yes. Rename the archive folder if one is already
        there; never delete anything.
@@ -138,9 +139,8 @@ question also put the longer text in its `preview`. Do not shorten the texts int
      `mode-*`: offer `chmod 600` on it. `symlink` or `not-owned`: explain; change nothing.
    - If `deny_rule=absent` and a token was set up: offer to add
      `"Read(~/.config/opsci/**)"` to `permissions.deny` in `<config>/settings.json`
-     (`<config>` = `$CLAUDE_CONFIG_DIR` or `~/.claude`). Say plainly that it stops
-     accidental reads by the agent's Read tool, and that it is not a wall: a shell command
-     can still read the file.
+     (`<config>` = `$CLAUDE_CONFIG_DIR` or `~/.claude`). Say plainly that it stops accidental
+     reads by the agent's Read tool, and that it is not a wall: a shell command still can.
 
 10. **Summary.** Two lists: what was set up (with each check's result), and what is left for
     the user by hand (GitHub steps, the resurrect `register` line, restarting Claude Code so
