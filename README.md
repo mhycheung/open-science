@@ -15,13 +15,13 @@ open-science is a framework for doing research in the open:
 - **With or without agents.** It works the same whether an agent does a small part of the
   work, most of it, or none of it.
 
-![How a project is organised and published](docs/figures/project_flow.svg)
-
 - **Context management for agentic work.** Agents keep a short context file for the project
   and for each task, so any new session, a collaborator or another researcher can pick up
   an ongoing project straight away. Optionally, agents also clear their conversation on
   their own and resume from that file ("session jumps"), so a long session is not resent in
   full on every turn or after the prompt cache expires, which reduces usage.
+
+![How a project is organised and published](docs/figures/project_flow.svg)
 
 **Start with the [tutorial](docs/tutorial.md).** The full documentation is at
 <https://mhycheung.github.io/open-science/> (source in `docs/`).
