@@ -14,7 +14,6 @@ open-science is a framework for doing research in the open:
   secrets, and needs your approval.
 - **With or without agents.** It works the same whether an agent does a small part of the
   work, most of it, or none of it.
-
 - **Context management for agentic work.** Agents keep a short context file for the project
   and for each task, so any new session, a collaborator or another researcher can pick up
   an ongoing project straight away. Optionally, agents also clear their conversation on
