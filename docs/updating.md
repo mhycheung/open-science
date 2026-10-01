@@ -21,6 +21,18 @@ changed hooks with `/hooks`. Keep the same `opsci` release for both agents. Addi
 existing project keeps `CLAUDE.md` and `.claude/` and adds `config/codex.md` and the
 Codex role files; it does not move research records or disable Claude session controls.
 
+### The update notice
+
+The `open-science` plugin (the one with the onboarding skill) checks for a new release. At
+the start of a session it looks up, in the background and at most once a day, the version
+of the newest release in the framework repository (the remote of the marketplace the
+plugins came from). The agent is not told. If the release is newer than the installed
+plugin, the user sees one short notice when the agent finishes its first turn after the
+lookup, with the update commands; the same session does not show it again, and nothing
+asks a question. A failed lookup (no network) shows nothing. Set `OPSCI_UPDATE_CHECK=off`
+in the environment to turn the check off; in Claude Code, put it in the `env` block of
+`settings.json`. The check works the same in Codex once its hooks are trusted (`/hooks`).
+
 ## 2. Update each project
 
 In the project, ask for `open-science-project:update-from-template`. The skill:

@@ -11,6 +11,11 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- The `open-science` plugin tells the user when a newer release exists. A SessionStart hook
+  looks up the newest release's version in the background, at most once a day; a Stop
+  hook shows the user one notice per session, with the update commands for Claude Code or
+  Codex, when that release is newer than the installed plugin. The agent is not told and
+  no question is asked. `OPSCI_UPDATE_CHECK=off` turns it off. No layout change.
 - Two documents for the user to write: `ABSTRACT.md` and `WRITEUP.md` (a short page in the
   user's words: main results and methods, or current work and thinking, each linked to its
   task, result or context). Both say `TODO` in a new project. Agents do not fill them in

@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/scripts/update_check.sh\"", "timeout": 10}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/scripts/update_check.sh\"", "timeout": 10}]}]
+  }
+}

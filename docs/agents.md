@@ -57,6 +57,10 @@ caps, and guard accidental direct pushes to the public remote. Keep running
 or custom-tool edit. Every agent commit uses an `Agent: claude` or `Agent: codex` trailer;
 the publication check uses attribution to reject agent-set human verification.
 
+The `open-science` plugin's hook tells the user, once per session, when a newer release
+exists ([Updating](updating.md#the-update-notice)); in Codex the notice names the Codex
+update commands.
+
 `opsci notion enable` adds auto-sync hooks for Claude Code and Codex while keeping
 unrelated settings. With Codex, trust that project's Stop hook before relying on it.
 Manual `opsci notion sync` remains available. Credential files stay outside the project,
