@@ -34,6 +34,9 @@ CARD_TEXT_PT = 142.0  # text width of a card (5 cm)
 PAD = 5.0             # space between a card's border and its text
 BAR = 3.0             # width of the status bar on a card's left edge
 TOOLS = ("dot", "pdflatex", "pdftocairo", "pdftoppm")
+PNG_DPI = 170         # resolution of the PNG (for Notion)
+PNG_MAX_PX = 8000     # longest side of the PNG; a larger graph is drawn at a lower resolution, so the
+                      # file stays under Notion's 5 MiB upload limit
 SVG_MARK = "<!-- opsci-graph {} -->"
 BADGES = {  # the label on a card or box -> its colour, and the text after it in the legend
     "public": ("publicB", "files published"),
@@ -234,12 +237,19 @@ def _html_box(w: float, h: float) -> str:
 
 
 def layout(work: Path, d: dict, dims: dict) -> dict:
-    """Graphviz's placement: node centres and sizes, box corners, edge splines, in pt."""
+    """Graphviz's placement: node centres and sizes, box corners, edge splines, in pt. The
+    graph is laid out left to right and top to bottom, and the narrower of the two is kept:
+    Notion and most pages fit an image to the column width, so a wide image is drawn small."""
+    lays = [_layout(work, d, dims, rd) for rd in ("LR", "TB")]
+    return min(lays, key=lambda lay: (lay["bb"][2] - lay["bb"][0], lay["rankdir"] != "LR"))
+
+
+def _layout(work: Path, d: dict, dims: dict, rankdir: str) -> dict:
     card_w = CARD_TEXT_PT + 2 * PAD + BAR + 3
     cid = {c["id"]: f"c{i}" for i, c in enumerate(d["cards"])}
     bid = {b["id"]: f"b{i}" for i, b in enumerate(d["boxes"])}
     members = {b["id"]: [c["id"] for c in d["cards"] if c.get("box") == b["id"]] for b in d["boxes"]}
-    lines = ["digraph G {", 'rankdir=LR; nodesep=0.3; ranksep=0.6; splines=spline; compound=true; '
+    lines = ["digraph G {", f'rankdir={rankdir}; nodesep=0.3; ranksep=0.6; splines=spline; compound=true; '
              'newrank=true; node [shape=box, fixedsize=true, label=""]; edge [arrowsize=0.5];']
     for b in d["boxes"]:
         w, h = dims[bid[b["id"]]]
@@ -295,7 +305,8 @@ def layout(work: Path, d: dict, dims: dict) -> dict:
                 pts.append(tuple(map(float, tok.split(","))))
         lp = tuple(map(float, e["lp"].split(","))) if "lp" in e else None
         splines[e["id"]] = (pts, endp, lp)
-    return {"pos": pos, "bbs": bbs, "splines": splines, "bb": tuple(map(float, g["bb"].split(",")))}
+    return {"pos": pos, "bbs": bbs, "splines": splines, "bb": tuple(map(float, g["bb"].split(","))),
+            "rankdir": rankdir}
 
 
 # ---------------------------------------------------------------- TikZ
@@ -451,8 +462,10 @@ def render(d: dict, base: Path) -> None:
             raise DrawError("pdflatex failed on the graph: " + ("; ".join(err[:3]) or r.stdout[-300:]))
         subprocess.run([_tool("pdftocairo"), "-svg", "graph.pdf", "graph.svg"], cwd=work, check=True,
                        capture_output=True, timeout=300)
-        subprocess.run([_tool("pdftoppm"), "-png", "-r", "170", "-singlefile", "graph.pdf", "graph"], cwd=work,
-                       check=True, capture_output=True, timeout=300)
+        x1, y1, x2, y2 = lay["bb"]
+        dpi = min(PNG_DPI, PNG_MAX_PX * 72 / (max(x2 - x1, y2 - y1) + 40))  # 40: the border and the legend
+        subprocess.run([_tool("pdftoppm"), "-png", "-r", f"{dpi:.0f}", "-singlefile", "graph.pdf", "graph"],
+                       cwd=work, check=True, capture_output=True, timeout=300)
         svg = (work / "graph.svg").read_text(encoding="utf-8")
         first, _, rest = svg.partition("\n")
         mark = SVG_MARK.format(digest(d))

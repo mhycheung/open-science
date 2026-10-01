@@ -181,6 +181,12 @@ def drawings(all_nodes: list[Node], root_has, bib: dict[str, str] | None = None,
     ``badges`` carries that label (a key of ``graphdraw.BADGES``)."""
     out = {"map/graph": graph_drawing(all_nodes, badges),
            "map/claims": results.claims_drawing(all_nodes, bib, badges)}
+    for n in all_nodes:  # one claims graph per task, beside its results page
+        if results.is_task_page_node(n):
+            mine = {r.id for r in results.task_results(n, all_nodes)}
+            if mine:
+                out[f"{n.path.rsplit('/', 1)[0]}/results/claims"] = results.claims_drawing(all_nodes, bib, badges,
+                                                                                            only=mine)
     for sub in SUBROOTS:
         if root_has(sub):
             pre = sub + "/"

@@ -236,6 +236,8 @@ def test_plots_in_versions_pdf_twin_and_data(tmp_path):
     plot(td / "fig" / "y.pdf", b"%PDF y")          # PDF twin of y.png: skipped
     plot(td / "fig" / "z.pdf", b"%PDF z")          # a PDF on its own: shown
     plot(td / "data" / "w.png", b"w")              # under data/: ignored
+    plot(td / "results" / "claims.png", b"g")      # a graph image of `opsci map build`: ignored
+    (td / "results" / "claims.svg").write_text('<?xml version="1.0"?>\n<!-- opsci-graph 0123 -->\n<svg/>\n')
     ps = mirror.plots_in(root, td)
     assert [p["path"] for p in ps] == [f"tasks/{TASK}/fig/x_2026-09-28.png", f"tasks/{TASK}/fig/y.png",
                                        f"tasks/{TASK}/fig/z.pdf"]

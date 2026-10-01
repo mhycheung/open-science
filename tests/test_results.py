@@ -86,6 +86,12 @@ def test_results_pages_and_claims_graph(project):
     claims = read(project, "map/claims.md")
     assert "![Claims graph](claims.svg)" in claims
     drawing = results.claims_drawing(nodes.scan(project).nodes, results.read_bib(project))
+    # each task's results page draws the part of the claims graph around its results
+    assert "![Claims graph of this task](claims.svg)" in page
+    assert (project / "tasks/t02-fit/results/claims.svg").is_file()
+    part = results.claims_drawing(nodes.scan(project).nodes, only={"r-mass"})
+    assert {c["id"] for c in part["cards"]} == {"r-mass", "r-psd"}  # r-psd: what it rests on, unboxed
+    assert [b["id"] for b in part["boxes"]] == ["t02-fit"]
     assert {"id": "t01-noise", "kicker": "task t01-noise", "title": "Noise model", "style": "task"} in drawing["boxes"]
     assert ["r-psd", "r-mass", "dep"] in drawing["edges"]
     assert next(c for c in drawing["cards"] if c["id"] == "r-mass")["tags"] == ["Isi2019"]

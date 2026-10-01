@@ -59,3 +59,14 @@ def test_real_render_is_repeatable(tmp_path, monkeypatch):
     assert (tmp_path / "a.svg").read_bytes() == (tmp_path / "b.svg").read_bytes()
     assert (tmp_path / "a.png").read_bytes() == (tmp_path / "b.png").read_bytes()
     assert not re.search(r"/home|/tmp|/anvil", svg)  # no local path in the image
+
+
+@pytest.mark.skipif(G._tool("dot") is None, reason="needs Graphviz")
+def test_layout_keeps_the_narrower_direction(tmp_path):
+    cards = [{"id": f"n{i}", "title": "", "meta": "", "status": "done"} for i in range(6)]
+    chain = G.drawing(cards, [], [(f"n{i}", f"n{i + 1}", "dep") for i in range(5)], "used by")
+    dims = {f"c{i}": (G.CARD_TEXT_PT, 30.0) for i in range(6)}
+    lay = G.layout(tmp_path, chain, dims)
+    assert lay["rankdir"] == "TB"  # a long chain is drawn top to bottom, not as a wide strip
+    x1, y1, x2, y2 = lay["bb"]
+    assert x2 - x1 < y2 - y1

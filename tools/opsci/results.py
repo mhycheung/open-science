@@ -331,13 +331,22 @@ def render_task_results(task: Node, nodes: list[Node], linked=None, zenodo=None)
     tdir = task.path.rsplit("/", 1)[0]
     page_dir = tdir + "/results"
     ids = {n.id: n for n in nodes}
-    rs = [n for n in results(nodes) if results_dir(n.path) == page_dir]
+    rs = task_results(task, nodes)
     intro = ["The scientific results of this task: the figures, tables, values and statements it",
              "established, not the plots and numbers of debugging runs. Each result has its own file",
              "here, `<result-id>.md`, with a `type: result` header (fields: `tasks/README.md`). This page",
              f"is generated from those headers. What each result rests on, across the project: "
              f"[the claims graph]({_rel(_claims_path(tdir), page_dir)})."]
+    if rs:
+        intro += ["", "The part of the claims graph around this task's results: what they rest on and what",
+                  "uses them.", "", "![Claims graph of this task](claims.svg)"]
     return _page(f"Results: {task.get('title')}", intro, rs, ids, page_dir, linked, "No results yet.", zenodo)
+
+
+def task_results(task: Node, nodes: list[Node]) -> list[Node]:
+    """The results in a task's ``results/`` directory."""
+    page_dir = task.path.rsplit("/", 1)[0] + "/results"
+    return [n for n in results(nodes) if results_dir(n.path) == page_dir]
 
 
 def render_project_results(nodes: list[Node], linked=None, zenodo=None) -> str:
@@ -364,12 +373,13 @@ def link_lines(links: list[tuple[str, str, str]]) -> list[str]:
     return ["## Other links", ""] + [f"- `{a}` {say[k]} `{b}`." for a, b, k in links] + [""]
 
 
-def _claims_parts(nodes: list[Node]) -> dict:
+def _claims_parts(nodes: list[Node], only: set[str] | None = None) -> dict:
     """What the claims graph of ``nodes`` draws: the results, every node drawn, the tasks
     boxed with their results (box id -> results; "results" for project-level results, ""
-    for results in no box), the nodes that use a result, and the verification tasks."""
+    for results in no box), the nodes that use a result, and the verification tasks. With
+    ``only`` (a set of result ids), only those results and their neighbours are drawn."""
     ids = {n.id: n for n in nodes}
-    rs = results(nodes)
+    rs = [n for n in results(nodes) if only is None or n.id in only]
     drawn = {n.id for n in rs}
     for n in rs:
         drawn |= {d for d in n.get("depends_on", []) or [] if d in ids}
@@ -402,12 +412,13 @@ def _claims_edges(p: dict) -> list[tuple[str, str, str]]:
     return out
 
 
-def claims_drawing(nodes: list[Node], bib=None, badges=None) -> dict | None:
+def claims_drawing(nodes: list[Node], bib=None, badges=None, only: set[str] | None = None) -> dict | None:
     """The drawing of the claims graph (``graphdraw``), or None if there are no results. A
     node or task box whose id is in ``badges`` carries that label (a key of
-    ``graphdraw.BADGES``)."""
+    ``graphdraw.BADGES``). With ``only`` (a set of result ids), the part of the graph around
+    those results: what they rest on and what uses them."""
     badges = badges or {}
-    p = _claims_parts(nodes)
+    p = _claims_parts(nodes, only)
     ids, rs = p["ids"], p["rs"]
     if not rs:
         return None
@@ -460,6 +471,8 @@ def render_claims(nodes: list[Node], linked=None, bib=None, page_dir: str = "map
         "Colour shows the status; a thick red border marks a result that rests on failed, superseded",
         "or abandoned work and may no longer hold.",
         "", "![Claims graph](claims.svg)", "",
+        "Each task's results page (`tasks/<id>/results/README.md`) draws the part of this graph",
+        "around that task's results, at a size that can be read.", "",
     ]
     risky = [n for n in rs if at_risk(n, ids)]
     out += ["## May no longer hold", ""]
@@ -510,6 +523,12 @@ def render_claims(nodes: list[Node], linked=None, bib=None, page_dir: str = "map
     return "\n".join(out)
 
 
+def is_task_page_node(n: Node) -> bool:
+    """Whether ``n`` is a task's own node (its ``context.md``), which has a results page."""
+    return n.get("type") == "task" and bool(task_of(n.path)) and n.path.endswith("/context.md") \
+        and n.path.count("/") == task_of(n.path).count("/") + 1
+
+
 def outputs(nodes: list[Node], root_has, linked=None, bib=None, zenodo=None) -> dict[str, str]:
     """The generated result files: the claims graph (and one per sub-root that exists), the
     project results page, and one results page per task. ``zenodo``: the data manifest
@@ -522,8 +541,7 @@ def outputs(nodes: list[Node], root_has, linked=None, bib=None, zenodo=None) -> 
             mine = [n for n in nodes if n.path.startswith(pre)]
             out[f"{sub}/map/claims.md"] = render_claims(mine, linked, bib, page_dir=f"{sub}/map", zenodo=zenodo)
     for n in nodes:
-        if n.get("type") == "task" and task_of(n.path) and n.path.endswith("/context.md") \
-                and n.path.count("/") == task_of(n.path).count("/") + 1:
+        if is_task_page_node(n):
             rel = f"{task_of(n.path)}/results/README.md"
             if linked is None or rel in linked:
                 out[rel] = render_task_results(n, nodes, linked, zenodo)

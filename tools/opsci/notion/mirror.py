@@ -97,6 +97,16 @@ def caption_rich(plot: Path, rel: str) -> list:
     return nb.fit100(rt + (nb._t("\n") if rt else []) + nb._t(rel, {"code": True, "color": "gray"}))
 
 
+def is_graph_image(p: Path) -> bool:
+    """Whether ``p`` is a graph image that `opsci map build` drew (``opsci.graphdraw``): its
+    SVG carries the graph mark."""
+    svg = p.with_suffix(".svg")
+    if p.suffix.lower() not in (".svg", ".png") or not svg.is_file():
+        return False
+    with svg.open(encoding="utf-8", errors="replace") as f:
+        return "<!-- opsci-graph " in f.read(300)
+
+
 def plots_in(root: Path, task_dir: Path) -> list[dict]:
     """The newest version of each plot in a task directory."""
     best = {}
@@ -107,6 +117,8 @@ def plots_in(root: Path, task_dir: Path) -> list[dict]:
             continue
         if p.suffix.lower() == ".pdf" and any(p.with_suffix(e).exists() for e in (".png", ".jpg", ".svg")):
             continue                                   # the PDF twin of a PNG is the same figure
+        if is_graph_image(p):
+            continue                                   # a graph image of `opsci map build`, shown on its page
         rel = str(p.relative_to(root))
         key = DATE_IN_NAME.sub("", rel)
         m = DATE_IN_NAME.search(rel)
