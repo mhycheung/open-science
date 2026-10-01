@@ -14,9 +14,10 @@ pip install -U "git+<URL of the framework repository>@<tag>#subdirectory=tools"
 Plugin updates load in a new Claude Code session. The framework's `CHANGELOG.md` lists what
 changed in each version.
 
-For Codex, run `codex plugin marketplace upgrade open-science`, re-add each chosen
-plugin with `codex plugin add <plugin>@open-science`, and restart. Review changed hooks
-with `/hooks`. Keep the same `opsci` release for both agents. Adding Codex support to an
+For Codex, run `codex plugin marketplace upgrade open-science` if you added the
+marketplace from GitHub, or `git pull` the checkout if you added a local checkout. Then
+re-add each chosen plugin with `codex plugin add <plugin>@open-science` and restart. Review
+changed hooks with `/hooks`. Keep the same `opsci` release for both agents. Adding Codex support to an
 existing project keeps `CLAUDE.md` and `.claude/` and adds `config/codex.md` and the
 Codex role files; it does not move research records or disable Claude session controls.
 

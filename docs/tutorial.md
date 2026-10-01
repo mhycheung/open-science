@@ -22,11 +22,12 @@ In Claude Code, type:
 /open-science:onboard
 ```
 
-The agent first checks what your machine already has. It then asks which components you want
+Claude first checks what your machine already has. It then asks which components you want
 and how agents should reach you (Notion is recommended), and installs what you choose. It
 does not change any of your settings without asking you first. API tokens are never pasted
 into the chat: you write them by running a script in your own terminal. When it finishes,
-start a new session so the new plugins load. With Codex, review and trust the hooks using `/hooks`.
+start a new Claude Code session so the new plugins load. Onboarding also works in Codex;
+there, restart Codex and review and trust the hooks using `/hooks`.
 
 Without an agent: install `opsci` ([The opsci command](cli.md)), then set up each component
 from its page, listed in [Get started](index.md#components).

@@ -5,9 +5,11 @@ description: Take over the work a context file describes and drive it as the mai
 
 # Continue from a context file
 
-Claude Code uses the paths below. In Codex, resolve this skill directory's parent twice for
-`PC` below. Follow `../context-management/codex.md` for registration and session controls;
-if registration is unavailable, report it and continue from the explicitly named file.
+Claude Code uses the paths below. In Codex, `${CLAUDE_PLUGIN_ROOT}` is not set: use the
+installed plugin root, two parents above this skill's directory, so `PC` is
+`<plugin root>/scripts/pane_context.sh`. Every step below applies; for registration and
+session controls also read `../context-management/codex.md`. If registration is unavailable,
+report it and continue from the explicitly named file.
 
 You are the main agent for the work the context file describes. Another session drove it
 until now, possibly this one before a jump.

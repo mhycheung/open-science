@@ -1,11 +1,16 @@
 # Working in tmux
 
-**Automatic session jumps require tmux.** Claude Code clears its conversation in its pane;
-Codex ends its TUI and starts a fresh session from the same pane's shell. Both register the
-context file that the pane drives. Outside tmux, use an explicit context-file path to
-continue in a new session. Project management and publishing work without tmux.
-See [context management](context-management.md#codex-session-controls) for Codex hook trust and writable
-state setup.
+**Context management requires tmux.** Claude Code must run inside a tmux pane for session
+jumps to work: a jump clears the conversation by typing into the agent's own pane, and the
+pane records which context file it drives. Outside tmux, `jump.sh` refuses to run and the
+plugin's Stop hook does nothing, so the agent's conversation only grows. Project management
+and publishing work without tmux.
+
+Codex needs tmux only for session jumps: a Codex jump ends the session and starts a new one
+from the same pane's shell. Outside tmux, Codex registers the context file for its session
+(`CODEX_THREAD_ID`) instead of the pane. See
+[context management](context-management.md#codex-session-controls) for Codex hook trust and
+writable state setup.
 
 tmux keeps terminal sessions running on a machine after you disconnect, and splits one
 terminal into several. This page covers what you need of it: connecting to a compute node

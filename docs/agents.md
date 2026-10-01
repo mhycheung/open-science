@@ -25,7 +25,8 @@ codex
 ```
 
 Ask Codex to use `open-science:onboard`. For a local checkout, pass its directory instead
-of `mhycheung/open-science` to the marketplace command. Install individual components
+of `mhycheung/open-science` to the marketplace command; to update it later, `git pull` the
+checkout (`codex plugin marketplace upgrade` refreshes only marketplaces added from Git). Install individual components
 with `codex plugin add open-science-project@open-science`, and similarly for
 `open-science-context` and `open-science-publish`. Install project management before
 context management. Restart Codex after installation.
@@ -50,7 +51,7 @@ on disk does not mean they run: new or changed definitions need review. Project-
 hooks also require a trusted project. Do not bypass trust during normal installation.
 See the [Codex hook documentation](https://learn.chatgpt.com/docs/hooks).
 
-The project hooks check file patches for `human-verified` assignments and context line
+The plugin hooks check file patches for `human-verified` assignments and context line
 caps, and guard accidental direct pushes to the public remote. Keep running
 `opsci context check` and `opsci publish check`: hooks do not cover every possible shell
 or custom-tool edit. Every agent commit uses an `Agent: claude` or `Agent: codex` trailer;
@@ -63,7 +64,7 @@ and only the user enters credentials in their own terminal.
 
 ## Shared research workflows
 
-The same prompts work with either agent:
+Give these prompts in a Claude Code session; they also work in Codex:
 
 ```text
 Start a new open-science project in <directory>.
@@ -110,7 +111,9 @@ files while keeping local customizations and existing Claude files. No task dire
 result, citation, or public release needs to move. To add Notion hooks to an existing
 mirrored project, run `opsci notion enable` again; it is idempotent.
 
-For Claude Code, use its existing marketplace/plugin update commands. For Codex, refresh
-the marketplace with `codex plugin marketplace upgrade open-science`, re-add the chosen
-plugins, then restart. Update `opsci` from the same release. Review changed hook
+For Claude Code, run `claude plugin update <plugin>@open-science` for each installed
+plugin and start a new session ([Updating](updating.md)). For Codex, refresh the marketplace
+with `codex plugin marketplace upgrade open-science` if you added it from GitHub, or
+`git pull` the checkout if you added a local checkout; then re-add the chosen plugins with
+`codex plugin add` and restart. Update `opsci` from the same release. Review changed hook
 definitions again. Never replace the whole settings file during an update.

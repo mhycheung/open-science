@@ -1,48 +1,61 @@
-# Onboarding with Codex
+# Onboarding with Codex: substitutions
 
-This is the Codex path through onboarding. Keep the same research choices and privacy
-rules as the shared skill. Do not edit Claude Code settings, move Claude skills, or
-change the user's tmux setup merely to install Codex support.
+Codex follows `SKILL.md` step by step and asks every question with the texts in
+`explanations.md`. Nothing is skipped or shortened. This file lists only the Claude Code
+mechanics that differ in Codex; everything not listed here applies unchanged.
 
-1. Check `codex --version`, `codex plugin marketplace list`, `codex plugin list`,
-   `opsci --help`, and the available git identity. Ask only for missing choices:
-   project management, context/handoff, publishing, and optionally SLURM recovery.
-   Ask the intended project directory and notification preference (Notion, Slack,
-   or local files). The descriptions in `explanations.md` explain the research components;
-   their Claude-specific installation and session controls apply only to Claude Code.
-2. Install the selected components with `codex plugin add <plugin>@open-science`.
-   If the marketplace is missing, first run
-   `codex plugin marketplace add mhycheung/open-science`. Install
-   `open-science-project` before `open-science-context`; do not assume dependencies
-   are installed automatically. The other component is `open-science-publish`.
-   Restart Codex after installation. If this CLI lacks `plugin`, report the required
-   upgrade rather than modifying another agent's configuration.
-3. Install `opsci` from the same framework release, if absent. From a checkout use
-   `pip install -e tools`; otherwise use the repository URL with `#subdirectory=tools`.
-   Keep a checkout for the project template: a cached plugin need not include `template/`.
-4. Review the installed hook commands with the user. Codex `/hooks` must trust the
-   current definitions before they run. Never mark them trusted on the user's behalf
-   or bypass trust during ordinary onboarding. Keep existing user hooks and settings.
-5. Project setup uses `open-science-project:new-project` or, for an existing layout,
-   `open-science-project:update-from-template`. Both agents use the same `AGENTS.md`,
-   context files, plans, citations, and results. Codex uses `config/codex.md` and
-   `.codex/agents/`; existing `CLAUDE.md` and `.claude/` remain intact.
-6. For context/handoff, load the Codex reference in
-   `open-science-context:context-management`. Only offer features that reference supports.
-   Ask whether jumps should be `all`, `wait`, or `off`, preserving an existing choice.
-   Explain the tmux, trusted-hook, and writable-state requirements before enabling jumps.
-   Offer a launch command with `OPSCI_JUMPS=<choice>` and the narrow state directory
-   passed through `--add-dir`; preserve the user's model, sandbox and approval settings.
-   Without that setup, offer manual handoff from a named context file.
-7. For notifications and publication credentials, keep the shared setup choices and
-   storage under `~/.config/opsci/`. The user runs `scripts/secret_file.sh` from this
-   plugin in their own terminal. Never read or display credentials. Notion uses
-   `opsci notion check`, `opsci notion enable`, and `opsci notion init` as documented
-   in `open-science-project:notion`. Slack uses `opsci notify --backend slack` only
-   when the user authorizes a message. Do not send test messages unasked.
-8. Report what was installed, what awaits hook trust or credentials, and the next
-   project command. Do not claim configuration is active just because files exist.
+**Everywhere**
+- Questions: use Codex's question tool when it is available, with the same options, order
+  and texts. Otherwise ask in plain text: list every option with its full text from
+  `explanations.md` and the recommended option first, and wait for the answer.
+- `${CLAUDE_PLUGIN_ROOT}`: Codex does not set it. Use this skill's directory, two parents
+  up (the installed plugin root), as an absolute path in each shell call.
+- Where a text says "Claude" or "Claude Code", say "Codex".
+- `<config>/settings.json` (`$CLAUDE_CONFIG_DIR` or `~/.claude`): never edit it from Codex.
+  Codex settings are in `~/.codex/config.toml` (or `$CODEX_HOME`); keep existing keys.
 
-For upgrades, run `codex plugin marketplace upgrade open-science`, then re-add the
-selected plugins and restart Codex. Use each CLI's `--help` if its update interface
-differs. Recheck hook trust after an update. Existing Claude Code installations stay intact.
+**Step 2, checks.** `onboard_check.sh` reports Claude Code plugins. For Codex, take the
+installed plugins from `codex plugin list` and the marketplace from
+`codex plugin marketplace list`. The other keys apply unchanged.
+
+**Step 5, install.** `codex plugin add <plugin>@open-science`. If the marketplace is
+missing, first `codex plugin marketplace add mhycheung/open-science`. Codex does not install
+dependencies: install `open-science-project` before `open-science-context`. New plugins load
+only in a new Codex session. If this Codex has no `plugin` command, say it must be upgraded.
+
+**Step 6, `opsci`.** Take the repository URL from `codex plugin marketplace list`.
+
+**Branch 1, context management.** Say "Codex inside tmux". Codex must be started from a
+shell in the pane (not `exec codex`), so that a jump can start a new session there.
+- 1e, session names: Codex has no session names to set. Do not ask; say this in one line.
+- 1f, jumps: ask the "1f" text, but leave out the sentence about Claude's one-hour cache
+  (Codex has no cache-cold notice). Codex reads `OPSCI_JUMPS` from the environment: offer a
+  launch command such as `OPSCI_JUMPS=<choice> codex --add-dir ~/.local/state/open-science`
+  (the state directory must be writable from the sandbox; `--add-dir` grants only that), and
+  keep the user's own model, sandbox and approval options.
+- Then the hooks: the context and project plugins have hooks that run only after the user
+  trusts them with `/hooks` in Codex. Show what they run and ask the user to review and
+  trust them. Never mark them trusted yourself or bypass the trust check.
+- 1d: `onboard_check.sh` looks only in Claude's skills folder. Also list `~/.codex/skills/`
+  (or `$CODEX_HOME/skills/`) for directories named like a framework skill, and treat them alike.
+
+**Branch 4, SLURM resurrection.** 4a: Codex instead of Claude in the batch job. 4b: the
+launch command is the user's `codex` command. 4c and 4d (permission mode, Remote Control)
+are Claude Code settings: a Codex pane resumes with the sandbox, approval and other options
+it was started with. Ask them only if the user will also run Claude Code in that tmux
+session; otherwise say this in one line. Codex panes resume only after the context plugin's
+Codex hook has run in them; say so. 4e and 4g: Codex has no `/slurm-resurrect:resurrect`
+command. Give the terminal form, `bash <plugin root of slurm-resurrect>/scripts/rr_registry.sh
+<command>`, to type in a plain shell pane of that tmux session (outside Codex): for 4e
+`set queue_mode early`; for 4g `register` (with `--permission-mode <mode> --remote-control
+off` if 4c was asked), run twice as in the text.
+
+**Step 9, tokens.** `secret_file.sh` refuses to run inside Codex too. The deny rule
+(`Read(~/.config/opsci/**)`) has no Codex equivalent: skip that offer and say so.
+
+**Step 10, summary.** "Restart Codex" instead of "restart Claude Code". Add any hooks that
+still wait for `/hooks` trust to the list of what is left for the user.
+
+**Updates.** `codex plugin marketplace upgrade open-science` (a marketplace added from
+GitHub; for a local checkout, `git pull` it instead), then `codex plugin add` each
+installed plugin again and restart Codex; recheck hook trust afterwards.

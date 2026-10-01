@@ -1,23 +1,66 @@
-# Codex project instructions
+# Codex only
 
-The shared research rules are in `AGENTS.md`. Claude Code uses `CLAUDE.md` and
-`.claude/agents/`; Codex uses this file and `.codex/agents/`.
+`AGENTS.md` holds the instructions for every agent; read it first. This file holds what
+Codex uses in place of `CLAUDE.md`, which Codex does not read. The sections Skills, Dispatch
+tiers and Sessions are the same as in `CLAUDE.md`; keep them in step.
 
-Main agents load `open-science-project:context-files` at startup. Invoke the framework
-skills by their installed full names; when a skill is unavailable, report that and use
-the documented `opsci` command instead of silently choosing a similarly named skill.
-The roles `med-effort`, `high-effort`, `low-effort`, `literature`, and `text` have the
-same contracts as the Claude Code roles. Use `med-effort` by default; use `high-effort`
-only after a recorded failed medium-effort attempt. The active Codex model is inherited.
+## Skills
+
+The framework's skills come from the open-science plugins. **Always name them in full**
+(`open-science-project:new-task`): a skill with the same short name installed elsewhere may
+otherwise be chosen instead.
+
+- Starting a task: `open-science-project:new-task`.
+- Keeping context files current: `open-science-project:context-files`. Main agents load it at
+  session start.
+<!-- opsci:context -->
+- Session jumps: `open-science-context:context-management`. Main agents load it at session
+  start, with `open-science-project:context-files`.
+- Taking over work from a context file: `open-science-context:continue-context`.
+- Questions about a context file, without acting on it: `open-science-context:advise-with-context`.
+<!-- /opsci:context -->
+- Publishing: `open-science-publish:publish`; data releases: `open-science-publish:zenodo-release`
+  (plugin `open-science-publish`, if installed).
+<!-- opsci:notion -->
+- Notion (this project is mirrored there, `AGENTS.md` section 10):
+  `open-science-project:notion`. Main agents load it at session start.
+<!-- /opsci:notion -->
+
+## Dispatch tiers
+
+Agent roles are defined in `.codex/agents/` (the same contracts as `.claude/agents/`). Every
+dispatch names one explicitly.
+
+| tier | use for |
+|---|---|
+| `med-effort` | the default: implement a specified change, run a specified sweep, review a diff, analyse a result |
+| `high-effort` | only after a `med-effort` attempt at the same task has provably failed, with the failure recorded |
+| `low-effort` | fully specified mechanics with no decision left: run a given command, a mechanical edit, pull numbers from a file |
+| `literature` | read a source and judge it; find which section supports a claim |
+| `text` | mechanical work on text: find a string, extract a table, assemble a document |
+
+The model behind each tier is set in its file; change it to the models you have.
 
 <!-- opsci:context -->
-Load `open-science-context:context-management` and follow its Codex instructions.
-Durable context files are shared; session controls are specific to the running agent.
-Never send Claude Code terminal commands to a Codex pane.
+## Sessions
+
+Agents clear their own conversation and resume from the context files ("jumps"); this is
+expected. The `open-science-context:context-management` skill describes when and how.
+<!-- /opsci:context -->
+
+## Codex mechanics
+
+Where a skill gives a Claude Code command or path, use the Codex substitution the skill
+names (its `codex.md`, or its Codex note); every question, rule and step still applies.
+`${CLAUDE_PLUGIN_ROOT}` is not set in Codex: use the installed plugin root, two parents
+above the skill's directory. When a framework skill is unavailable, report that and use the
+documented `opsci` command; never choose a similarly named skill instead.
+<!-- opsci:context -->
+Never send Claude Code terminal commands (such as `/clear`) to a Codex pane.
 <!-- /opsci:context -->
 <!-- opsci:notion -->
-Load `open-science-project:notion`. Run `opsci notion sync` after changes. Use `/hooks`
-to review and trust the project's Notion Stop hook before relying on automatic sync.
+Run `opsci notion sync` after changes. Review and trust the project's Notion Stop hook with
+`/hooks` before relying on automatic sync.
 <!-- /opsci:notion -->
 
 Before relying on plugin hooks, review and trust them using Codex `/hooks`. They check

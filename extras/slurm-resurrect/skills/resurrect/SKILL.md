@@ -8,10 +8,12 @@ allowed-tools: Read
 
 # /slurm-resurrect:resurrect
 
-In Claude Code, follow the hook procedure below. In Codex, no user-command hook runs:
-show the terminal command from this plugin's README and let the user run it in a plain
-terminal. Do not claim registration succeeded or run user-only commands on their behalf.
-Resolve the plugin root from this skill's installed directory (two parents).
+In Claude Code, follow the hook procedure below. In Codex, no user-command hook runs and
+there is no `[slurm-resurrect]` block: instead of steps 1-3, give the user the terminal form
+`bash <plugin root>/scripts/rr_registry.sh <command>` (plugin root: two parents above this
+skill's directory), to run in a plain terminal pane of the tmux session, outside Codex.
+Do not claim registration succeeded or run user-only commands on their behalf. The
+descriptions of the commands below apply to both agents.
 
 The user typed `/slurm-resurrect:resurrect $ARGUMENTS`.
 

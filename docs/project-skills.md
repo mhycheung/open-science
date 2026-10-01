@@ -1,7 +1,7 @@
 # Project skills (`open-science-project`)
 
 The `open-science-project` plugin is the project-structure component. It gives Claude Code
-and Codex skills and hooks that work on a project made from the
+seven skills and two hooks that work on a project made from the
 [template](project-template.md). It needs git and `opsci`.
 
 ```bash
@@ -24,6 +24,7 @@ folder.
 | `open-science-project:migrate-project` | move an existing project into the layout without losing a file |
 | `open-science-project:update-from-template` | take framework improvements into a project made from an older template |
 | `open-science-project:private-investigation` | record a side question in a private context file |
+| `open-science-project:notion` | keep a project's Notion mirror in sync; see [Notion](notion.md) |
 
 ## `open-science-project:new-project`
 

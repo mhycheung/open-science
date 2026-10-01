@@ -221,7 +221,7 @@ git-ignored) with the export, keeping `.github/`; writes the site workflow
 `publish/LAST_PUBLISHED` and commits that file in the private repository.
 
 The project's `.claude/settings.json` denies `git push public` and `git push --mirror`.
-The trusted Codex project hook guards those direct commands too. These checks prevent
+A Codex plugin hook of `open-science-project`, once trusted, guards those direct commands too. These checks prevent
 accidental direct publication; they are not a complete boundary against arbitrary shell
 programs. Both agents must use the publication skill and its approved export. Agent
 commits carry `Agent: claude` or `Agent: codex`; unmarked commits cannot reliably be

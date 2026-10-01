@@ -1,9 +1,13 @@
-# Context management with Codex
+# Context management with Codex: substitutions
 
-Claude Code follows the main skill's procedure. Codex uses this reference instead for
-session mechanics; `open-science-project:context-files` still governs the research record.
-Resolve the installed plugin root from this skill's directory (two parents). In the commands
-below, `SCRIPTS` means that root's `scripts/` directory; use its actual path in each shell call.
+Codex follows `SKILL.md`: when to register, when to jump and when not to, the jump's
+record (task and project context, log line, notification), and the subagent contract with
+its `PAUSED`, `SUBMITTED` and `DONE` reports. `open-science-project:context-files` governs
+the context files. This file lists only what differs in Codex.
+
+`${CLAUDE_PLUGIN_ROOT}`: Codex does not set it. Resolve the installed plugin root from this
+skill's directory (two parents). Below, `SCRIPTS` means that root's `scripts/` directory;
+use its actual path in each shell call.
 
 ## Register and resume work
 
@@ -54,7 +58,7 @@ Claude-style session naming. Do not apply Claude's cache lifetime assumptions to
 
 ## Subagents
 
-Use the project's `.codex/agents/` roles with the shared dispatch contracts. Give every
-agent its output paths, relevant context sections, budget and stopping condition. Keep
-durable subcontext notes; do not assume Codex exposes Claude's transcript/token interfaces.
-For long SLURM jobs, return the job id and next step to the main agent, which owns the waker.
+Use the project's `.codex/agents/` roles. Every dispatch prompt states what `SKILL.md`
+lists (subcontext path, the 200k-token stop, `PAUSED`/`SUBMITTED`/`DONE` reports, the
+closing line). Codex does not expose Claude's transcript or token counters to subagents:
+the subagent estimates its own size. The main agent owns the SLURM waker.

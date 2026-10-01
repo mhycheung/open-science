@@ -5,9 +5,10 @@ description: Bring an open-science project's scaffolding up to date with the fra
 
 # Update from template
 
-Claude Code uses the paths below. In Codex, resolve `CLAUDE_PLUGIN_ROOT` from this directory's parent twice.
-Read `.codex-plugin/plugin.json` for the version; use Codex plugin marketplace upgrade/add
-for plugin updates. Keep Claude Code files and project choices while adding Codex files.
+Claude Code uses the paths below. In Codex, `CLAUDE_PLUGIN_ROOT` is the installed plugin
+root, two parents above this skill's directory; read the version from its
+`.codex-plugin/plugin.json`. Keep Claude Code files and project choices while adding Codex
+files. The plugin update commands for Codex are in "Updating the code".
 
 A project records the framework commit it was copied from, and the changes it made on
 purpose, in `config/framework.yaml`. **Updating is a diff against that commit, applied by
@@ -95,7 +96,9 @@ committed there, not only in this project.
 This skill updates the project's files. The plugins and `opsci` are updated separately, by
 the user or with their approval: `claude plugin marketplace update open-science`, then
 `claude plugin update <plugin>@open-science` for each installed plugin (restart Claude
-Code to load it), and
+Code to load it); in Codex, `codex plugin marketplace upgrade open-science` (a GitHub
+marketplace; for a local checkout, `git pull` it), then `codex plugin add
+<plugin>@open-science` for each installed plugin (restart Codex to load it); and
 `pip install -U "git+<framework_repo>@v<version>#subdirectory=tools"` (or `pip install -e
 tools` from a clone) for `opsci`. Update the code first, so that the plugin version names the
 release this skill updates the project to.

@@ -30,7 +30,7 @@
     {
       "name": "slurm-resurrect",
       "source": "./extras/slurm-resurrect",
-      "description": "Optional extra: resume Claude Code sessions in a fresh SLURM job when the current job reaches its time limit."
+      "description": "Optional extra: resume Claude Code and Codex sessions in a fresh SLURM job when the current job reaches its time limit."
     }
   ]
 }

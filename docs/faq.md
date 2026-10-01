@@ -5,14 +5,6 @@ details.
 
 ## Skills and plugins
 
-**Using Claude Code and Codex on the same project.** Install the plugins separately for
-each agent. They share research files, but keep separate runtime settings and hooks.
-Use separate worktrees for concurrent edits. See [Claude Code and Codex](agents.md).
-
-**Codex installed the hooks but nothing happens.** Restart after plugin installation and
-review the definitions in `/hooks`. New or changed hooks are skipped until trusted.
-Codex project hooks must also be in a trusted project.
-
 **A skill I just installed does not appear.** New plugins load only in a new Claude Code
 session. Start a new session after `claude plugin install` or after
 `/open-science:onboard` installed plugins.
@@ -22,6 +14,14 @@ directory (`~/.claude/skills/`) has a skill with the same name as a plugin skill
 `context-management` or `new-project`), the model tends to pick the unprefixed personal
 skill. Move that skill out of the directory or rename it, and call plugin skills with their
 prefix, for example `/open-science-project:new-task`.
+
+**Using Claude Code and Codex on the same project.** Install the plugins separately for
+each agent. They share research files, but keep separate runtime settings and hooks.
+Use separate worktrees for concurrent edits. See [Claude Code and Codex](agents.md).
+
+**Codex installed the hooks but nothing happens.** Restart after plugin installation and
+review the definitions in `/hooks`. New or changed hooks are skipped until trusted.
+Codex project hooks must also be in a trusted project.
 
 ## Session jumps
 

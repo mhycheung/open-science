@@ -6,8 +6,8 @@ description: Publish a project's public part - export the files the publish mani
 # Publish
 
 Nothing reaches the public repo except through this skill, and only after the user approves
-the review report (`AGENTS.md` §0 rule 3). Claude Code settings and the trusted Codex project
-plugin hook guard accidental direct public pushes. The tool is `opsci publish`; it exports only the files
+the review report (`AGENTS.md` §0 rule 3). The project's `.claude/settings.json` denies a
+push to the public remote outside it (in Codex, the project plugin's hook, once trusted). The tool is `opsci publish`; it exports only the files
 `publish/manifest.yaml` allows, from one commit, so the working tree and uncommitted changes
 never leak.
 

@@ -12,8 +12,11 @@ open-science is a framework for doing research in the open:
   any task, file or dataset as private. Nothing is released until you choose to publish.
   Each release contains only the files you allow, is checked for private material and
   secrets, and needs your approval.
-- **Research others can continue.** Short project and task records explain what is known,
-  what was tried, and what comes next, for collaborators and future readers.
+- **Context management for agentic work.** Agents keep a short context file for the project
+  and for each task, so any new session, a collaborator or another researcher can pick up
+  an ongoing project straight away. Optionally, agents also clear their conversation on
+  their own and resume from that file ("session jumps"), so a long session is not resent in
+  full on every turn or after the prompt cache expires, which reduces usage.
 - **Work your way.** Use plain files and the `opsci` command yourself, or use the optional
   Claude Code and Codex plugins. The research record and publication checks are shared.
 
@@ -58,13 +61,14 @@ except context management, which needs project management.
 | # | component | plugin | what | needs |
 |---|---|---|---|---|
 | 1 | project management | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`, `private-investigation`) | git, `opsci` |
-| 2 | context management (optional, for agents) | `open-science-context` | Claude Code and Codex keep context files and take over a task; session controls depend on the agent (`context-management`, `continue-context`, `advise-with-context`) | project management, `opsci`; tmux for automatic session jumps |
+| 2 | context management (for agents) | `open-science-context` | Claude Code agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`). Codex: see [Claude Code and Codex](docs/agents.md) | project management (installed with it), Claude Code running inside tmux, `opsci` |
 | 3 | publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
 
 There are also two [optional extras](#optional-extras).
 
-Claude Code and Codex automatic session jumps need tmux; the
+Context management needs Claude Code to run inside tmux; the
 [tmux guide](docs/tmux.md) shows how to set it up, including on a cluster's compute node.
+Codex needs tmux only for session jumps; see [Claude Code and Codex](docs/agents.md).
 
 ## Optional extras
 

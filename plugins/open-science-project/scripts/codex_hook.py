@@ -92,17 +92,29 @@ def check(payload, event):
             continue
         if event == 'pre':
             if HUMAN.search(added):
-                problems.append("Only the user sets verification: human-verified. "
-                                "An agent may set verified with an evidence pointer.")
+                problems.append("only the user sets 'verification: human-verified' (AGENTS.md rule 5). "
+                                "An agent may set 'verified' with an 'evidence:' pointer. Leave "
+                                "human-verification to the user, and tell them the result is ready for it.")
         elif path.is_file():
             cap = 200 if path.name == 'context.md' else (
                 150 if path.name == 'README.md' and path.parent.name == 'map' else None)
             if cap:
                 count = len(path.read_text(encoding='utf-8').splitlines())
                 if count > cap:
-                    problems.append('{} has {} lines, over its cap of {}. '
-                                    'Move finished detail to the log or subcontext.'.format(path, count, cap))
+                    problems.append('{} has {} lines, over its cap of {}. Prune it now: move finished '
+                                    'or background material to a subcontext/ file or the log, and keep '
+                                    'only what the next agent needs.'.format(path, count, cap))
     return problems
+
+
+TASK_SAVED = (
+    "open-science-project: task context saved ({n}/{cap} lines). If a subtask just finished, check: "
+    "(1) did a status or edge change, or a subtask start, finish, fail or branch? update the header "
+    "and the task map.md; did a result land, change or fail (something later work relies on, or that "
+    "answers part of the task goal; not a debugging finding)? update its file in the task's results/; "
+    "run opsci map build; (2) does the next agent need it? update the project context.md; (3) did you "
+    "use or consult a source or package? update citations/, and the uses: of any result that relies "
+    "on it; (4) one line in the task log.md.")
 
 
 def main():
@@ -120,10 +132,15 @@ def main():
     inp = payload.get('tool_input') or {}
     command = inp.get('command', '') if isinstance(inp, dict) else ''
     changed = patch_files(command, cwd) if isinstance(command, str) else []
-    if event == 'post' and payload.get('tool_name') == 'apply_patch' and any(project_for(p) for p, _ in changed):
-        print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PostToolUse',
-              'additionalContext': 'After a finished subtask, update its results and map, '
-              'project context, citations, and log as needed; run opsci map build.'}}))
+    if event == 'post' and payload.get('tool_name') == 'apply_patch':
+        # Same message and condition as context_hook.sh: a saved task or verification context.md.
+        for p, _ in changed:
+            if (p.name == 'context.md' and p.parent.parent.name in ('tasks', 'verifications')
+                    and project_for(p) and p.is_file()):
+                n = len(p.read_text(encoding='utf-8').splitlines())
+                print(json.dumps({'hookSpecificOutput': {'hookEventName': 'PostToolUse',
+                      'additionalContext': TASK_SAVED.format(n=n, cap=200)}}))
+                break
     return 0
 
 

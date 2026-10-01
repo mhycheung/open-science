@@ -36,7 +36,7 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
 ## 2. How to work
 
 - **Startup.** Main agents load `open-science-project:context-files`. Claude Code also
-  reads `CLAUDE.md`; Codex reads `config/codex.md`. Use the installed framework skill
+  reads `CLAUDE.md`; Codex reads `config/codex.md` at session start. Use the installed framework skill
   with its full plugin name. Keep the same research records whichever agent is working.
 - **Commit attribution.** Every agent-authored commit includes an `Agent: claude` or
   `Agent: codex` trailer, respectively. Never attribute agent work to a human verifier.
