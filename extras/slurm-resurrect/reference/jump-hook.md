@@ -88,3 +88,11 @@ the lock.
 repo (or `RR_TEST_CORE_SCRIPTS` set) it also runs the core's real `jump.sh`:
 the worker re-drives a wait jump in a stand-in Claude pane, and the inhibit
 files make `jump.sh` refuse, with a control case where they are absent.
+
+## Codex panes
+
+The core's Codex jumps (`runtime: "codex"` in the request) end the Codex process and start
+a new one instead of typing `/clear`, so this plugin does not re-drive them: a Codex
+pane's jump record is not captured, and the thread is resumed as it was. The wind-down
+inhibit file applies to Codex panes as to Claude panes (`jump.sh` checks it before
+either runtime's branch).

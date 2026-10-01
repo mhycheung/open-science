@@ -1,0 +1,48 @@
+#!/bin/bash
+# Stand-in for the `codex` CLI in the Codex context-management tests. Its process name
+# is `codex`. Put its directory first on PATH.
+#
+#   codex queue --thread <id> --message <text>   append "<id>\t<text>" to $FAKE_CX_QUEUE_LOG
+#   codex [options] [prompt]                     a fake TUI: appends its argv (one line,
+#       NUL-free, space-joined) to $FAKE_CX_ARGV_LOG, and runs the hook $FAKE_CX_HOOK as
+#       real Codex does, as its child: SessionStart when the first prompt arrives, then
+#       UserPromptSubmit and Stop for that prompt (a one-second turn). SIGUSR1 runs one
+#       more turn (UserPromptSubmit + Stop). SIGTERM ends it. The thread id is a fresh
+#       uuid, or $FAKE_CX_THREAD.
+set -u
+if [ "${1:-}" = queue ]; then
+  shift; t=""; m=""
+  while [ $# -gt 0 ]; do case "$1" in --thread) t="$2"; shift 2 ;; --message) m="$2"; shift 2 ;; *) shift ;; esac; done
+  printf '%s\t%s\n' "$t" "$m" >> "$FAKE_CX_QUEUE_LOG"
+  echo "Queued message for thread $t."
+  exit 0
+fi
+printf '%s\n' "$*" >> "$FAKE_CX_ARGV_LOG"
+tid="${FAKE_CX_THREAD:-$(python3 -c 'import uuid; print(uuid.uuid4())')}"
+prompt=""; skip=0
+for a in "$@"; do
+  if [ "$skip" = 1 ]; then skip=0; continue; fi
+  case "$a" in -m|-s|-a|-c|-p|-C|--add-dir|--sandbox|--model|--config) skip=1 ;; -*) ;; *) prompt="$a" ;; esac
+done
+hook() {  # <event> [extra jq]
+  jq -cn --arg e "$1" --arg s "$tid" --arg c "$PWD" --arg t "${FAKE_CX_ROLLOUT:-}" \
+    '{session_id:$s, transcript_path:$t, cwd:$c, hook_event_name:$e, model:"fake-model",
+      permission_mode:"bypassPermissions", source:"startup", turn_id:"t", prompt:"p",
+      stop_hook_active:false, last_assistant_message:"ok"}' \
+    | bash "$FAKE_CX_HOOK" >> "${FAKE_CX_HOOK_OUT:-/dev/null}" 2>&1
+}
+started=0
+turn() {   # FAKE_CX_START_DELAY: seconds before the first SessionStart (a slow start)
+  [ "$started" = 1 ] || { sleep "${FAKE_CX_START_DELAY:-0}"; hook SessionStart; started=1; }
+  hook UserPromptSubmit; echo "working (esc to interrupt)"; sleep 1
+  printf '\033[H\033[2J'; echo "fake codex, thread $tid"; echo "› "; hook Stop
+}
+# FAKE_CX_ON_TERM=<command>: on SIGTERM, exec that command in place of exiting (a TUI that
+# leaves something else in the foreground). FAKE_CX_REQ_LOG: at start, log the phase of
+# the jump request file $FAKE_CX_REQ (the order of the worker's steps).
+[ -n "${FAKE_CX_REQ_LOG:-}" ] && { jq -r '.phase // "none"' "$FAKE_CX_REQ" 2>/dev/null || echo none; } >> "$FAKE_CX_REQ_LOG"
+if [ -n "${FAKE_CX_ON_TERM:-}" ]; then trap 'exec $FAKE_CX_ON_TERM' TERM; else trap 'exit 0' TERM; fi
+trap 'turn' USR1
+echo "fake codex, thread $tid"; echo "› "
+[ -n "$prompt" ] && turn
+while :; do sleep 0.2; done

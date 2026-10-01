@@ -4,7 +4,7 @@
 - init: create the project's pages under the parent page (root page, Tasks database, Feed),
   then write everything once.
 - enable: for an existing project, add the Notion section to AGENTS.md, the auto-sync hook
-  to .claude/settings.json, `notion: true` to config/framework.yaml, and the state file to
+  to .claude/settings.json and .codex/hooks.json, `notion: true` to config/framework.yaml, and the state file to
   .gitignore. New projects get
   the same from `opsci template instantiate --notion`.
 - hook: what the hook runs when a Claude Code turn ends: a sync in the background, one at a
@@ -172,7 +172,7 @@ def init(project_root: str | None = None, days: int = feed.DEFAULT_DAYS, log=pri
 # ---------------------------------------------------------------- enable (existing project)
 
 def add_hook(settings: Path) -> bool:
-    """Add the Stop hook to a Claude Code settings file; keep every other key. True if added."""
+    """Add the command Stop hook to settings/hooks JSON, preserving every other key."""
     data = json.loads(settings.read_text(encoding="utf-8")) if settings.exists() else {}
     stop = data.setdefault("hooks", {}).setdefault("Stop", [])
     for entry in stop:
@@ -187,6 +187,13 @@ def add_hook(settings: Path) -> bool:
     settings.parent.mkdir(parents=True, exist_ok=True)
     settings.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return True
+
+
+def add_sync_hooks(root: Path) -> bool:
+    """Configure Claude Code first, then Codex; never overwrite unrelated hooks."""
+    claude = add_hook(root / ".claude" / "settings.json")
+    codex = add_hook(root / ".codex" / "hooks.json")
+    return claude or codex
 
 
 def add_agents_section(agents: Path) -> bool:
@@ -249,9 +256,10 @@ def enable(project_root: str | None = None, log=print) -> None:
     for label, done in ((f".gitignore: {STATE_FILE}", add_gitignore(root / ".gitignore")),
                         ("AGENTS.md: section 10 (Notion)", add_agents_section(root / "AGENTS.md")),
                         ("CLAUDE.md: the notion skill", add_claude_skill_line(root / "CLAUDE.md")),
-                        (".claude/settings.json: Stop hook", add_hook(root / ".claude" / "settings.json")),
+                        (".claude/settings.json and .codex/hooks.json: Stop hooks", add_sync_hooks(root)),
                         ("config/framework.yaml: notion: true", set_framework_flag(root / "config" / "framework.yaml"))):
         log(f"{'added' if done else 'already there'}: {label}")
+    log("Codex: review and trust the Notion Stop hook with /hooks before relying on auto-sync.")
 
 
 # ---------------------------------------------------------------- the hook

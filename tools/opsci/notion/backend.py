@@ -1,6 +1,6 @@
 """The `notion` back end of `opsci notify`: post the message to the project's Notion Feed.
 
-Config: `notify: {backend: notion, notion: {parent_page, user, kind, mention, author}}`.
+Config: `notify: {backend: notion, notion: {parent_page, user, kind, mention, author, timezone}}`.
 `kind` (default note) and `mention` (default true: the user is @mentioned, so Notion notifies
 them) apply to every message sent through `opsci notify`; `opsci notion post` sets them per
 message. The author is $OPSCI_AUTHOR, else notify.notion.author, else "agent".

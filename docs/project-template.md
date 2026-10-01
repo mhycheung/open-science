@@ -12,7 +12,7 @@ Run `opsci template instantiate` yourself, then `git init` in the new directory:
 opsci template instantiate <dir> --name <slug> --title "<title>" --author "<name>" --template <framework>/template
 ```
 
-Or ask for `open-science-project:new-project` in Claude Code (see
+Or ask for `open-science-project:new-project` in Claude Code or Codex (see
 [Project skills](project-skills.md)). It asks for a directory, a short name, a title, your
 name, and what the project is about, then runs the same command.
 
@@ -64,6 +64,7 @@ keeping `data/MANIFEST.yaml`, `messages/README.md` and `config/site.example.yaml
 | `config/` | `framework.yaml`, `site.example.yaml` (tracked) and `site.local.yaml` (git-ignored) | user |
 | `publish/` | `manifest.yaml` (the allowlist), `PRIVATE_POLICY.md`, `LAST_PUBLISHED`, `reports/` | user, `open-science-publish:publish` |
 | `.claude/` | `settings.json` (permissions) and `agents/` (the dispatch tiers) | user |
+| `.codex/` | Codex dispatch tiers and, when Notion is enabled, its sync hook; startup guidance is in `config/codex.md` | user |
 | `brainstorm/` | ideas before they become project work; a smaller copy of the layout; soft-private unless the user opts in | anyone |
 | `docs/` | project documentation; published | user, agents |
 | `private-docs/` | private notes and side investigations (`investigations/`); soft-private: committed to the private repository, never exported | user, agents |
@@ -314,8 +315,8 @@ described in [Notifications](notify.md).
 
 ### `.claude/`
 
-`settings.json` allows `git` commands and denies `git push public` and `git push --mirror`,
-so an agent cannot push to the public remote outside `opsci publish push`. `agents/` defines
+`settings.json` allows `git` commands and denies `git push public` and `git push --mirror`
+as protection against accidental direct publication. `agents/` defines
 the five dispatch tiers:
 
 | tier | use for |
@@ -327,6 +328,14 @@ the five dispatch tiers:
 | `text` | mechanical work on text: find a string, extract a table, assemble a document |
 
 Each tier file sets `model: inherit`; change it to the models you have.
+
+### `.codex/`
+
+Codex has matching roles in `.codex/agents/`, expressed as TOML with the same contracts
+and effort choices. The model is inherited by omitting an override. `AGENTS.md` directs
+Codex to `config/codex.md` at startup. Plugin hooks adapt Codex patches to the project
+checks; Notion adds a project Stop hook. Review hooks with `/hooks` before relying on
+them. [Claude Code and Codex](agents.md) explains installation and permissions.
 
 ## The rules every agent follows
 

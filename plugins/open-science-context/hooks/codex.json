@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/scripts/cx_hook.sh\"", "timeout": 30}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/scripts/cx_hook.sh\"", "timeout": 30}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "bash \"${PLUGIN_ROOT}/scripts/cx_hook.sh\"", "timeout": 30}]}]
+  }
+}

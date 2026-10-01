@@ -79,7 +79,21 @@ winddown_nudge() {
   for f in "$RR_REG_ROOT/$JOB_ID"/*.json; do
     sock=$(jq -r '.tmux_socket' "$f"); name=$(jq -r '.tmux_session' "$f")
     while IFS=$'\t' read -r widx pidx ppid paneid; do
-      info=$(rr_resolve_claude "$ppid" "$paneid") || continue
+      # A busy Codex pane gets the same message through `codex queue` (it waits behind
+      # the running turn); nothing is typed into Codex. Idle Codex panes are left alone.
+      if ! info=$(rr_resolve_claude "$ppid" "$paneid"); then
+        if xinfo=$(rr_resolve_codex "$ppid" "$paneid" "$sock"); then
+          IFS='|' read -r _ xtid xst xhome _ <<< "$xinfo"
+          if [[ "$xst" == busy ]]; then
+            if rr_codex_queue "$xtid" "$xhome" "$msg" >/dev/null 2>&1; then
+              rr_log "wind-down nudge -> codex thread $xtid in $sock $name:$widx.$pidx (codex queue)"
+            else
+              rr_log "wind-down nudge FAILED for codex thread $xtid in $name:$widx.$pidx"
+            fi
+          fi
+        fi
+        continue
+      fi
       IFS='|' read -r cdir cpid sid status <<< "$info"
       case "$status" in
         busy|shell)
@@ -156,7 +170,7 @@ submit_successor() {  # <seconds left in this job>
   # tmux and Claude Code variables so the successor starts clean tmux servers and
   # the rebuilt panes do not look like they run inside a Claude session.
   new=$(env -u TMUX -u TMUX_PANE -u CLAUDECODE -u RR_CALLER -u CLAUDE_CODE_SESSION_ID \
-        -u CLAUDE_CODE_ENTRYPOINT sbatch "${dep[@]}" "${extra[@]}" --parsable "$script" 2>>"$LOG")
+        -u CLAUDE_CODE_ENTRYPOINT -u CODEX_THREAD_ID -u CODEX_SESSION_ID -u CODEX_CI sbatch "${dep[@]}" "${extra[@]}" --parsable "$script" 2>>"$LOG")
   new="${new%%;*}"
   if [[ ! "$new" =~ ^[0-9]+$ ]]; then
     SUBMIT_FAIL_AT=$(date +%s)

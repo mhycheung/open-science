@@ -181,6 +181,11 @@ to `permissions.deny`:
 agent from reading the token by accident. It does not stop a program running
 as you from reading it.
 
+Codex does not consume Claude Code's permission rules. Keep the same private credential
+file and let `opsci` read it internally; do not ask Codex to open it. The credentials-entry
+helper refuses calls from Claude Code and Codex. This is an accidental-exposure guard,
+not isolation from other programs running as your user.
+
 ### Revoking and replacing the token
 
 If the token may have leaked, revoke it on the app's **OAuth & Permissions** page at

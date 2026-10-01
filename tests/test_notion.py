@@ -505,6 +505,31 @@ def test_feed_post_newest_first_and_prune(mirrored):
     assert run(S, "notion", "prune", "--days", "3", cwd=S.proj).stdout == "removed 1 message(s)\n"
 
 
+def test_feed_time_zone(mirrored):
+    """The time is in the posting machine's time zone, unless notify.notion.timezone is set."""
+    S, m = mirrored, mirrored.mock
+    feed = state(S.proj)["feed_page"]
+
+    def meta_line():
+        return MockNotion.plain(m.node(m.kids(live_ids(m, feed)[1])[0]["id"])["body"]["rich_text"])
+
+    run(S, "notion", "post", "In Tokyo", cwd=S.proj, env={**S.env, "TZ": "Asia/Tokyo"})
+    assert re.search(r" · \d{4}-\d\d-\d\d \d\d:\d\d JST$", meta_line())
+    run(S, "notion", "post", "In Nepal", cwd=S.proj, env={**S.env, "TZ": "Asia/Kathmandu"})
+    assert meta_line().endswith(" UTC+05:45")
+    led = [json.loads(l) for l in (S.proj / "messages" / "notion-feed.jsonl").read_text().splitlines()]
+    assert [x["posted"][-6:] for x in led] == ["+09:00", "+05:45"]
+    cfg = yaml.safe_load(S.cfg.read_text())
+    cfg["notify"]["notion"]["timezone"] = "America/New_York"
+    S.cfg.write_text(yaml.safe_dump(cfg))
+    run(S, "notion", "post", "Configured", cwd=S.proj, env={**S.env, "TZ": "Asia/Tokyo"})
+    assert re.search(r" E[SD]T$", meta_line())
+    cfg["notify"]["notion"]["timezone"] = "Mars/Olympus"
+    S.cfg.write_text(yaml.safe_dump(cfg))
+    r = run(S, "notion", "post", "Nowhere", cwd=S.proj, rc=None)
+    assert r.returncode != 0 and "unknown time zone 'Mars/Olympus'" in r.stdout + r.stderr
+
+
 # ---------------------------------------------------------------- notify back end
 
 def test_notify_backend_posts_to_feed(mirrored):

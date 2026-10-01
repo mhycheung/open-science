@@ -17,6 +17,15 @@
 # the new session, and types the resume prompt. The agent never
 # types into its own pane, and a jump is detected by this action, never by wording.
 #
+# Under Codex (cm_runtime) there is no /clear: a jump ENDS the Codex TUI in the pane and
+# starts a fresh `codex` in the pane's shell, with the same options (cm_codex_relaunch_cmd)
+# and the resume prompt as its first message (cm_codex_prompt). The Codex hook
+# (cx_hook.sh) starts the worker at Stop and hands the registration over at the new
+# SessionStart. A Codex wait jump relaunches the same way (the new session reads the
+# context file and ends its turn); its waker is `wait_slurm.sh --notify`, which wakes the
+# pane's current thread with `codex queue`. Codex needs, in addition: the hook installed
+# (a record of this thread in this pane), and Codex started from a shell in the pane.
+#
 # Refusals (exit 1): jumps switched off by $OPSCI_JUMPS (`off`: every jump; `wait`:
 # active jumps); not in tmux; context file missing; context file not modified
 # in the last $OPSCI_JUMP_FRESH_MIN minutes (default 15: the state was not saved);
@@ -37,10 +46,100 @@ RECOVER_WINDOW="${OPSCI_JUMP_RECOVER_WINDOW:-1800}"
 
 die() { echo "jump.sh: $*" >&2; exit 1; }
 
-set_phase() {  # <request> <phase>
+set_phase() {  # <request> <phase>; returns 1 if the request could not be updated
   local tmp="$1.tmp.$$"
   jq --arg p "$2" --arg at "$(date -Iseconds)" '.phase=$p | .phase_at=$at' "$1" > "$tmp" 2>/dev/null \
-    && mv "$tmp" "$1" || rm -f "$tmp"
+    && mv "$tmp" "$1" || { rm -f "$tmp"; return 1; }
+}
+
+# ------------------------------------------------------------ codex worker ----
+# Wait until the thread is idle (the hooks' record says idle and the pane shows no busy
+# marker, for $OPSCI_IDLE_STABLE polls in a row), end the TUI with SIGTERM, check the
+# pane is back at its shell, type the relaunch command into the SHELL, and wait for the
+# new thread's SessionStart (cx_hook.sh finishes the request). Never types into Codex.
+cx_fail() {  # <request> <message>: log, tell the user what state the pane is in, give up
+  local req="$1" msg="$2" tid home phase full
+  tid=$(jq -r .old_sid "$req"); phase=$(jq -r '.phase' "$req")
+  # Say exactly what was done, by phase: before `ended` the old session was not touched.
+  case "$phase" in
+    ended|relaunching)
+      full="[open-science] session jump FAILED after the old Codex session (thread $tid) was ENDED: $msg. No new session was started by the jump. Resume the old one with: codex resume $tid" ;;
+    terminating)
+      full="[open-science] session jump FAILED after SIGTERM was sent to the old Codex TUI (thread $tid), which did not exit: $msg. It may still be shutting down; if it is gone, resume it with: codex resume $tid" ;;
+    *)
+      full="[open-science] session jump FAILED before anything was changed; this session keeps running: $msg" ;;
+  esac
+  cm_log "codex worker $(jq -r .pane "$req"): $full"
+  jq --arg m "$full" '.failure=$m' "$req" > "$req.tmp" 2>/dev/null && mv "$req.tmp" "$req"
+  # Queued to the old thread: it starts a turn if the session still runs, and is waiting
+  # in the thread if it was ended (seen on `codex resume`).
+  if command -v codex >/dev/null 2>&1; then
+    home=$(jq -r '.codex_home // ""' "$(cm_cx_thread_path "$tid")" 2>/dev/null)
+    ${home:+env CODEX_HOME="$home"} timeout 60 codex queue --thread "$tid" --message "$full" >/dev/null 2>&1 || true
+  fi
+  set_phase "$req" failed
+  mkdir -p "$OS_STATE/jump/done"; mv "$req" "$OS_STATE/jump/done/$(basename "$req" .json)-$(date +%s).json" 2>/dev/null
+}
+codex_worker() {
+  local req="$1" sock pane old tf tpid tstart ppid cmd stable=0 waited=0 st shell model n cur
+  sock=$(jq -r .sock "$req"); pane=$(jq -r .pane "$req"); old=$(jq -r .old_sid "$req")
+  tf=$(cm_cx_thread_path "$old")
+  cm_log "codex worker $pane: $(jq -r .kind "$req") jump started (thread ${old:0:8})"
+  while [ "$waited" -lt "$IDLE_TIMEOUT" ]; do
+    st=$(jq -r '.status // ""' "$tf" 2>/dev/null)
+    if [ "$st" = idle ] && ! cm_cap "$sock" "$pane" | grep -q "$OS_BUSY_RE"; then stable=$((stable+1)); else stable=0; fi
+    [ "$stable" -ge "${OPSCI_IDLE_STABLE:-5}" ] && break
+    sleep 1; waited=$((waited+1))
+  done
+  [ "$stable" -ge "${OPSCI_IDLE_STABLE:-5}" ] || { cx_fail "$req" "the session was not idle for ${IDLE_TIMEOUT} s"; return; }
+  tpid=$(jq -r '.tui_pid // ""' "$tf"); tstart=$(jq -r '.tui_start // ""' "$tf")
+  cm_is_codex_proc "$tpid" "$tstart" || { cx_fail "$req" "the Codex TUI (pid ${tpid:-unknown}) is not running"; return; }
+  ppid=$(tmux -S "$sock" display-message -p -t "$pane" '#{pane_pid}' 2>/dev/null)
+  shell=$(ps -o comm= -p "$ppid" 2>/dev/null)
+  case "$shell" in bash|zsh|sh|dash|ksh|fish|tcsh|csh) ;; *)
+    cx_fail "$req" "pane $pane does not run a shell (it runs '${shell:-nothing}'), so a new codex cannot be started in it; start Codex from a shell in the pane"; return ;; esac
+  cm_descends "$tpid" "$ppid" || { cx_fail "$req" "the Codex TUI is not running in pane $pane"; return; }
+  model=$(jq -r '.model // ""' "$tf")
+  cmd=$(cm_codex_relaunch_cmd "$tpid" "$(jq -r .prompt "$req")" "$model" 2>&1) \
+    || { cx_fail "$req" "cannot rebuild the codex command line: $cmd"; return; }
+  cmd="cd $(printf '%q' "$(readlink "/proc/$tpid/cwd")") && $cmd"
+  jq --arg c "$cmd" '.relaunch=$c' "$req" > "$req.tmp" && mv "$req.tmp" "$req"
+  set_phase "$req" terminating || { cx_fail "$req" "could not update the jump request $req"; return; }
+  kill -TERM "$tpid" 2>/dev/null
+  for n in $(seq 30); do cm_is_codex_proc "$tpid" "$tstart" || break; sleep 1; done
+  if cm_is_codex_proc "$tpid" "$tstart"; then
+    cx_fail "$req" "the Codex TUI (pid $tpid) is still running 30 s after SIGTERM; nothing else was done"; return
+  fi
+  set_phase "$req" ended
+  # Type only into the pane's own shell: if anything else holds the foreground (the TUI
+  # left a child behind, the shell started something), typing would feed that program.
+  for n in $(seq "${OPSCI_CODEX_SHELL_TIMEOUT:-20}"); do
+    cur=$(tmux -S "$sock" display-message -p -t "$pane" '#{pane_current_command}' 2>/dev/null)
+    [ "$cur" = "$shell" ] && break
+    sleep 1
+  done
+  if [ "$cur" != "$shell" ]; then
+    cx_fail "$req" "pane $pane did not return to its shell '$shell' (foreground: '${cur:-none}'); nothing was typed. Start Codex there by hand: $cmd"; return
+  fi
+  sleep 1
+  # The shell's line editor, not the Codex TUI: a single line and Enter are reliable here.
+  tmux -S "$sock" send-keys -t "$pane" C-u 2>/dev/null; sleep 0.3
+  tmux -S "$sock" send-keys -t "$pane" -l "$cmd" 2>/dev/null; sleep 0.5
+  # The phase must say `relaunched` BEFORE Enter: the new session's SessionStart hook
+  # hands the registration over only for a request in that phase.
+  if ! set_phase "$req" relaunched; then
+    tmux -S "$sock" send-keys -t "$pane" C-u 2>/dev/null
+    cx_fail "$req" "could not update the jump request $req; nothing was started. Start Codex there by hand: $cmd"; return
+  fi
+  tmux -S "$sock" send-keys -t "$pane" Enter 2>/dev/null
+  cm_log "codex worker $pane: old TUI ended; relaunched: $cmd"
+  for n in $(seq "${OPSCI_CODEX_START_TIMEOUT:-120}"); do
+    [ -f "$req" ] || { cm_log "codex worker $pane: new thread confirmed"; return; }
+    sleep 1
+  done
+  cm_log "codex worker $pane: NO SessionStart from a new thread within ${OPSCI_CODEX_START_TIMEOUT:-120} s; the command was typed into the shell but the new session is unconfirmed (is cx_hook.sh installed and trusted?)"
+  set_phase "$req" unconfirmed
+  mkdir -p "$OS_STATE/jump/done"; mv "$req" "$OS_STATE/jump/done/$(basename "$req" .json)-$(date +%s).json" 2>/dev/null
 }
 
 # ------------------------------------------------------------------ worker ----
@@ -53,6 +152,7 @@ if [ "${1:-}" = "--worker" ]; then
   exec 9>"$(cm_lock_path "$KEY")"
   flock -w 120 9 || { cm_log "worker $PANE: pane lock busy for 120 s; jump aborted"; set_phase "$REQ" failed; exit 0; }
   set_phase "$REQ" running
+  if [ "$(jq -r '.runtime // "claude"' "$REQ")" = codex ]; then codex_worker "$REQ"; exit 0; fi
   cm_log "worker $PANE: $KIND jump started (sid ${OLD:0:8})"
 
   finish() { set_phase "$REQ" "$1"; mkdir -p "$OS_STATE/jump/done"; mv "$REQ" "$OS_STATE/jump/done/$(basename "$REQ" .json)-$(date +%s).json" 2>/dev/null; }
@@ -149,6 +249,36 @@ for f in "$OS_STATE/inhibit_jump" "$OS_STATE/inhibit_jump_$KEY"; do
 done
 age_min=$(( ( $(date +%s) - $(stat -c %Y "$CTX") ) / 60 ))
 [ "$age_min" -lt "$FRESH_MIN" ] || die "$CTX was last modified ${age_min} min ago. Save the state first (summary, next step, log line), then jump."
+if [ "$(cm_runtime)" = codex ]; then
+  cm_state_writable || { cm_state_hint >&2; exit 3; }
+  OLD="${CODEX_THREAD_ID:-}"; [ -n "$OLD" ] || die "CODEX_THREAD_ID is not set; cannot tell which Codex thread to end"
+  PREC=$(cm_cx_pane_path "$KEY")
+  [ "$(jq -r '.thread_id // ""' "$PREC" 2>/dev/null)" = "$OLD" ] \
+    || die "no Codex hook record of this thread in this pane ($PREC). The open-science Codex hook (cx_hook.sh) must be installed and trusted for jumps."
+  TP=$(jq -r '.transcript_path // ""' "$PREC")
+  if [ "$CMD" = active ] && [ "$FORCE" = 0 ]; then
+    tokens=$(python3 "$HERE/ctx_usage.py" --codex-rollout "$TP" 2>/dev/null) || tokens=""
+    [ -n "$tokens" ] || die "cannot read the context size (the Codex rollout format is not stable); pass --force to jump anyway"
+    CFLOOR="${OPSCI_CODEX_ACTIVE_JUMP_FLOOR:-$FLOOR}"
+    [ "$tokens" -ge "$CFLOOR" ] || die "context is ${tokens} tokens, below the active-jump floor ${CFLOOR}: a jump costs more than it saves. Continue here, or pass --force."
+  fi
+  PROMPT=$(cm_codex_prompt "$CTX")
+  [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" != requested ] && die "a jump is already $(jq -r .phase "$REQ") for this pane"
+  mkdir -p "$(dirname "$REQ")" 2>/dev/null || die "cannot write to $OS_STATE; in the Codex sandbox, add it as a writable root"
+  jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${TMUX%%,*}" \
+        --arg pane "$TMUX_PANE" --arg key "$KEY" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
+    '{version:1, runtime:"codex", kind:$kind, context:$ctx, prompt:$prompt, sock:$sock, pane:$pane,
+      key:$key, state_file:"", old_sid:$sid, requested_at:$at, phase:"requested"}' > "$REQ.tmp" \
+    && mv "$REQ.tmp" "$REQ" || die "could not write $REQ (in the Codex sandbox, add $OS_STATE as a writable root)"
+  cm_log "launcher $TMUX_PANE: codex $CMD jump requested (context $CTX)"
+  bash "$HERE/pane_context.sh" set "$CTX" >/dev/null 2>&1 || true
+  echo "Codex $CMD jump requested. When this turn ends, this Codex session is ENDED and a fresh one"
+  echo "starts in this pane with the same options and the prompt:"
+  echo "  $PROMPT"
+  [ "$CMD" = wait ] && echo "The Stop hook refuses the jump unless a waker (wait_slurm.sh --notify) is queued or running."
+  echo "Finish anything you owe the user in this turn, then end the turn. Start no new work."
+  exit 0
+fi
 CPID=$(cm_claude_pid) || die "no claude process above this shell; cannot confirm a clear"
 SF=$(cm_state_file "$CPID") || die "no state file for claude pid $CPID; cannot confirm a clear, refusing"
 OLD=$(cm_sid "$SF"); [ -n "$OLD" ] || die "state file $SF has no sessionId"

@@ -5,6 +5,9 @@ description: Clear the session (a "jump") and resume from the context files inst
 
 # Context management
 
+**Claude Code:** follow the procedure below. **Codex:** use `codex.md` beside this file
+for session mechanics. Both agents keep the same research context files.
+
 Session jumps for a project made with the `open-science-project` plugin. Keeping the context
 files themselves current (caps, when to update, the four questions, amending) is
 `open-science-project:context-files`; load both at session start. A jump is only as good as

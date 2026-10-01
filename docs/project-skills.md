@@ -1,12 +1,15 @@
 # Project skills (`open-science-project`)
 
 The `open-science-project` plugin is the project-structure component. It gives Claude Code
-six skills and two hooks that work on a project made from the
+and Codex skills and hooks that work on a project made from the
 [template](project-template.md). It needs git and `opsci`.
 
 ```bash
 claude plugin install open-science-project@open-science
 ```
+
+For Codex: `codex plugin add open-science-project@open-science`, then restart and review
+the hooks with `/hooks`. See [Claude Code and Codex](agents.md).
 
 Always name the skills in full, for example `/open-science-project:new-task`. If your own
 skills directory (`~/.claude/skills/`) has a skill with the same short name, the model tends
@@ -175,7 +178,7 @@ project was copied from, applied by hand, never a re-copy. See
 
 ## Hooks
 
-The plugin installs two hooks. Both act only inside a project made from the template (a
+The Claude Code plugin installs two hooks. Both act only inside a project made from the template (a
 directory holding both `AGENTS.md` and `config/framework.yaml`); without `jq`, the line-cap
 hook does nothing and the guard checks every edit.
 
@@ -186,3 +189,9 @@ hook does nothing and the guard checks every edit.
 
 Bash commands are not checked by the guard. The publish check is the second line: it refuses
 a `human-verified` node whose `verification:` line was last changed in an agent's commit.
+
+Codex uses separate adapters for `apply_patch`, including patches touching several files.
+They enforce the same human-verification and line-cap rules. A Bash hook also guards
+accidental `git push public` and `git push --mirror`. Trust the definitions using `/hooks`.
+Shell/custom-tool edits can bypass file checks; run `opsci context check` and publication
+checks as well. Every agent commit includes `Agent: claude` or `Agent: codex`.

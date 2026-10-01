@@ -2,7 +2,7 @@
 
 An optional extra (plugin `slurm-resurrect`, in `extras/slurm-resurrect/`) for one setting
 only: **development on a compute node of a computing cluster that uses the SLURM
-scheduler**, with Claude Code running in tmux inside a batch job on that node. It is of no use
+scheduler**, with Claude Code or Codex running in tmux inside a batch job on that node. It is of no use
 on a laptop, a workstation, or a cluster login node.
 
 A batch job ends at its time limit, and every Claude Code session running in it ends with it.
@@ -127,3 +127,18 @@ the plugin works the same way and skips these steps. Details:
   this folder". If it cannot select it, it presses nothing and notifies you.
 - Registration is checked by process ancestry, not enforced by the operating system.
 - Further limits of the tests are listed in the plugin's `README.md`.
+
+## Codex
+
+After adding the marketplace, install with
+`codex plugin add slurm-resurrect@open-science`. Mixed Claude Code and Codex panes are
+supported. Codex panes resume with `codex resume`, preserving their original launch
+options and model; Claude permission settings are not applied to them. Unknown launch
+options or a missing thread identity leave a plain shell and a notice.
+
+Register from your own plain terminal pane using the `rr_registry.sh` commands in the
+extra's README. Codex agents cannot register a session. The core context plugin's trusted
+hooks provide thread identity; wind-down notices and wake-ups use `codex queue`.
+Codex folder-trust prompts need your response. An interrupted Codex jump is not re-driven
+after a hop: the thread is resumed as it was. Fake-scheduler tests and live Codex resume
+checks cover these adapters; a real SLURM hop with Codex has not been tested.

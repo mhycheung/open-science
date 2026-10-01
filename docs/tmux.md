@@ -1,10 +1,11 @@
 # Working in tmux
 
-**Context management requires tmux.** Claude Code must run inside a tmux pane for session
-jumps to work: a jump clears the conversation by typing into the agent's own pane, and the
-pane records which context file it drives. Outside tmux, `jump.sh` refuses to run and the
-plugin's Stop hook does nothing, so the agent's conversation only grows. Project management
-and publishing work without tmux.
+**Automatic session jumps require tmux.** Claude Code clears its conversation in its pane;
+Codex ends its TUI and starts a fresh session from the same pane's shell. Both register the
+context file that the pane drives. Outside tmux, use an explicit context-file path to
+continue in a new session. Project management and publishing work without tmux.
+See [context management](context-management.md#codex-session-controls) for Codex hook trust and writable
+state setup.
 
 tmux keeps terminal sessions running on a machine after you disconnect, and splits one
 terminal into several. This page covers what you need of it: connecting to a compute node
@@ -18,12 +19,12 @@ first.
 |---|---|
 | session | a set of windows that keeps running when you disconnect; you reattach to it later |
 | window | one full screen of a session, like a browser tab; listed in the status bar at the bottom |
-| pane | one rectangle of a window; each pane runs its own shell, or its own Claude Code |
+| pane | one rectangle of a window; each pane runs its own shell, Claude Code, or Codex |
 
 ## Arranging your work: one pane per task
 
 Keep **one tmux session** for your research work, **one window per project**, and **one pane
-per task** of that project. Each pane runs one Claude Code session that drives one task.
+per task** of that project. Each pane runs one Claude Code or Codex session that drives one task.
 
 ```
 tmux session "work"
@@ -50,6 +51,9 @@ To start a task: in the project's window, open a new pane, `cd` to the project, 
 `claude`, and ask it to work on the task (or type
 `/open-science-context:continue-context tasks/<id>/context.md` for a task that already has a
 context file). When a task is finished, close its pane.
+
+For Codex, start it from the pane's shell using the state-directory setup linked above,
+then ask it to use the `continue-context` skill with the task's context-file path.
 
 ## Keys and mouse
 

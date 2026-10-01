@@ -5,6 +5,10 @@ description: Bring an open-science project's scaffolding up to date with the fra
 
 # Update from template
 
+Claude Code uses the paths below. In Codex, resolve `CLAUDE_PLUGIN_ROOT` from this directory's parent twice.
+Read `.codex-plugin/plugin.json` for the version; use Codex plugin marketplace upgrade/add
+for plugin updates. Keep Claude Code files and project choices while adding Codex files.
+
 A project records the framework commit it was copied from, and the changes it made on
 purpose, in `config/framework.yaml`. **Updating is a diff against that commit, applied by
 hand**, never a re-copy, which would discard the project's own changes. The main agent does

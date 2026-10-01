@@ -33,10 +33,13 @@ rr_test_cleanup() {
 
 rr_test_setup() {
   # Never inherit the environment of a session that runs the tests: an outer
-  # Claude session (CLAUDECODE), a tmux client, or a real SLURM job.
+  # Claude or Codex session (CLAUDECODE, CODEX_THREAD_ID), a tmux client, a real SLURM
+  # job, or a resurrected pane (RR_REBUILD_NAME and the other RR_* a successor exports).
   unset CLAUDECODE TMUX TMUX_PANE RR_CALLER CLAUDE_CODE_SESSION_ID SLURM_JOB_ACCOUNT \
         SLURM_JOB_PARTITION SLURM_NTASKS SLURM_CPUS_PER_TASK SLURM_JOB_NUM_NODES \
-        RR_CORE_SCRIPTS_DIR OPSCI_STATE_DIR
+        RR_CORE_SCRIPTS_DIR OPSCI_STATE_DIR \
+        RR_REBUILD_NAME RR_WRITE_SELFREG_DIR RR_SELFREG_DIR RR_LAUNCH_CMD RR_CODEX_LAUNCH_CMD \
+        CODEX_THREAD_ID CODEX_SESSION_ID CODEX_CI CODEX_HOME
   TMP=$(mktemp -d "${TMPDIR:-/tmp}/rrtest.XXXXXX"); trap rr_test_cleanup EXIT
   SOCK="$TMP/tmux.sock"
   STUB="$TMP/stub"

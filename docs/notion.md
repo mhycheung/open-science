@@ -69,7 +69,8 @@ Each message is a coloured box: `result` green, `status` blue, `question` orange
 red, `note` gray. The first paragraph of the text is the title. Notion's notification and inbox preview show
 only about the first ten words, so the title is written as a short headline with the main
 point first; the agent skill asks for this. A line under the title names
-the kind, the author, the task and the time. Attached plots appear inline with their
+the kind, the author, the task and the time. The time is in the time zone of the machine
+that posts the message, or in `notify.notion.timezone` if you set it (step 4). Attached plots appear inline with their
 captions. `--mention` @mentions you, so Notion notifies you, also on your phone if you have
 the app. The messages are written by your integration, not by your account; Notion does not
 notify you of your own edits.
@@ -125,6 +126,7 @@ messages are written to files.
      notion:
        parent_page: https://www.notion.so/Research-projects-0123456789abcdef0123456789abcdef
        user: 01234567-89ab-cdef-0123-456789abcdef   # your Notion user id; opsci notion check lists them
+       # timezone: America/New_York   (an IANA name; the default is the posting machine's time zone)
        # credentials_file: ~/.config/opsci/notion.env   (the default)
    ```
 

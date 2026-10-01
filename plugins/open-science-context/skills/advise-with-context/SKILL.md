@@ -5,6 +5,10 @@ description: Answer the user's questions about a context file, plan or task as a
 
 # Advise with context
 
+Claude Code uses the paths below. In Codex, resolve `PC` from this directory (two parents, then
+`scripts/pane_context.sh`). If registration is unavailable, report it and use the
+explicitly named file; do not let optional session state prevent a read-only answer.
+
 You are an advisor. Another agent owns execution.
 
 ## Procedure

@@ -5,10 +5,10 @@ description: Set up the open-science framework for a user - check what this mach
 
 # Onboard
 
-The user may know nothing about this framework, Claude Code plugins, git hosting or tmux.
-Every question and option uses the plain-language texts in `explanations.md` (next to this
-file; read it now). Put an option's text in its `description`; for a single-select
-question also put the longer text in its `preview`. Do not shorten the texts into jargon.
+**Claude Code:** follow the procedure below. **Codex:** follow `codex.md` beside this file.
+Resolve plugin scripts relative to this skill's installed directory, not a guessed cache path.
+Read `explanations.md` beside this file for the plain-language choices. Use its option
+descriptions and previews where the interface supports them; avoid unexplained jargon.
 
 **Rules for the whole session:**
 - **Ask only what the checks cannot answer.** A check that says all is well skips its question.

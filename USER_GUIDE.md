@@ -5,7 +5,7 @@
 You work privately and publish a checked public record: plans, results, failed routes,
 sources, data with a DOI. Short "current state" files (`context.md`,
 `tasks/<id>/context.md`) let anyone pick up the work. Every step is an `opsci` command; this
-guide covers the optional Claude Code plugins.
+guide covers the optional Claude Code and Codex plugins (`docs/agents.md`).
 
 ## One-time setup
 
@@ -13,7 +13,7 @@ guide covers the optional Claude Code plugins.
    `/open-science:onboard`. It explains the three components (project management, context
    management, publishing), asks which you want, and sets them up, asking before any change
    to your settings.
-2. **tmux.** Context management requires Claude Code to run inside tmux. Onboarding sets
+2. **tmux.** Automatic session jumps require tmux. Onboarding sets
    tmux up for the mouse; `docs/tmux.md` covers the keys and, on a cluster, running tmux on
    a compute node.
 3. **Notifications.** Recommended: Notion. Each project gets a page in your Notion, kept in
@@ -30,7 +30,7 @@ guide covers the optional Claude Code plugins.
   context file, so it knows which work it drives.
   To take over work in a pane, type `/open-science-context:continue-context`. Doing this in the
   wrong pane resumes the wrong work; it prints which file it uses, so check that line.
-- **Agents clear their own conversation and type a prompt into their own pane.** This is
+- **Claude Code clears its conversation; Codex starts a fresh session from saved state.** This is
   called a jump. It keeps the context small; they resume from the context files and the
   log. Anything meant for you is sent before the jump. Jumps are optional: onboarding asks
   which ones you want (`OPSCI_JUMPS`).

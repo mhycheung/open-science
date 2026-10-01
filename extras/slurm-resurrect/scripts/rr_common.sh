@@ -174,11 +174,15 @@ rr_launch_cmd() {
 # This stops accidental and well-meant self-registration. It is not a security
 # boundary: an agent running as the same uid that deliberately imitates the
 # hook (RR_CALLER) can get past it. The refusal message tells it not to.
+# Codex counts the same way (since 2026-09-30): CODEX_THREAD_ID, which codex-cli 0.159.3
+# sets in every tool shell (its sandbox hides the process tree, so the variable is the
+# signal there), or a `codex` ancestor. A Codex user therefore registers from a plain
+# terminal pane; the prompt hook is Claude Code's only.
 rr_has_claude_ancestor() {
   local pid="${1:-$$}" comm ppid n=0
   while [[ -n "$pid" && "$pid" -gt 1 && $n -lt 64 ]]; do
     comm=$(ps -o comm= -p "$pid" 2>/dev/null | tr -d ' ')
-    [[ "$comm" == claude ]] && return 0
+    [[ "$comm" == claude || "$comm" == codex ]] && return 0
     ppid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
     [[ -n "$ppid" && "$ppid" != "$pid" ]] || return 1
     pid="$ppid"; n=$((n+1))
@@ -189,6 +193,7 @@ rr_has_claude_ancestor() {
 rr_caller_is_agent() {
   [[ "${RR_CALLER:-}" == "user-prompt-hook" ]] && return 1
   [[ -n "${CLAUDECODE:-}" ]] && return 0
+  [[ -n "${CODEX_THREAD_ID:-}" ]] && return 0
   rr_has_claude_ancestor "$$"
 }
 
@@ -200,11 +205,12 @@ rr_require_user() {  # <what> -> 0 if the caller is the user, else 3 (refused)
     >> "$RR_HOME/refused.log" 2>/dev/null
   cat >&2 <<MSG
 REFUSED: '$what' is the user's decision and cannot be run by an agent.
-This command was started from inside a Claude Code session (CLAUDECODE is set or
-a 'claude' process is an ancestor). Do not work around this check. Tell the user
-they can run it themselves, either by typing
+This command was started from inside a Claude Code or Codex session (CLAUDECODE or
+CODEX_THREAD_ID is set, or a 'claude' or 'codex' process is an ancestor). Do not work
+around this check. Tell the user they can run it themselves, either by typing
     /slurm-resurrect:resurrect $what
-in Claude Code, or by running this script in a plain terminal pane.
+in Claude Code, or by running this script in a plain terminal pane (the only way
+under Codex).
 The attempt has been logged to $RR_HOME/refused.log.
 MSG
   [[ -f "$RR_CONFIG" ]] && rr_notify "slurm-resurrect refused an agent's attempt to run '$what' (job ${SLURM_JOB_ID:-none}, pane ${TMUX_PANE:-none})."
@@ -378,6 +384,128 @@ rr_resolve_claude() {  # <pane_pid> [pane_id]
     printf '%s|%s|%s|%s\n' "$d" "$cpid" "$sid" "unknown"; return 0
   fi
   return 1
+}
+
+# --- Codex panes ---------------------------------------------------------------
+# Codex keeps no per-process state file, and its TUI does not hold its rollout open,
+# so nothing outside it can say which thread runs in a pane. The open-science context
+# plugin's Codex hook (cx_hook.sh) records it: <core state>/codex/panes/<key>.json with
+# thread_id, tui_pid, status (busy|idle), model and CODEX_HOME. A pane is a Codex pane
+# only if a live process named `codex` runs in its subtree; the thread comes from that
+# record when its tui_pid is that process, else from the pane cache (rr_pane_cache_put,
+# runtime codex), which the rebuild seeds because a resumed Codex runs no hook until
+# its first prompt. With neither, the thread is unknown and the pane is NOT resumed.
+rr_codex_pid() {  # <pane_pid> -> the codex TUI process in the pane, or return 1
+  local pid
+  for pid in "$1" $(rr_descendants "$1"); do
+    [[ "$(ps -o comm= -p "$pid" 2>/dev/null)" == codex ]] || continue
+    # The first `codex` from the top is the TUI (the npm wrapper is `node`).
+    echo "$pid"; return 0
+  done
+  return 1
+}
+
+# "codex_pid|thread_id|status|codex_home|model" for the Codex TUI in a pane, or
+# return 1 (no codex) / 2 (codex running, thread unknown: prints "codex_pid||unknown||").
+rr_resolve_codex() {  # <pane_pid> <pane_id> <sock>
+  local pane_pid="$1" paneid="$2" sock="$3" cpid rec tid st home model cached
+  cpid=$(rr_codex_pid "$pane_pid") || return 1
+  home=$(rr_proc_env "$cpid" CODEX_HOME)
+  rec="$RR_OS_STATE/codex/panes/$(rr_os_key "$sock" "$paneid").json"
+  # The record must name THIS process: same pid and, when recorded, the same start time
+  # (field 22 of /proc/<pid>/stat), so a reused pid never inherits another thread.
+  local rst; rst=$(jq -r '.tui_start // ""' "$rec" 2>/dev/null)
+  if [[ -f "$rec" && "$(jq -r '.tui_pid // ""' "$rec" 2>/dev/null)" == "$cpid" ]] \
+     && [[ -z "$rst" || "$rst" == "$(sed 's/.*) //' "/proc/$cpid/stat" 2>/dev/null | awk '{print $20}')" ]]; then
+    tid=$(jq -r '.thread_id // ""' "$rec"); st=$(jq -r '.status // "unknown"' "$rec")
+    model=$(jq -r '.model // ""' "$rec")
+    [[ -n "$home" ]] || home=$(jq -r '.codex_home // ""' "$rec")
+    if [[ -n "$tid" ]]; then
+      rr_pane_cache_put_codex "$paneid" "$tid" "$home" "$model"
+      printf '%s|%s|%s|%s|%s\n' "$cpid" "$tid" "$st" "$home" "$model"; return 0
+    fi
+  fi
+  cached=$(rr_pane_cache_get_codex "$paneid")
+  if [[ -n "$cached" ]]; then
+    IFS='|' read -r tid model <<<"$cached"
+    printf '%s|%s|unknown|%s|%s\n' "$cpid" "$tid" "$home" "$model"; return 0
+  fi
+  printf '%s||unknown||\n' "$cpid"; return 2
+}
+
+rr_pane_cache_put_codex() {  # <pane_id> <thread_id> <codex_home> <model>
+  local paneid="${1:-}" dir="${RR_SELFREG_DIR:-}" f
+  [[ -n "$dir" && -n "$paneid" && -n "${2:-}" ]] || return 0
+  f="$dir/$(rr_pane_key "$paneid").json"
+  [[ "$(jq -r '.session_id // empty' "$f" 2>/dev/null)" == "$2" ]] && return 0
+  mkdir -p "$dir" 2>/dev/null || return 0
+  jq -n --arg sid "$2" --arg h "${3:-}" --arg m "${4:-}" --arg pid "$paneid" \
+    '{runtime:"codex", session_id:$sid, codex_home:$h, model:$m, pane_id:$pid, cached_at:(now|todate)}' \
+    > "$f" 2>/dev/null || true
+}
+rr_pane_cache_get_codex() {  # <pane_id> -> "thread_id|model", or empty
+  local paneid="${1:-}" dir="${RR_SELFREG_DIR:-}" f
+  [[ -n "$dir" && -n "$paneid" ]] || return 0
+  f="$dir/$(rr_pane_key "$paneid").json"
+  [[ -f "$f" ]] || return 0
+  jq -r 'select(.runtime == "codex" and .session_id != null) | [.session_id, (.model // "")] | join("|")' "$f" 2>/dev/null
+}
+
+# The options of a running Codex TUI that a resume must keep, as a JSON array, or
+# return 1 with the reason on stderr. Kept: config overrides, profile, sandbox,
+# approval policy, added dirs, feature flags and the other plain switches, exactly
+# as the user gave them; nothing is added. Dropped: the model (the hook's record is
+# newer and is passed separately), images, a prompt, `resume`/`fork` and their
+# thread. An unknown option or a non-TUI subcommand refuses: never guessed.
+rr_codex_options() {  # <pid>
+  local pid="$1" a i=1 skip=0 first=1 out=()
+  local -a argv=()
+  [[ -r "/proc/$pid/cmdline" ]] || { echo "cannot read /proc/$pid/cmdline" >&2; return 1; }
+  mapfile -d '' -t argv < "/proc/$pid/cmdline"
+  case "$(basename -- "${argv[1]:-x}")" in codex|codex.js) [[ -f "${argv[1]}" ]] && i=2 ;; esac
+  for (( ; i<${#argv[@]}; i++)); do
+    a="${argv[$i]}"
+    case "$skip" in keep) out+=("$a"); skip=0; continue ;; drop) skip=0; continue ;; esac
+    case "$a" in
+      -c|--config|--enable|--disable|--remote|--remote-auth-token-env|--local-provider|-p|--profile|-s|--sandbox|-C|--cd|--add-dir|-a|--ask-for-approval)
+        out+=("$a"); skip=keep ;;
+      --config=*|--enable=*|--disable=*|--remote=*|--remote-auth-token-env=*|--local-provider=*|--profile=*|--sandbox=*|--cd=*|--add-dir=*|--ask-for-approval=*)
+        out+=("$a") ;;
+      --oss|--approve-for-me|--dangerously-bypass-approvals-and-sandbox|--dangerously-bypass-hook-trust|--search|--no-alt-screen|--no-daemon|--strict-config)
+        out+=("$a") ;;
+      -m|--model|-i|--image) skip=drop ;;
+      --model=*|--image=*|--last|--all|--include-non-interactive) ;;
+      --worktree) echo "--worktree: a resume would start another worktree" >&2; return 1 ;;
+      --) break ;;
+      -*) echo "unknown codex option '$a'" >&2; return 1 ;;
+      *) if (( first )); then
+           first=0
+           case "$a" in
+             resume|fork) ;;
+             exec|e|review|login|logout|mcp|plugin|app-server|remote-control|completion|update|doctor|sandbox|debug|apply|queue|archive|delete|migrate-rollouts|unarchive|cloud|exec-server|features|agents|help)
+               echo "codex runs '$a', not the interactive TUI" >&2; return 1 ;;
+           esac
+         fi ;;
+    esac
+  done
+  jq -cn '$ARGS.positional' --args -- "${out[@]}"
+}
+
+# The command to start Codex for a thread: config key `codex_launch_cmd`, env
+# RR_CODEX_LAUNCH_CMD, default `codex`.
+rr_codex_launch_cmd() {
+  local c="${RR_CODEX_LAUNCH_CMD:-}"
+  [[ -n "$c" ]] || c=$(jq -r '.codex_launch_cmd // empty' "$RR_CONFIG" 2>/dev/null)
+  printf '%s' "${c:-codex}"
+}
+
+# Send a message to a Codex thread with `codex queue` (it starts a turn in an idle
+# TUI, and waits behind a running one). Never types into the Codex TUI: typed input
+# was not reliably submitted there (measured, codex-cli 0.159.3).
+rr_codex_queue() {  # <thread_id> <codex_home or ""> <message>
+  local bin; bin=$(rr_codex_launch_cmd)
+  if [[ -n "${2:-}" ]]; then CODEX_HOME="$2" timeout 120 $bin queue --thread "$1" --message "$3"
+  else timeout 120 $bin queue --thread "$1" --message "$3"; fi
 }
 
 # --- pane injection lock -----------------------------------------------------
@@ -863,7 +991,7 @@ rr_inhibit_panes() {  # <job> <message>
   for f in "$RR_REG_ROOT/$job"/*.json; do
     sock=$(jq -r '.tmux_socket' "$f"); name=$(jq -r '.tmux_session' "$f")
     while IFS=$'\t' read -r ppid paneid; do
-      rr_resolve_claude "$ppid" "$paneid" >/dev/null || continue
+      rr_resolve_claude "$ppid" "$paneid" >/dev/null || rr_codex_pid "$ppid" >/dev/null || continue
       p="$RR_OS_STATE/inhibit_jump_$(rr_os_key "$sock" "$paneid")"
       printf '%s\n' "$msg" > "$p" && echo "$p" >> "$list"
     done < <(tmux -S "$sock" list-panes -s -t "$name" -F $'#{pane_pid}\t#{pane_id}' 2>/dev/null)

@@ -9,6 +9,9 @@ hand.
 claude plugin install open-science-publish@open-science
 ```
 
+For Codex: `codex plugin add open-science-publish@open-science`. The same export and
+approval procedure applies; see [Claude Code and Codex](agents.md).
+
 The plugin has two skills: `open-science-publish:publish` (this page) and
 `open-science-publish:zenodo-release` ([Zenodo releases](zenodo.md)). The tool behind them is
 `opsci publish`. Publishing needs git, `opsci` and a GitHub account, and works with any git
@@ -60,7 +63,7 @@ the map and the node headers.
 | `status` | an exported markdown file with no `status:` in a front-matter header, or a status that is not allowed, unless it is in `status_exempt` |
 | `copyright` | a PDF of more than one page, or an EPUB or DjVu file, not covered by a `type: paper` node (a one-page PDF counts as a figure); a quotation of more than 150 words; a run of 40 or more words shared with a file in `lit_cache/` |
 | `evidence` | a `verified` or `human-verified` node whose `evidence` file is not exported |
-| `human-verified` | a node whose `verification: human-verified` line was last changed in a commit made by an agent (a commit message with a `Claude-Session:`, `Agent:` or Claude `Co-Authored-By:` line) |
+| `human-verified` | a node whose `verification: human-verified` line was last changed in an attributed agent commit (`Agent:`, `Claude-Session:`, `Codex-Session:`, or a Claude/Codex `Co-Authored-By:` line) |
 | `references` | a node header whose `depends_on`, `supersedes` or `related` names a hard-private node (an edge to a soft-private node is allowed; the public map shows it); a link in an exported markdown or HTML file to a file or directory of the commit that is not exported. For a soft-private target the fix is a plain mention in backticks instead of the link |
 | `private-content` | exported text that contains, from hard-private material only: the id of a hard-private node (only ids containing `-`, `_` or a digit are matched); its title, if the title has 3 or more words; the path of a hard-private task directory or file; a run of 12 words shared with a hard-private prose file. Text of the template and of the task skeleton is ignored in that comparison. Mentions of soft-private material are allowed; the report lists them as notes |
 | `redaction` | a redaction marker with no closing `<!-- /redact -->`, or one with an empty reason |
@@ -217,8 +220,12 @@ git-ignored) with the export, keeping `.github/`; writes the site workflow
 `main`. Then it writes the private and public commits, the date and the export id to
 `publish/LAST_PUBLISHED` and commits that file in the private repository.
 
-The project's `.claude/settings.json` denies `git push public` and `git push --mirror`, so
-an agent cannot push to the public remote in another way.
+The project's `.claude/settings.json` denies `git push public` and `git push --mirror`.
+The trusted Codex project hook guards those direct commands too. These checks prevent
+accidental direct publication; they are not a complete boundary against arbitrary shell
+programs. Both agents must use the publication skill and its approved export. Agent
+commits carry `Agent: claude` or `Agent: codex`; unmarked commits cannot reliably be
+distinguished from human commits by the attribution check.
 
 ### `opsci publish status`
 

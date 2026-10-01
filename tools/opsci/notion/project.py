@@ -3,7 +3,7 @@
 - User config (not secret): the `notify.notion` section of ~/.config/opsci/config.yaml or the
   project's config/site.local.yaml: `parent_page` (link or id of the page under which each
   project gets its own page), `user` (the user's Notion user id, @mentioned in messages that
-  need them), optionally `credentials_file`.
+  need them), optionally `timezone` (for the times in Feed messages) and `credentials_file`.
 - Project state (not secret, git-ignored): config/notion.local.yaml in the main checkout, with
   the ids of the project's Notion pages, the hashes of what was last written, and the upload
   cache.

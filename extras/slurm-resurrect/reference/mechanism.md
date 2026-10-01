@@ -11,7 +11,7 @@
 | `rr_snapshot.sh` | Captures one tmux session as JSON. |
 | `rr_successor.sh` | Body of the successor job. |
 | `rr_rebuild.sh` | Rebuilds one tmux session from a snapshot and starts Claude in its Claude panes. |
-| `rr_deliver.sh` | After all sessions are rebuilt: trust dialogs, interrupted session jumps, notes, Remote Control check. |
+| `rr_deliver.sh` | After all sessions are rebuilt: trust dialogs, interrupted session jumps, notes, Remote Control check. Codex panes: notes through `codex queue`; no trust answer, no jump recovery. |
 
 ## One hop
 
@@ -57,6 +57,18 @@ comes from the session transcript, plus any context-window suffix on the
 process's `--model` argument (`context_window_suffix` can add one per model
 family). A pane with no live `claude` process is rebuilt as a plain shell.
 
+## Detecting a Codex pane
+
+Checked only when the pane has no live `claude`. A pane is a Codex pane if a process
+named `codex` runs in its tree. Codex has no per-process state file and its TUI does not
+keep its rollout file open, so the thread comes from the open-science-context Codex hook's
+record `<core state>/codex/panes/<sock>__<pane>.json`, used only when its `tui_pid` is
+that live process, else from this plugin's pane cache (`runtime: "codex"`), which the
+rebuild seeds because a resumed Codex runs no hook before its first prompt. The options
+to keep are read from `/proc/<pid>/cmdline` (`rr_codex_options`); an unknown option,
+`--worktree`, or a non-TUI subcommand makes the pane unresumable. Status (`busy`/`idle`)
+and model come from the same hook record.
+
 ## Resume command
 
 In each Claude pane of the rebuilt session:
@@ -70,6 +82,15 @@ In each Claude pane of the rebuilt session:
 `CLAUDE_CONFIG_DIR` is set only if the original process had it set. The
 session name and `--remote-control` are added only when Remote Control is on.
 `launch_cmd` defaults to `claude`.
+
+In each resumable Codex pane:
+
+```
+[CODEX_HOME=<original value>] <codex_launch_cmd> resume <original options> [-m <model>] <thread id>
+```
+
+`codex_launch_cmd` defaults to `codex`. Unresumable Codex panes stay plain shells and are
+listed in the successor's notice with the reason.
 
 ## Notes
 

@@ -5,6 +5,9 @@ text are markdown with $LaTeX$; attached plots appear inline with their caption 
 (<stem>.caption.md). With `mention`, the user (notify.notion.user) is @mentioned, so Notion
 notifies them: the messages are written by the integration (a bot), not by the user.
 
+The time shown in a message is in notify.notion.timezone (an IANA name such as
+America/New_York) if set, else in the local time zone of the machine that posts it.
+
 Every message is also kept in messages/notion-feed.jsonl. Pruning deletes only the callout
 block in Notion; results and plots stay in the project files and so in the task pages.
 """
@@ -25,6 +28,29 @@ KINDS = {"status": ("🔵", "blue_background"), "result": ("🟢", "green_backgr
          "question": ("🟠", "orange_background"), "blocker": ("🔴", "red_background"),
          "note": ("⚪", "gray_background")}
 DEFAULT_DAYS = 3
+
+
+def _now(proj: Project) -> dt.datetime:
+    """The current time in notify.notion.timezone, else in the machine's local time zone."""
+    name = proj.section.get("timezone")
+    if not name:
+        return dt.datetime.now().astimezone()
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    try:
+        return dt.datetime.now(ZoneInfo(str(name)))
+    except (ZoneInfoNotFoundError, ValueError):
+        raise NotionError(f"notify.notion.timezone: unknown time zone '{name}' "
+                          "(use an IANA name such as America/New_York)")
+
+
+def _stamp(t: dt.datetime) -> str:
+    """'2026-09-26 14:05 EDT'; the UTC offset when the zone has no abbreviation."""
+    zone = t.tzname() or ""
+    if not re.fullmatch(r"[A-Za-z]+", zone):
+        minutes = round(t.utcoffset().total_seconds() / 60)
+        h, m = divmod(abs(minutes), 60)
+        zone = f"UTC{'-' if minutes < 0 else '+'}{h:02d}" + (f":{m:02d}" if m else "")
+    return f"{t:%Y-%m-%d %H:%M} {zone}"
 
 
 def _attachment_blocks(proj: Project, st: dict, path: Path) -> list:
@@ -55,7 +81,7 @@ def post(proj: Project, text: str, author: str = "agent", kind: str = "note", ta
     user = proj.section.get("user")
     if mention and not user:
         raise NotionError("no user to mention: set notify.notion.user (opsci notion check prints it)")
-    now = dt.datetime.now(dt.timezone.utc)
+    now = _now(proj)
     paras = [p.strip() for p in re.split(r"\n\s*\n", text.strip()) if p.strip()]
     if title is None:            # the first paragraph, unless it is one long paragraph
         if not paras:
@@ -70,7 +96,7 @@ def post(proj: Project, text: str, author: str = "agent", kind: str = "note", ta
     from .mirror import task_finder, task_links
     find = task_finder(task_links(st))         # task ids in a message link to the task pages
     head += nb.fit100(nb.link_rich(nb.rich(title, {"bold": True}), find))[:100 - len(head)]
-    meta = f"{kind} · {author}" + (f" · {task}" if task else "") + f" · {now:%Y-%m-%d %H:%M} UTC"
+    meta = f"{kind} · {author}" + (f" · {task}" if task else "") + f" · {_stamp(now)}"
     children = [nb.blk("paragraph", nb._t(meta, {"italic": True, "color": "gray"}))]
     for para in paras:
         children += [nb.blk("paragraph", rt)

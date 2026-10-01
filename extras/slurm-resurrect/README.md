@@ -1,9 +1,10 @@
 # slurm-resurrect (optional plugin)
 
 For development on a compute node of a computing cluster that uses the SLURM
-scheduler, with Claude Code running in tmux inside a batch job. When the batch
+scheduler, with Claude Code (or Codex) running in tmux inside a batch job. When the batch
 job reaches its time limit, this plugin rebuilds your tmux session in a new job and resumes every Claude Code session that was running in
-it, with `--resume`. Windows, panes, layout and working directories are
+it, with `--resume`, and every Codex session it can identify, with `codex resume` (section
+"Codex" below). Windows, panes, layout and working directories are
 restored. Nothing in the open-science plugins depends on this plugin.
 
 How it works is described in `reference/mechanism.md`. The optional coupling
@@ -61,6 +62,30 @@ To resume with a command other than `claude` (for example a wrapper that sets
 the config directory), run `set launch_cmd <command>`. The resumed process gets
 back the `CLAUDE_CONFIG_DIR` the original process had.
 
+## Codex
+
+Codex panes in a registered tmux session are resumed too, with these differences:
+
+- **Register from a plain terminal pane.** The prompt hook is Claude Code's; under Codex
+  the script refuses `register` like any agent call (`CODEX_THREAD_ID` set, or a `codex`
+  process among the ancestors).
+- **The thread must be known.** Codex keeps no state file that maps a process to its
+  thread. The open-science-context plugin's Codex hook (`cx_hook.sh`) records it per pane;
+  without that hook, or before it has run in the pane, the pane is rebuilt as a plain
+  shell and the successor's notice names it.
+- **Options are the TUI's own.** The resume command is
+  `[CODEX_HOME=...] codex resume <the original options> -m <model> <thread>`. Sandbox,
+  approval policy, profile and `-c` overrides are copied from the running process
+  exactly; `--permission-mode` and Remote Control are Claude Code settings and do not
+  apply. Nothing that widens permissions is added. A process with an option the plugin
+  does not know, or started with `--worktree`, is not resumed.
+- **Nothing is typed into Codex.** The wind-down message (busy panes only) and notes go
+  through `codex queue --thread`. A Codex folder-trust question is never answered: Codex
+  saves that answer in your configuration, so the plugin leaves it to you and notifies.
+- A Codex session jump in flight at the limit is not finished after the hop; the thread is
+  resumed as it was.
+- `set codex_launch_cmd <command>` resumes with a command other than `codex`.
+
 ## Disable
 
 - `remove [session]`: take one tmux session out.
@@ -98,7 +123,7 @@ it waits with `set queue_mode`:
   current job for a final snapshot, cancels the current job, then rebuilds.
 
 Before the limit (`winddown_threshold_seconds`, default 30 min) each active
-Claude pane gets one message: the job is near its limit and the session will
+Claude or Codex pane gets one message: the job is near its limit and the session will
 be resumed; if the work in hand will not finish, stop cleanly and leave a note
 for after the hop. At `pause_threshold_seconds` (default 120 s) the final
 snapshot is taken.
@@ -124,3 +149,5 @@ way and skips these steps. Details: `reference/jump-hook.md`.
   notifies you.
 - Registration is checked by process ancestry, not enforced by the operating
   system.
+- The Codex resume was checked against a stand-in `codex` (tests/slurm_resurrect/
+  test_codex_panes.sh), not with codex-cli inside a real SLURM hop.

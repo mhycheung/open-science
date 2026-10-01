@@ -12,13 +12,10 @@ open-science is a framework for doing research in the open:
   any task, file or dataset as private. Nothing is released until you choose to publish.
   Each release contains only the files you allow, is checked for private material and
   secrets, and needs your approval.
-- **With or without agents.** It works the same whether an agent does a small part of the
-  work, most of it, or none of it.
-- **Context management for agentic work.** Agents keep a short context file for the project
-  and for each task, so any new session, a collaborator or another researcher can pick up
-  an ongoing project straight away. Optionally, agents also clear their conversation on
-  their own and resume from that file ("session jumps"), so a long session is not resent in
-  full on every turn or after the prompt cache expires, which reduces usage.
+- **Research others can continue.** Short project and task records explain what is known,
+  what was tried, and what comes next, for collaborators and future readers.
+- **Work your way.** Use plain files and the `opsci` command yourself, or use the optional
+  Claude Code and Codex plugins. The research record and publication checks are shared.
 
 ![How a project is organised and published](docs/figures/project_flow.svg)
 
@@ -39,6 +36,18 @@ Then type `/open-science:onboard`. The [tutorial](docs/tutorial.md) says what on
 does and gives the prompts for the next steps: starting a project, brainstorming, starting a
 task and using Notion.
 
+For Codex:
+
+```bash
+codex plugin marketplace add mhycheung/open-science
+codex plugin add open-science@open-science
+codex
+```
+
+Ask Codex to use `open-science:onboard`. Restart after installing components and review
+their hooks with `/hooks`. See [Claude Code and Codex](docs/agents.md) for setup,
+shared workflows, and the differences in session controls.
+
 If you are not using agents, install the `opsci` command
 (`pip install "git+https://github.com/mhycheung/open-science#subdirectory=tools"`, see
 [The opsci command](docs/cli.md)) and follow the pages of the components you want (below).
@@ -49,12 +58,12 @@ except context management, which needs project management.
 | # | component | plugin | what | needs |
 |---|---|---|---|---|
 | 1 | project management | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`, `private-investigation`) | git, `opsci` |
-| 2 | context management (for agents) | `open-science-context` | Claude Code agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`) | project management (installed with it), Claude Code running inside tmux, `opsci` |
+| 2 | context management (optional, for agents) | `open-science-context` | Claude Code and Codex keep context files and take over a task; session controls depend on the agent (`context-management`, `continue-context`, `advise-with-context`) | project management, `opsci`; tmux for automatic session jumps |
 | 3 | publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
 
 There are also two [optional extras](#optional-extras).
 
-Context management needs Claude Code to run inside tmux; the
+Claude Code and Codex automatic session jumps need tmux; the
 [tmux guide](docs/tmux.md) shows how to set it up, including on a cluster's compute node.
 
 ## Optional extras
@@ -64,14 +73,14 @@ Both are in `extras/`, and nothing in the three components depends on them.
 | extra | where | what | needs |
 |---|---|---|---|
 | projects list | `extras/projects-page/` (no plugin) | one page on your personal GitHub site listing your projects | a GitHub Pages site; `opsci` only to check the file |
-| SLURM resurrection | plugin `slurm-resurrect`, in `extras/slurm-resurrect/` | for development on a compute node of a computing cluster that uses the SLURM scheduler: when the batch job reaches its time limit, rebuild the tmux session in a new job and resume its Claude sessions; see `extras/slurm-resurrect/README.md` | a SLURM cluster, with tmux and Claude running inside a batch job; `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel` |
+| SLURM resurrection | plugin `slurm-resurrect`, in `extras/slurm-resurrect/` | for development on a compute node of a computing cluster that uses the SLURM scheduler: when the batch job reaches its time limit, rebuild the tmux session in a new job and resume its Claude Code and Codex sessions; see `extras/slurm-resurrect/README.md` | a SLURM cluster, with tmux and Claude Code or Codex running inside a batch job; `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel` |
 
 ## What is in this repository
 
 | path | what |
 |---|---|
 | `template/` | the project skeleton that a new project is copied from |
-| `plugins/` | optional Claude Code plugins: `open-science` (onboarding) and one per component |
+| `plugins/` | optional Claude Code and Codex plugins: `open-science` (onboarding) and one per component |
 | `extras/` | the optional extras: the projects page and the `slurm-resurrect` plugin |
 | `tools/` | the `opsci` Python package and command line (map build, publish, sync, Zenodo, notify, site) |
 | `tests/` | `tests/run_all` runs every automated test |

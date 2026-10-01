@@ -68,10 +68,13 @@ cm_state_file() {  # <claude pid>
 cm_sid()    { jq -r '.sessionId // empty' "$1" 2>/dev/null; }   # <state file>
 cm_status() { jq -r '.status // empty' "$1" 2>/dev/null; }      # <state file>
 
-# The live session id of the claude above this shell: its state file, which follows
-# /clear, else $CLAUDE_CODE_SESSION_ID. Prints nothing when neither is known.
+# The live session id of the agent above this shell. Claude: its state file, which
+# follows /clear, else $CLAUDE_CODE_SESSION_ID. Codex: $CODEX_THREAD_ID, which Codex
+# sets in every tool shell (a Codex jump starts a new process, so it never goes stale).
+# Prints nothing when none is known.
 cm_live_sid() {
   local cpid sf sid=""
+  if [ "$(cm_runtime)" = codex ]; then printf '%s' "${CODEX_THREAD_ID:-}"; return 0; fi
   cpid=$(cm_claude_pid) && sf=$(cm_state_file "$cpid") && sid=$(cm_sid "$sf")
   printf '%s' "${sid:-${CLAUDE_CODE_SESSION_ID:-}}"
 }
@@ -200,4 +203,183 @@ cm_timer_kill() {  # <pane key>
   pid=$(cat "$f" 2>/dev/null)
   [ -n "$pid" ] && kill -- "-$pid" 2>/dev/null || { [ -n "$pid" ] && kill "$pid" 2>/dev/null; }
   rm -f "$f"
+}
+
+# ---- runtime adapter (Claude Code or Codex) ------------------------------------
+# Which agent runs this shell: claude, codex, or none. $OPSCI_RUNTIME overrides.
+# Claude Code sets CLAUDECODE=1 in its tool shells; Codex sets CODEX_THREAD_ID. Codex
+# runs tool shells in a sandbox with its own pid namespace (measured, codex-cli
+# 0.159.3), so the process tree cannot find it there; its hooks are children of the
+# TUI and have no CODEX_THREAD_ID, so there the tree walk decides. With both
+# variables set (one agent started inside the other) the nearer ancestor wins, and a
+# walk that finds neither means the Codex sandbox.
+cm_runtime() {
+  case "${OPSCI_RUNTIME:-}" in claude|codex) echo "$OPSCI_RUNTIME"; return 0 ;; esac
+  local near; near=$(cm_agent_ancestor)
+  if [ -n "${CODEX_THREAD_ID:-}" ] && [ -n "${CLAUDECODE:-}" ]; then echo "${near:-codex}"; return 0; fi
+  [ -n "${CLAUDECODE:-}" ] && { echo claude; return 0; }
+  [ -n "${CODEX_THREAD_ID:-}" ] && { echo codex; return 0; }
+  echo "${near:-none}"
+}
+
+# Name (claude|codex) of the nearest agent process above this shell, or nothing.
+cm_agent_ancestor() {
+  local p="${1:-$$}" c n=0
+  while [ -n "$p" ] && [ "$p" -gt 1 ] 2>/dev/null && [ "$n" -lt 64 ]; do
+    c=$(ps -o comm= -p "$p" 2>/dev/null)
+    case "$c" in claude|codex) echo "$c"; return 0 ;; esac
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' '); n=$((n+1))
+  done
+  return 1
+}
+
+# The codex process above this shell (a hook's parent chain), or return 1.
+cm_codex_pid() {
+  local p="${1:-$$}" n=0
+  while [ -n "$p" ] && [ "$p" -gt 1 ] 2>/dev/null && [ "$n" -lt 64 ]; do
+    [ "$(ps -o comm= -p "$p" 2>/dev/null)" = codex ] && { echo "$p"; return 0; }
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' '); n=$((n+1))
+  done
+  return 1
+}
+
+# ---- Codex session records ------------------------------------------------------
+# Codex has no state file like Claude's sessions/<pid>.json, and nothing outside the
+# TUI can tell which thread runs in which pane. The Codex hooks (cx_hook.sh) write:
+#   codex/threads/<thread id>.json   status (busy|idle), TUI pid, pane, model, rollout
+#   codex/panes/<pane key>.json      the same record for the thread last seen in a pane
+# Both are written only by hooks, which Codex runs outside its sandbox.
+cm_cx_thread_path() { printf '%s/codex/threads/%s.json' "$OS_STATE" "$(cm_key "$1")"; }
+cm_cx_pane_path()   { printf '%s/codex/panes/%s.json' "$OS_STATE" "$1"; }   # <pane key>
+
+# Session-keyed context registration (pane_context.sh), for work outside tmux.
+cm_sess_reg_path() { printf '%s/session_context/%s__%s.json' "$OS_STATE" "$1" "$(cm_key "$2")"; }  # <runtime> <sid>
+
+# Atomic JSON write: <file> then the jq arguments that build it with -n.
+cm_write_json() {
+  local f="$1" tmp; shift; tmp="$f.tmp.$$"
+  mkdir -p "$(dirname "$f")" 2>/dev/null || return 1
+  jq -n "$@" > "$tmp" 2>/dev/null && mv "$tmp" "$f" || { rm -f "$tmp"; return 1; }
+}
+
+# The resume prompt for a Codex session. Codex has no /open-science-context:...
+# slash command; the prompt names the skill in words. $OPSCI_CODEX_RESUME_PROMPT
+# overrides it, with {ctx} standing for the context file.
+cm_codex_prompt() {  # <context file>
+  local t="${OPSCI_CODEX_RESUME_PROMPT:-Use the open-science-context continue-context skill to continue from {ctx}}"
+  printf '%s' "${t//\{ctx\}/$1}"
+}
+
+# Is <pid> a live codex process?
+cm_is_codex() { [ -n "${1:-}" ] && [ "$(ps -o comm= -p "$1" 2>/dev/null)" = codex ]; }
+
+# Is <pid> a descendant of (or equal to) <ancestor>?
+cm_descends() {  # <pid> <ancestor>
+  local p="$1" n=0
+  while [ -n "$p" ] && [ "$p" -gt 1 ] 2>/dev/null && [ "$n" -lt 64 ]; do
+    [ "$p" = "$2" ] && return 0
+    p=$(ps -o ppid= -p "$p" 2>/dev/null | tr -d ' '); n=$((n+1))
+  done
+  return 1
+}
+
+# The command line that starts a fresh Codex TUI like the one running as <pid>, with
+# <prompt> as its first message, printed as one shell-quoted line. It keeps the
+# process's own options (model, profile, sandbox, approval policy, config overrides,
+# added dirs: exactly what the user chose, nothing added) and drops what belongs to
+# the old thread: a positional prompt, images, `resume`/`fork` and their arguments.
+# <model>, when given, replaces --model (the hooks report the model in use, which
+# /model may have changed). Returns 1 with a reason on stderr for anything it does
+# not understand: an unknown option is refused, not guessed at.
+cm_codex_relaunch_cmd() {  # <pid> <prompt> [model]
+  local pid="$1" prompt="$2" model="${3:-}" a skip=0 i first=1 out=() home
+  local -a argv=()
+  [ -r "/proc/$pid/cmdline" ] || { echo "cannot read /proc/$pid/cmdline" >&2; return 1; }
+  mapfile -d '' -t argv < "/proc/$pid/cmdline"
+  i=1   # an interpreter running a codex script (node codex.js, bash codex): skip the script
+  case "$(basename -- "${argv[1]:-x}")" in codex|codex.js) [ -f "${argv[1]}" ] && i=2 ;; esac
+  for (( ; i<${#argv[@]}; i++)); do
+    a="${argv[$i]}"
+    case "$skip" in
+      keep) out+=("$a"); skip=0; continue ;;
+      drop) skip=0; continue ;;
+    esac
+    case "$a" in
+      -c|--config|--enable|--disable|--remote|--remote-auth-token-env|--local-provider|-p|--profile|-s|--sandbox|-C|--cd|--add-dir|-a|--ask-for-approval)
+        out+=("$a"); skip=keep ;;
+      --config=*|--enable=*|--disable=*|--remote=*|--remote-auth-token-env=*|--local-provider=*|--profile=*|--sandbox=*|--cd=*|--add-dir=*|--ask-for-approval=*)
+        out+=("$a") ;;
+      --oss|--approve-for-me|--dangerously-bypass-approvals-and-sandbox|--dangerously-bypass-hook-trust|--search|--no-alt-screen|--no-daemon|--strict-config)
+        out+=("$a") ;;
+      -m|--model) [ -n "$model" ] || model="${argv[$((i+1))]:-}"; skip=drop ;;
+      --model=*) [ -n "$model" ] || model="${a#--model=}" ;;
+      -i|--image) skip=drop ;;
+      --image=*|--last|--all|--include-non-interactive) ;;
+      --worktree) echo "codex runs with --worktree; a relaunch would make another worktree" >&2; return 1 ;;
+      --) break ;;
+      -*) echo "unknown codex option '$a'; not relaunching" >&2; return 1 ;;
+      *)  # positional: the first may be a subcommand; the rest are a prompt or a thread id
+        if [ "$first" = 1 ]; then
+          first=0
+          case "$a" in
+            resume|fork) ;;
+            exec|e|review|login|logout|mcp|plugin|app-server|remote-control|completion|update|doctor|sandbox|debug|apply|queue|archive|delete|migrate-rollouts|unarchive|cloud|exec-server|features|agents|help)
+              echo "codex process runs '$a', not the interactive TUI" >&2; return 1 ;;
+          esac
+        fi ;;
+    esac
+  done
+  [ -n "$model" ] && out=(-m "$model" "${out[@]}")
+  home=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | sed -n 's/^CODEX_HOME=//p' | head -1)
+  local line="" x
+  [ -n "$home" ] && line="CODEX_HOME=$(printf '%q' "$home") "
+  line="${line}codex"
+  for x in "${out[@]}"; do line="$line $(printf '%q' "$x")"; done
+  [ -n "$prompt" ] && line="$line $(printf '%q' "$prompt")"
+  printf '%s\n' "$line"
+}
+
+# Start time of a process (field 22 of /proc/<pid>/stat, in clock ticks since boot), or
+# nothing. A pid with a different start time is a different process: records keep both,
+# so a reused pid is never mistaken for the process they describe.
+cm_proc_start() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | awk '{print $20}'; }
+
+# Is <pid> still the codex process a record describes? <start>, when recorded, must match.
+cm_is_codex_proc() {  # <pid> [start]
+  cm_is_codex "${1:-}" || return 1
+  [ -z "${2:-}" ] || [ "$(cm_proc_start "$1")" = "$2" ]
+}
+
+# ---- the state directory under the Codex sandbox -----------------------------------
+# Codex's workspace-write and read-only sandboxes make everything outside the workspace,
+# /tmp and the added directories read-only (measured with `codex sandbox`, codex-cli
+# 0.159.3), so a Codex tool shell cannot write the default $OS_STATE under ~/.local/state.
+# The state directory is not moved for Codex: the hooks, the jump worker and the SLURM
+# plugin must all find the same records. The fix is to make that one directory writable,
+# narrowly, when Codex starts (verified live: `--add-dir` makes it writable):
+#   mkdir -p <state dir> && codex --add-dir <state dir> ...
+# or, for every start, `sandbox_workspace_write.writable_roots = ["<state dir>"]` in
+# ~/.codex/config.toml. Nothing here widens a sandbox by itself.
+cm_state_writable() {
+  local t
+  mkdir -p "$OS_STATE" 2>/dev/null || return 1
+  t="$OS_STATE/.write_test.$$"
+  ( : > "$t" ) 2>/dev/null || return 1
+  rm -f "$t"
+}
+cm_state_hint() {
+  printf 'open-science: the state directory %s is not writable here (under Codex: the sandbox). Context registration, jumps and wakers need it. Start Codex with it as an extra writable directory:\n  mkdir -p %q && codex --add-dir %q\nor add it to sandbox_workspace_write.writable_roots in ~/.codex/config.toml. A context file named explicitly still works without it (continue-context <file>).\n' \
+    "$OS_STATE" "$OS_STATE" "$OS_STATE"
+}
+
+# Update a JSON record under its lock (<file>.lock): <file> <jq filter> [jq args...].
+# Returns 1 (and leaves the file alone) if the file is gone or jq fails.
+cm_json_update() {
+  local f="$1" flt="$2" tmp; shift 2
+  (
+    exec 8>"$f.lock"; flock -w 30 8 || exit 1
+    [ -f "$f" ] || exit 1
+    tmp="$f.tmp.$$"
+    jq "$@" "$flt" "$f" > "$tmp" 2>/dev/null && mv "$tmp" "$f" || { rm -f "$tmp"; exit 1; }
+  )
 }

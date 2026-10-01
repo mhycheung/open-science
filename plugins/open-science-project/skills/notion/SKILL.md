@@ -77,7 +77,8 @@ What is in Notion, under the project's page:
 - **Existing project** (the user asks to mirror it): run `opsci notion check`. If the token or
   parent page is missing, send the user to `open-science:onboard` (Notion setup). Then run
   `opsci notion enable`. It adds AGENTS.md section 10, the Stop hook in
-  `.claude/settings.json`, `notion: true` in `config/framework.yaml` and the `.gitignore`
+  `.claude/settings.json` and `.codex/hooks.json` (Codex requires `/hooks` trust),
+  `notion: true` in `config/framework.yaml` and the `.gitignore`
   line. Review and commit those changes, then run `opsci notion init`. Report the page link
   it prints.
 - `config/notion.local.yaml` holds the page ids (git-ignored). If it is lost, the pages

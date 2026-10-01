@@ -16,11 +16,17 @@ Usage
     ctx_usage.py --json                   # machine-readable
     ctx_usage.py --subagents              # per-subagent usage for the same session
     ctx_usage.py --transcript AGENT.jsonl --sidechain    # ONE subagent's own usage
+    ctx_usage.py --codex-rollout ROLLOUT.jsonl           # a Codex thread (best effort)
 
 `--sidechain` is required when pointing `--transcript` at a subagent transcript
 (`.../<session-id>/subagents/agent-<agent-id>.jsonl`). Subagent messages are
 marked `isSidechain`, which the default reading skips; without the flag such a
 file reports "no assistant messages with usage yet".
+
+Codex (`--codex-rollout`): the context is `input_tokens` of the last
+`event_msg`/`token_count` event's `info.last_token_usage`, and the window is its
+`info.model_context_window` (seen in codex-cli 0.159.3). Codex documents the rollout
+format as unstable, so any other shape is a failed reading (exit 1), never a guess.
 
 Prints the integer token count on stdout by default, so it can be used as
     ctx=$(ctx_usage.py) || ctx=0
@@ -165,6 +171,39 @@ def read_usage(path, main_only=True):
     return result
 
 
+def read_codex_usage(path):
+    """Context usage of a Codex thread from its rollout file, or an error."""
+    result = {"transcript": path, "tokens": None, "window": None, "timestamp": None}
+    if not path or not os.path.isfile(path):
+        result["error"] = "rollout not found: %s" % path
+        return result
+    last = None
+    try:
+        with open(path, "r") as fh:
+            for line in fh:
+                if '"token_count"' not in line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                p = d.get("payload") or {}
+                if d.get("type") != "event_msg" or p.get("type") != "token_count":
+                    continue
+                info = p.get("info") or {}
+                u = info.get("last_token_usage") or {}
+                if isinstance(u.get("input_tokens"), int):
+                    last = (u["input_tokens"], info.get("model_context_window"), d.get("timestamp"))
+    except (IOError, OSError) as exc:
+        result["error"] = "cannot read rollout: %s" % exc
+        return result
+    if last is None:
+        result["error"] = "no token_count event with last_token_usage.input_tokens"
+        return result
+    result["tokens"], result["window"], result["timestamp"] = last
+    return result
+
+
 def subagent_report(transcript_path, session_id):
     """Per-subagent usage for a session.
 
@@ -206,7 +245,18 @@ def main(argv=None):
     ap.add_argument("--sidechain", action="store_true",
                     help="read sidechain (subagent) messages; required when "
                          "--transcript points at an agent-*.jsonl")
+    ap.add_argument("--codex-rollout", help="path to a Codex rollout .jsonl")
     args = ap.parse_args(argv)
+
+    if args.codex_rollout:
+        info = read_codex_usage(args.codex_rollout)
+        if args.json:
+            print(json.dumps(info, indent=1, sort_keys=True))
+        elif info.get("tokens") is not None:
+            print(info["tokens"])
+        else:
+            print(info.get("error", "unknown error"), file=sys.stderr)
+        return 0 if info.get("tokens") is not None else 1
 
     path = args.transcript
     if not path:

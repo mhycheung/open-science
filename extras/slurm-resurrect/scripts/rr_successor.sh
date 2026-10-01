@@ -29,7 +29,8 @@ JOB="${SLURM_JOB_ID:?SLURM_JOB_ID not set}"
 # sbatch --export=ALL carries the submitting shell's environment. Start clean:
 # no inherited tmux client, and nothing that marks the rebuilt panes as running
 # inside a Claude Code session.
-unset TMUX TMUX_PANE CLAUDECODE RR_CALLER CLAUDE_CODE_SESSION_ID CLAUDE_CODE_ENTRYPOINT
+unset TMUX TMUX_PANE CLAUDECODE RR_CALLER CLAUDE_CODE_SESSION_ID CLAUDE_CODE_ENTRYPOINT \
+      CODEX_THREAD_ID CODEX_SESSION_ID CODEX_CI
 
 NODE=$(hostname)
 DEFSOCK="${TMUX_TMPDIR:-/tmp}/tmux-$(id -u)/default"
@@ -100,8 +101,11 @@ for snap in "$SNAPDIR"/*.json; do
       > "$newdir/$san.json"
   fi
 done
-count=$(grep -c . "$MANIFEST" 2>/dev/null); count=${count:-0}
-echo "launched $count Claude pane(s); waiting for boot..."
+count=$(jq -s '[.[] | select((.runtime // "claude") == "claude")] | length' "$MANIFEST" 2>/dev/null); count=${count:-0}
+xcount=$(jq -s '[.[] | select(.runtime == "codex" and .status != "unresumable")] | length' "$MANIFEST" 2>/dev/null); xcount=${xcount:-0}
+xlost=$(jq -r 'select(.runtime == "codex" and .status == "unresumable") | "\(.target): \(.reason)"' "$MANIFEST" 2>/dev/null)
+echo "launched $count Claude pane(s) and $xcount Codex pane(s); waiting for boot..."
+[[ -n "$xlost" ]] && echo "Codex panes NOT resumed (left as shells):"$'\n'"$xlost"
 
 # The source job's jump-inhibit files (rr_common.sh rr_inhibit_panes) have
 # done their job; a rebuilt pane can get the same key, so remove them first.
@@ -119,7 +123,8 @@ for f in "$newdir"/*.json; do
 done
 
 # --- 3. notify how to reach the resurrected session(s) -----------------------
-connect="Respawned in job $JOB on node $NODE ($count Claude pane(s)). Attach in a terminal:"
+connect="Respawned in job $JOB on node $NODE ($count Claude pane(s), $xcount Codex pane(s)). Attach in a terminal:"
+[[ -n "$xlost" ]] && connect="$connect"$'\n'"Codex panes not resumed (start Codex there by hand):"$'\n'"$xlost"
 for f in "$newdir"/*.json; do
   [[ -e "$f" ]] || continue
   name=$(jq -r '.tmux_session' "$f"); sock=$(jq -r '.tmux_socket' "$f")

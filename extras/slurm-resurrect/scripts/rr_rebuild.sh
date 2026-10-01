@@ -9,6 +9,8 @@
 # with the permission mode and Remote Control setting the user chose when
 # registering (read from the registry record; defaults bypassPermissions / on).
 #
+# Panes that ran Codex are resumed with `codex resume` (launch_codex below).
+#
 # It does NOT wait for boot or send continuation prompts -- it prints a JSONL
 # manifest of the Claude panes it launched, one object per line:
 #     {socket, target, status, session_id, launch, permission_mode,
@@ -79,6 +81,50 @@ launch_cmd() {  # emit the shell command to start claude in a pane
   printf '%s' "$cmd"
 }
 
+# A Codex pane: `[CODEX_HOME=..] codex resume <options> [-m model] <thread>`, typed into
+# the pane's shell. The options are the old TUI's own (rr_codex_options): sandbox,
+# approval policy, profile, config overrides, exactly as the user started it. The
+# registry's permission mode is a Claude Code setting and is NOT applied to Codex, and
+# nothing that widens permissions is ever added. A pane whose thread or options were
+# not known is left a plain shell and reported in the manifest (status unresumable).
+launch_codex() {  # <window array idx> <pane array idx>
+  local w="$1" p="$2" pj widx pidx target tid home model why lc o newpid san
+  pj=$(jq -c ".windows[$w].panes[$p]" "$SNAP")
+  widx=$(jq -r ".windows[$w].index" "$SNAP"); pidx=$(jq -r '.index' <<<"$pj")
+  target="$name:$widx.$pidx"
+  tid=$(jq -r '.session_id // ""' <<<"$pj"); home=$(jq -r '.codex_home // ""' <<<"$pj")
+  model=$(jq -r '.model // ""' <<<"$pj"); why=$(jq -r '.codex_unresumable // ""' <<<"$pj")
+  if [[ "$(jq -r '.codex' <<<"$pj")" != true || -z "$tid" ]]; then
+    jq -nc --arg sock "$SOCK" --arg target "$target" --arg why "${why:-not resumable}" \
+      '{socket:$sock, target:$target, runtime:"codex", status:"unresumable", reason:$why, session_id:""}'
+    return 0
+  fi
+  lc=""
+  [[ -n "$home" ]] && lc="CODEX_HOME=$(printf '%q' "$home") "
+  lc="${lc}$(rr_codex_launch_cmd) resume"
+  while IFS= read -r -d '' o; do lc="$lc $(printf '%q' "$o")"; done \
+    < <(jq -j '.codex_options[]? | (. + "\u0000")' <<<"$pj")
+  [[ -n "$model" ]] && lc="$lc -m $(printf '%q' "$model")"
+  lc="$lc $(printf '%q' "$tid")"
+  if [[ "${RR_REBUILD_DRYRUN:-0}" == "1" ]]; then "${D[@]}" send-keys -t "$target" "# $lc" Enter
+  else "${D[@]}" send-keys -t "$target" "$lc" Enter; fi
+  jq -nc --arg sock "$SOCK" --arg target "$target" --arg status "$(jq -r '.status // ""' <<<"$pj")" \
+     --arg sid "$tid" --arg home "$home" --arg launch "$lc" \
+     --arg note "$(jq -r '.note // ""' <<<"$pj")" --arg nsrc "$(jq -r '.note_src // ""' <<<"$pj")" \
+    '{socket:$sock, target:$target, runtime:"codex", status:$status, session_id:$sid,
+      codex_home:$home, launch:$launch, note:$note, note_src:$nsrc, jump:null}'
+  # Seed the next hop's pane cache: a resumed Codex runs no hook before its first prompt.
+  if [[ -n "${RR_WRITE_SELFREG_DIR:-}" ]]; then
+    newpid=$("${D[@]}" display-message -p -t "$target" '#{pane_id}' 2>/dev/null)
+    if [[ -n "$newpid" ]]; then
+      mkdir -p "$RR_WRITE_SELFREG_DIR"; san=$(printf '%s' "$newpid" | tr -c 'A-Za-z0-9._-' '_')
+      jq -n --arg sid "$tid" --arg h "$home" --arg m "$model" --arg pid "$newpid" \
+        '{runtime:"codex", session_id:$sid, codex_home:$h, model:$m, pane_id:$pid, registered_at:(now|todate)}' \
+        > "$RR_WRITE_SELFREG_DIR/$san.json"
+    fi
+  fi
+}
+
 created_session=0
 for ((w=0; w<nwin; w++)); do
   widx=$(jq -r ".windows[$w].index" "$SNAP")
@@ -132,6 +178,9 @@ for ((w=0; w<nwin; w++)); do
   widx=$(jq -r ".windows[$w].index" "$SNAP")
   npane=$(jq -r ".windows[$w].panes | length" "$SNAP")
   for ((p=0; p<npane; p++)); do
+    if [[ "$(jq -r ".windows[$w].panes[$p].runtime // \"claude\"" "$SNAP")" == codex ]]; then
+      launch_codex "$w" "$p"; continue
+    fi
     is=$(jq -r ".windows[$w].panes[$p].claude" "$SNAP")
     [[ "$is" == "true" ]] || continue
     pidx=$(jq -r ".windows[$w].panes[$p].index" "$SNAP")

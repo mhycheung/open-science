@@ -8,6 +8,11 @@ allowed-tools: Read
 
 # /slurm-resurrect:resurrect
 
+In Claude Code, follow the hook procedure below. In Codex, no user-command hook runs:
+show the terminal command from this plugin's README and let the user run it in a plain
+terminal. Do not claim registration succeeded or run user-only commands on their behalf.
+Resolve the plugin root from this skill's installed directory (two parents).
+
 The user typed `/slurm-resurrect:resurrect $ARGUMENTS`.
 
 The plugin's `UserPromptSubmit` hook has **already run** this command for the user,
@@ -31,7 +36,8 @@ What the commands do (for answering questions; details in
 
 - `register`: opt the tmux session in. When this job reaches its time limit a
   successor job rebuilds the session (windows, panes, layout, working directories)
-  and resumes every Claude pane with `--resume`. The first run only shows a
+  and resumes every Claude pane with `--resume` (and every Codex pane whose thread
+  the open-science Codex hook recorded, with `codex resume`). The first run only shows a
   warning; the second registers. Options: `--permission-mode` (default
   `bypassPermissions`), `--remote-control on|off` (default on).
 - `status`, `remove [session]`, `stop` (end the lineage), `reset [N]` (new hop

@@ -186,9 +186,10 @@ cmd_note() {
     printf '%s' "$*" > "$dir/$(sanitize "$TMUX_PANE").txt"
     echo "self-message saved for this pane; it will be delivered after resurrection."
   else
-    : "${CLAUDE_CODE_SESSION_ID:?not set -- run inside a claude session in tmux}"
+    local sid="${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}"
+    : "${sid:?not set -- run inside a Claude Code or Codex session in tmux}"
     mkdir -p "$RR_HOME/notes"
-    printf '%s' "$*" > "$RR_HOME/notes/${CLAUDE_CODE_SESSION_ID}.txt"
+    printf '%s' "$*" > "$RR_HOME/notes/${sid}.txt"
     echo "self-message saved; it will be delivered after resurrection."
   fi
 }
@@ -267,7 +268,7 @@ cmd_set_notify() {
 # Lineage settings a user may change. Numbers are stored as numbers.
 RR_SET_KEYS="queue_mode early_lead_seconds handoff_timeout_seconds handoff_grace_seconds
 snapshot_interval_seconds pause_threshold_seconds winddown_threshold_seconds
-launch_cmd sbatch_extra account partition default_time_limit nodes ntasks cpus_per_task
+launch_cmd codex_launch_cmd sbatch_extra account partition default_time_limit nodes ntasks cpus_per_task
 context_window_suffix core_scripts_dir"
 cmd_set() {
   if [[ $# -lt 2 ]]; then

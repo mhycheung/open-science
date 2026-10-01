@@ -19,6 +19,10 @@
 #   3. Deliver each pane's checkpoint note.
 #   4. Remote Control audit (read only).
 #
+# Codex panes (manifest runtime "codex"): no trust answer is given (Codex saves it to
+# the user's config), notes go through `codex queue`, and no jump is recovered (a
+# Codex jump is not carried across a hop; the thread is resumed as it was).
+#
 # Delivery rule for notes: a note is delivered whenever one exists, regardless of
 # the pane's status at snapshot. A note is written only by an agent that chose to
 # wind down, so it is that agent's own instruction to itself.
@@ -111,6 +115,14 @@ while IFS= read -r line; do
   [[ -n "$line" ]] || continue
   sock=$(jq -r '.socket // empty' <<<"$line"); target=$(jq -r '.target // empty' <<<"$line")
   [[ -n "$sock" && -n "$target" ]] || continue
+  if [[ "$(jq -r '.runtime // "claude"' <<<"$line")" == codex ]]; then
+    # Codex's folder-trust answer is saved to the user's Codex config; never give it here.
+    if tmux -S "$sock" capture-pane -p -t "$target" 2>/dev/null | grep -qi 'trust this folder'; then
+      echo "rr_deliver: the resumed Codex session in $target asks whether to trust its folder; left for the user"
+      [[ "$DRY" == "1" ]] || rr_notify "slurm-resurrect: the resumed Codex session in $target is waiting at its folder-trust question (job ${SLURM_JOB_ID:-?}). Attach and answer it."
+    fi
+    continue
+  fi
   if tmux -S "$sock" capture-pane -p -t "$target" 2>/dev/null | grep -qi 'trust this folder'; then
     if [[ "$DRY" == "1" ]]; then
       echo "DRYRUN trust-dialog accept -> $target"
@@ -247,7 +259,13 @@ while IFS= read -r line; do
   sid=$(jq -r '.session_id // empty' <<<"$line")
   note=$(jq -r '.note // ""' <<<"$line"); nsrc=$(jq -r '.note_src // ""' <<<"$line")
   [[ -n "$sock" && -n "$target" && -n "$note" ]] || continue
-  if ! inject "$sock" "$target" "$note"; then
+  if [[ "$(jq -r '.runtime // "claude"' <<<"$line")" == codex ]]; then
+    if [[ "$DRY" == "1" ]]; then echo "DRYRUN codex queue -> $sid: $note"
+    elif ! rr_codex_queue "$sid" "$(jq -r '.codex_home // ""' <<<"$line")" "$note" >/dev/null 2>&1; then
+      echo "rr_deliver: FAILED to queue the checkpoint note to Codex thread $sid in $target; note left at ${nsrc:-?}"
+      continue
+    fi
+  elif ! inject "$sock" "$target" "$note"; then
     # Keep the note file: an undelivered self-message must stay recoverable.
     echo "rr_deliver: FAILED to deliver the checkpoint note to $target ($sid); note left at ${nsrc:-?}"
     continue
@@ -286,6 +304,9 @@ while IFS= read -r line; do
   want=$(jq -r '.rc_name // ""' <<<"$line")
   rcon=$(jq -r 'if .remote_control == false then "false" else "true" end' <<<"$line")
   [[ -n "$sock" && -n "$target" ]] || continue
+  if [[ "$(jq -r '.runtime // "claude"' <<<"$line")" == codex ]]; then
+    echo "$target: Codex pane ($(jq -r '.status' <<<"$line")); Remote Control does not apply" >> "$RC_OUT"; continue
+  fi
   ppid=$(tmux -S "$sock" display-message -p -t "$target" '#{pane_pid}' 2>/dev/null)
   paneid=$(tmux -S "$sock" display-message -p -t "$target" '#{pane_id}' 2>/dev/null)
   if [[ -z "$ppid" ]] || ! info=$(rr_resolve_claude "$ppid" "$paneid"); then

@@ -5,6 +5,10 @@ description: Take over the work a context file describes and drive it as the mai
 
 # Continue from a context file
 
+Claude Code uses the paths below. In Codex, resolve this skill directory's parent twice for
+`PC` below. Follow `../context-management/codex.md` for registration and session controls;
+if registration is unavailable, report it and continue from the explicitly named file.
+
 You are the main agent for the work the context file describes. Another session drove it
 until now, possibly this one before a jump.
 

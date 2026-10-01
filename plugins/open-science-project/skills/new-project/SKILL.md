@@ -5,6 +5,10 @@ description: Create a new research project from the open-science template - copy
 
 # New project
 
+In Claude Code, use the paths below. In Codex, set `CLAUDE_PLUGIN_ROOT` in each shell
+command to this skill directory's parent twice (the installed plugin root); do not assume
+the variable is exported. Use Codex's plugin installer for the chosen components.
+
 Scaffolding only. The user wants an empty project to start working in, not a designed one.
 Do not invent research goals, methods or rules. A slot you were not given content for gets a
 one-line `TODO:` and goes in your report.

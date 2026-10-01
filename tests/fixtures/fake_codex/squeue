@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fake squeue: the job is queued while $FAKE_SQUEUE_HOLD exists.
+[ -n "${FAKE_SQUEUE_HOLD:-}" ] && [ -e "$FAKE_SQUEUE_HOLD" ] && echo 123
+exit 0

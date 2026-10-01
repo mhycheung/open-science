@@ -11,6 +11,12 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Claude Code and Codex can use the same research records and publication tools. Codex
+  gains native plugin manifests, startup instructions and agent roles, edit hooks, Notion
+  sync hooks, and tmux context handoffs. The optional SLURM extra can restore mixed agent
+  panes. Claude hooks remain separate. Existing projects receive the added instructions
+  through `update-from-template`; no layout migration is required. Documentation keeps
+  open science first and explains the runtime-specific setup and limits.
 - Session jumps are optional. A new setting, `OPSCI_JUMPS` in the `env` block of the Claude
   `settings.json`, allows `all` jumps (the default), only `wait` jumps (no active jumps and no
   size notice), or none (`off`: `jump.sh` refuses every jump and the Stop hook does nothing

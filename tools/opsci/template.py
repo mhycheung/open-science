@@ -176,8 +176,8 @@ def _fill(dest, template, name, title, author, date, framework_repo, context_man
         raise TemplateError("unknown placeholders in template: " + "; ".join(unknown))
 
     if notion:  # the auto-sync hook; JSON has no comments, so it is added here, not by markers
-        from .notion.setup import add_hook
-        add_hook(dest / ".claude" / "settings.json")
+        from .notion.setup import add_sync_hooks
+        add_sync_hooks(dest)
 
     log = dest / "log" / f"{values['MONTH']}.md"
     log.write_text(

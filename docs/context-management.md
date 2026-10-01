@@ -1,5 +1,8 @@
 # Context management and session jumps (`open-science-context`)
 
+Claude Code's session controls are described first below. Codex shares the same context
+files and handoff skills, with its own [session controls](#codex-session-controls).
+
 An agent can hold only a limited amount of conversation. On long work it would otherwise
 slow down or lose track. With the `open-science-context` plugin, the agent saves where the
 work stands in the project's context files, clears its own conversation, and carries on from
@@ -15,6 +18,9 @@ leaves the queue and resumes from the context file. Clearing before a long wait 
 because the prompt cache expires while the session sits idle: waking a session that still
 holds a long conversation would resend all of it uncached, which costs far more than a
 fresh start from the context file.
+
+The figure and cache-expiry explanation describe Claude Code. Codex does not use the
+Claude cache-cold timer or its fixed context thresholds.
 
 **Jumps are optional.** Without them, the plugin still registers each pane to its context
 file, the agents still keep the context files current, and any session can take over a task
@@ -171,3 +177,52 @@ For questions about work another session is driving. It reads the context file a
 question needs, and answers with a `file:line` for every claim. It does not run the plan, fix
 anything, or edit the context file or the plan unless you ask. Registering the file to the
 pane is the one write it makes.
+
+## Codex session controls
+
+The Claude Code setup is above. For Codex, install these plugins after adding the marketplace:
+
+```bash
+codex plugin add open-science-project@open-science
+codex plugin add open-science-context@open-science
+```
+
+Restart Codex and review the hooks using `/hooks`. Start Codex from a shell in the tmux
+pane, not with `exec codex`, since an automated jump needs that shell to launch the next
+session. For ordinary handoff, a named context file works without tmux. Registration
+without tmux is per Codex thread, so one session cannot inherit another's task by accident.
+
+The state directory must be writable by both the hooks and sandboxed tools. The default
+is `~/.local/state/open-science`; make it first and, when using Codex's workspace-write
+sandbox, explicitly include only that directory with `--add-dir`. Keep your other model,
+sandbox and approval settings:
+
+```bash
+mkdir -p ~/.local/state/open-science
+codex --add-dir ~/.local/state/open-science
+```
+
+Do not broaden sandbox permissions merely to make a jump work. Without writable session
+state, continue from an explicitly named context file and save changes in the project.
+For SLURM recovery, the state directory must be on storage shared by the compute nodes.
+The context plugin's `pane_context.sh check` tests write access and explains how to fix
+it; registration or jump requests return exit 3 when the state directory is read-only.
+
+An active Codex jump saves the research state, ends the old TUI after its turn, and starts
+Codex again in the pane shell with the original launch options and a handoff prompt.
+It never types Claude `/clear` into Codex. Unknown launch options and managed `--worktree`
+sessions are refused. Model and permissions are preserved; a hook's `permission_mode`
+field is not used to infer launch permissions.
+
+A Codex wait jump needs the plugin's detached SLURM watcher, requested with
+`wait_slurm.sh --notify <jobid>...` before `jump.sh wait <context file>`. When jobs leave
+the queue, it uses `codex queue` to wake the new thread in that pane. Ordinary background
+shells and subagents are not supported as wait-jump wakers. Recheck the scheduler's final
+state and outputs; leaving the queue is not proof of success.
+
+`OPSCI_JUMPS=all|wait|off` retains its meaning. Codex has no cache-cold timer and no
+Claude-style automatic session naming. Token usage is best effort from Codex's changing
+rollout format; if unreadable, no size notice is issued. By default a notice occurs at
+60% of the reported model window; `OPSCI_CODEX_JUMP_THRESHOLD` sets an explicit threshold.
+The active-jump floor is 100000 tokens unless `OPSCI_CODEX_ACTIVE_JUMP_FLOOR` overrides it.
+Manual requests can use `--force` after saving state; it bypasses only the size floor.

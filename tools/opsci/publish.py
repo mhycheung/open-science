@@ -82,7 +82,7 @@ PRIVATE_SKELETON = ("README.md", "context.md")
 PROSE_SUFFIXES = (".md", ".tex", ".txt", ".html", ".htm", ".rst")
 # A commit carrying one of these lines was made by an agent (it cannot set human-verified).
 AGENT_TRAILER_RE = re.compile(
-    r"^(?:Claude-Session:|Agent:|Co-Authored-By:.*(?:Claude|anthropic\.com)|.*Generated with \[Claude Code\])",
+    r"^(?:Claude-Session:|Codex-Session:|Agent:|Co-Authored-By:.*(?:Claude|anthropic\.com|Codex|openai\.com)|.*Generated with \[(?:Claude Code|Codex)\])",
     re.IGNORECASE | re.MULTILINE)
 
 

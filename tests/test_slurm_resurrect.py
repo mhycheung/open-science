@@ -35,7 +35,7 @@ def run_shell_test(name, timeout=900, env=None):
 @pytest.mark.skipif(bool(NEEDS), reason=f"missing tools: {NEEDS}")
 @pytest.mark.parametrize("name", ["test_registration.sh", "test_settings_carry.sh",
                                   "test_queue_modes.sh", "test_jump_recovery.sh",
-                                  "test_trust_dialog.sh"])
+                                  "test_trust_dialog.sh", "test_codex_panes.sh"])
 def test_shell_suite(name):
     run_shell_test(name)
 
@@ -85,7 +85,7 @@ def test_skill_is_user_only():
     assert not user_only("---\nname: resurrect\ndescription: x\n---\nbody\n")
 
 
-README_SECTIONS = ["Requirements", "Enable", "Disable", "Remote Control and permission mode",
+README_SECTIONS = ["Requirements", "Enable", "Codex", "Disable", "Remote Control and permission mode",
                    "Queueing", "Session jumps"]
 
 

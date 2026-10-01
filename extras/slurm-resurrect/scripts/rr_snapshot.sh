@@ -13,6 +13,9 @@
 # rebuild. Non-Claude panes are captured as plain panes (recreated as empty
 # shells in the same cwd). Emits JSON to stdout (or <out.json>).
 #
+# Codex panes (a live `codex` process in the pane) are captured too: thread id, model,
+# CODEX_HOME, status and the TUI's own options (rr_common.sh, "Codex panes").
+#
 # Claude is identified LIVE: a pane counts as a Claude pane only if a running
 # `claude` process exists in its process subtree at capture time. Identity then
 # comes from that process's $CONFIGDIR/sessions/<pid>.json (falling back to the
@@ -31,6 +34,7 @@ read -ra CONFIG_DIRS <<< "$(rr_config_dirs | tr '\n' ' ')"
 NOTES_DIR="${RR_NOTES_DIR:-$RR_HOME/notes}"
 
 T=(tmux -S "$SOCK")
+TMP_ERR=$(mktemp); trap 'rm -f "$TMP_ERR"' EXIT
 
 
 # Recover the model a session was last using: the base id from its transcript
@@ -141,9 +145,27 @@ while IFS=$'\t' read -r widx wname wactive wlayout; do
           config_dir:$cdir, config_dir_env:$cdenv, model:$model, status:$status,
           rc_name:$rcname,
           note:$note, note_src:$nsrc, jump:$jump, jump_src:$jsrc}')")
+    elif cinfo=$(rr_resolve_codex "$ppid" "$paneid" "$SOCK") || [[ $? -eq 2 ]]; then
+      # A live Codex TUI (rr_common.sh, "Codex panes"). Resumed only when its thread is
+      # known and its options are understood; otherwise rebuilt as a plain shell, with
+      # the reason in the snapshot (the successor reports it).
+      IFS='|' read -r xpid tid status xhome model <<< "$cinfo"
+      opts=$(rr_codex_options "$xpid" 2>"$TMP_ERR") || opts=""
+      why=""
+      [[ -n "$tid" ]] || why="thread unknown: the open-science Codex hook (cx_hook.sh) has no record of this pane"
+      [[ -n "$opts" ]] || why="${why:+$why; }$(cat "$TMP_ERR")"
+      read_note "$paneid" "$tid"; note="$NOTE"; nsrc="$NOTE_SRC"
+      pane_objs+=("$(jq -n \
+        --argjson idx "$pidx" --arg cwd "$pcwd" --arg pane "$paneid" \
+        --arg sid "$tid" --arg home "$xhome" --arg model "$model" --arg status "$status" \
+        --argjson opts "${opts:-[]}" --arg why "$why" --arg note "$note" --arg nsrc "$nsrc" \
+        '{index:$idx, cwd:$cwd, claude:false, runtime:"codex", codex:($why == ""),
+          codex_unresumable:(if $why == "" then null else $why end),
+          session_id:$sid, pane_id:$pane, codex_home:$home, model:$model, status:$status,
+          codex_options:$opts, note:$note, note_src:$nsrc, jump:null}')")
     else
-      # No live Claude here -> forget any mapping we had for this pane, so it can
-      # never be applied to a different session started in the pane later.
+      # No live Claude or Codex here -> forget any mapping we had for this pane, so it
+      # can never be applied to a different session started in the pane later.
       rr_pane_cache_drop "$paneid"
       pane_objs+=("$(jq -n --argjson idx "$pidx" --arg cwd "$pcwd" \
         '{index:$idx, cwd:$cwd, claude:false}')")

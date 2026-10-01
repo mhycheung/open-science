@@ -12,16 +12,12 @@ open-science is a framework for doing research in the open:
   any task, file or dataset as private. Nothing is released until you choose to publish.
   Each release contains only the files you allow, is checked for private material and
   secrets, and needs your approval.
-- **With or without agents.** It works the same whether an agent does a small part of the
-  work, most of it, or none of it.
+- **Research others can continue.** Short project and task records explain what is known,
+  what was tried, and what comes next, for collaborators and future readers.
+- **Work your way.** Use plain files and the `opsci` command yourself, or the optional
+  Claude Code and Codex plugins. The research record and publication checks are shared.
 
 ![How a project is organised and published](figures/project_flow.svg)
-
-- **Context management for agentic work.** Agents keep a short context file for the project
-  and for each task, so any new session, a collaborator or another researcher can pick up
-  an ongoing project straight away. Optionally, agents also clear their conversation on
-  their own and resume from that file ("session jumps"), so a long session is not resent in
-  full on every turn or after the prompt cache expires, which reduces usage.
 
 **Start with the [tutorial](tutorial.md).** The rest of this documentation covers each part
 in full; see the navigation menu.
@@ -40,6 +36,17 @@ Then type `/open-science:onboard`. The [tutorial](tutorial.md) says what onboard
 the prompts for the next steps: starting a project, brainstorming, starting a task and using
 Notion.
 
+For Codex:
+
+```bash
+codex plugin marketplace add mhycheung/open-science
+codex plugin add open-science@open-science
+codex
+```
+
+Ask Codex to use `open-science:onboard`. Restart after installing components and review
+their hooks with `/hooks`. [Claude Code and Codex](agents.md) covers setup and session differences.
+
 If you are not using agents, install the `opsci` command
 (`pip install "git+https://github.com/mhycheung/open-science#subdirectory=tools"`, see
 [The opsci command](cli.md)) and follow the pages of the components you want ([Components](#components)).
@@ -48,14 +55,14 @@ If you are not using agents, install the `opsci` command
 
 The framework has three components. Use any combination; each works without the others,
 except context management, which needs project management. Project management and
-publishing are used through `opsci` and plain files; their Claude Code plugins are optional.
-Context management exists for Claude Code sessions. One more plugin, `open-science`, holds
+publishing are used through `opsci` and plain files; their Claude Code and Codex plugins are optional.
+Context management supports agent handoffs. One more plugin, `open-science`, holds
 the onboarding skill.
 
 | # | component | what it does | pages |
 |---|---|---|---|
 | 1 | project management: the project template and the `open-science-project` plugin | the layout every project is copied from (description, tasks, map, rules, citations, context files, publish settings), and skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project template and layout](project-template.md), [Project skills](project-skills.md) |
-| 2 | context management: the `open-science-context` plugin, for agents | Claude Code agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files ("session jumps"); Claude Code must run inside tmux | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
+| 2 | context management: the optional `open-science-context` plugin | Claude Code and Codex keep context files and take over tasks; automatic session controls depend on the agent | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
 | 3 | publishing: `opsci publish` and the `open-science-publish` plugin | the checked, user-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
 
 Also part of the framework:

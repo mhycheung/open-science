@@ -35,6 +35,11 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
 
 ## 2. How to work
 
+- **Startup.** Main agents load `open-science-project:context-files`. Claude Code also
+  reads `CLAUDE.md`; Codex reads `config/codex.md`. Use the installed framework skill
+  with its full plugin name. Keep the same research records whichever agent is working.
+- **Commit attribution.** Every agent-authored commit includes an `Agent: claude` or
+  `Agent: codex` trailer, respectively. Never attribute agent work to a human verifier.
 - **Scope.** Deliver what was asked, at the scope asked. Make routine judgement calls
   yourself. If a request looks mistaken, say so in one sentence and continue as asked.
 - **Record the work.** A request for work in this project (an idea to explore, a question to
@@ -51,7 +56,7 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
 - **Literature.** Every source read in full is saved in `lit_cache/`, named by its
   identifier, and listed in `citations/consulted.md` or `citations/used.bib`. When more
   than one paper is consulted, subagents read the full texts (the `literature` tier in
-  Claude Code); the main agent works from their reports.
+  Claude Code or Codex); the main agent works from their reports.
 - **Proportionality.** Match a check's tightness to what the result decides.
 - **No self-verification rounds.** Put a control case (an input that must fail) inside the
   original check. Do not re-run finished work to confirm it.
