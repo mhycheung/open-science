@@ -7,13 +7,14 @@ details.
 
 **A skill I just installed does not appear.** New plugins load only in a new Claude Code
 session. Start a new session after `claude plugin install` or after
-`/open-science:onboard` installed plugins.
+`/open-science:onboard` installed plugins. In Codex, restart Codex after `codex plugin add`.
 
 **The agent used a different skill from the one the plugin provides.** If your own skills
-directory (`~/.claude/skills/`) has a skill with the same name as a plugin skill (for example
+directory (`~/.claude/skills/`, or `~/.codex/skills/` for Codex) has a skill with the same name as a plugin skill (for example
 `context-management` or `new-project`), the model tends to pick the unprefixed personal
 skill. Move that skill out of the directory or rename it, and call plugin skills with their
-prefix, for example `/open-science-project:new-task`.
+prefix, for example `/open-science-project:new-task` (in Codex, ask for
+`open-science-project:new-task`).
 
 **Using Claude Code and Codex on the same project.** Install the plugins separately for
 each agent. They share research files, but keep separate runtime settings and hooks.
@@ -35,7 +36,8 @@ active jump).
 **`continue-context` resumed the wrong work.** With no file named, it uses the file
 registered for the tmux pane it runs in. Typed in another pane, it resumes that pane's work.
 Check the line that names the file, and give the file explicitly if in doubt:
-`/open-science-context:continue-context tasks/<id>/context.md`.
+`/open-science-context:continue-context tasks/<id>/context.md`. In Codex, ask it to use
+`open-science-context:continue-context` with that file.
 
 ## Publishing
 

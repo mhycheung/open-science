@@ -86,8 +86,9 @@ setup, gets the message as a file in `messages/`, with a hint in the output.
 ## When the pages are updated
 
 - The agents run `opsci notion sync` after every change (template `AGENTS.md` section 10).
-- A Claude Code Stop hook in the project's `.claude/settings.json` runs
-  `opsci notion sync --hook || true` when a turn ends. It starts a sync in the background (one
+- A Stop hook runs `opsci notion sync --hook || true` when a turn ends: for Claude Code in
+  the project's `.claude/settings.json`, for Codex in `.codex/hooks.json` (Codex runs it
+  only after you trust it with `/hooks`). It starts a sync in the background (one
   at a time per checkout) and returns at once; it never blocks the session. Its output is in
   `messages/notion-sync.log`.
 - A page whose text changed is rewritten. A task page whose text did not change but whose

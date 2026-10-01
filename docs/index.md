@@ -60,14 +60,14 @@ If you are not using agents, install the `opsci` command
 The framework has three components. Use any combination; each works without the others,
 except context management, which needs project management. Project management and
 publishing are used through `opsci` and plain files; their Claude Code and Codex plugins are optional.
-Context management exists for Claude Code sessions; Codex is also supported (see
+Context management works with Claude Code and with Codex (see
 [Claude Code and Codex](agents.md)). One more plugin, `open-science`, holds
 the onboarding skill.
 
 | # | component | what it does | pages |
 |---|---|---|---|
 | 1 | project management: the project template and the `open-science-project` plugin | the layout every project is copied from (description, tasks, map, rules, citations, context files, publish settings), and skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project template and layout](project-template.md), [Project skills](project-skills.md) |
-| 2 | context management: the `open-science-context` plugin, for agents | Claude Code agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files ("session jumps"); Claude Code must run inside tmux. Codex: see [Claude Code and Codex](agents.md) | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
+| 2 | context management: the `open-science-context` plugin, for agents | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files ("session jumps"); Claude Code must run inside tmux, Codex only for jumps. Codex: see [Claude Code and Codex](agents.md) | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
 | 3 | publishing: `opsci publish` and the `open-science-publish` plugin | the checked, user-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
 
 Also part of the framework:
@@ -81,7 +81,7 @@ Two optional extras live in `extras/` of the repository; nothing in the three co
 depends on them: a [personal projects page](projects-page.md) that lists your projects on
 your GitHub Pages site, and [SLURM resurrection](slurm-resurrect.md), for development on a
 compute node of a computing cluster that uses the SLURM scheduler: it resumes your Claude
-Code sessions in a new batch job when the current one reaches its time limit.
+Code and Codex sessions in a new batch job when the current one reaches its time limit.
 
 ## How a project is laid out and published
 

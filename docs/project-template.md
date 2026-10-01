@@ -44,7 +44,7 @@ keeping `data/MANIFEST.yaml`, `messages/README.md` and `config/site.example.yaml
 | `README.md` | the public front page: one paragraph on the project and a table of where things are | user |
 | `PROJECT.md` | what the project is about, in the user's words: the question, why it matters, approach, what counts as success, scope, key sources | user |
 | `AGENTS.md` | instructions for every agent, loaded at the start of every session: the rules that are never broken, a summary of `PROJECT.md`, how to work, the layout | user |
-| `CLAUDE.md` | loads `AGENTS.md`, then lists the framework's skills and the dispatch tiers | user |
+| `CLAUDE.md` | Claude Code's startup file: loads `AGENTS.md`, then lists the framework's skills and the dispatch tiers | user |
 | `context.md` | where the project stands now: goal, task table, in flight, next step, what waits on the user, open questions; at most 200 lines | main agent |
 | `log/YYYY-MM.md` | the project log: one line per finished subtask, append only | anyone, append only |
 | `map/README.md` | the logic of the project, hand-written; at most 150 lines | main agent, user |
@@ -61,7 +61,7 @@ keeping `data/MANIFEST.yaml`, `messages/README.md` and `config/site.example.yaml
 | `lit_cache/` | full texts of sources, for reading; never published | anyone |
 | `archive/` | retired material; nothing outside it may depend on it | main agent |
 | `messages/` | messages to the user from `opsci notify`; git-ignored except its README | `opsci notify` |
-| `config/` | `framework.yaml`, `site.example.yaml` (tracked) and `site.local.yaml` (git-ignored) | user |
+| `config/` | `framework.yaml`, `codex.md` (Codex's startup instructions, read after `AGENTS.md`), `site.example.yaml` (tracked) and `site.local.yaml` (git-ignored) | user |
 | `publish/` | `manifest.yaml` (the allowlist), `PRIVATE_POLICY.md`, `LAST_PUBLISHED`, `reports/` | user, `open-science-publish:publish` |
 | `.claude/` | `settings.json` (permissions) and `agents/` (the dispatch tiers) | user |
 | `.codex/` | Codex dispatch tiers and, when Notion is enabled, its sync hook; startup guidance is in `config/codex.md` | user |
@@ -334,7 +334,8 @@ Each tier file sets `model: inherit`; change it to the models you have.
 Codex has matching roles in `.codex/agents/`, expressed as TOML with the same contracts
 and effort choices. The model is inherited by omitting an override. `AGENTS.md` directs
 Codex to `config/codex.md` at startup. Plugin hooks adapt Codex patches to the project
-checks; Notion adds a project Stop hook. Review hooks with `/hooks` before relying on
+checks, and the `open-science-project` plugin's hook guards `git push public` and
+`git push --mirror`; Notion adds a project Stop hook. Review hooks with `/hooks` before relying on
 them. [Claude Code and Codex](agents.md) explains installation and permissions.
 
 ## The rules every agent follows

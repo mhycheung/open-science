@@ -34,10 +34,10 @@ per task** of that project. Each pane runs one Claude Code or Codex session that
 ```
 tmux session "work"
 ├── window 0 "dark-matter"      (project)
-│   ├── pane: Claude on task fit-profiles
-│   └── pane: Claude on task compare-sims
+│   ├── pane: agent on task fit-profiles
+│   └── pane: agent on task compare-sims
 └── window 1 "qnm-catalog"      (project)
-    └── pane: Claude on task real-data-pe
+    └── pane: agent on task real-data-pe
 ```
 
 Why this matters:

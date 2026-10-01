@@ -10,12 +10,12 @@ guide covers the optional Claude Code and Codex plugins (`docs/agents.md`).
 ## One-time setup
 
 1. **Install and onboard.** Install the `open-science` plugin (see the README), then type
-   `/open-science:onboard`. It explains the three components (project management, context
-   management, publishing), asks which you want, and sets them up, asking before any change
-   to your settings.
-2. **tmux.** Context management requires Claude Code to run inside tmux. Onboarding sets
-   tmux up for the mouse; `docs/tmux.md` covers the keys and, on a cluster, running tmux on
-   a compute node.
+   `/open-science:onboard` (Codex: ask for `open-science:onboard`). It explains the three
+   components (project management, context management, publishing), asks which you want,
+   and sets them up, asking before changing your settings.
+2. **tmux.** Context management needs Claude Code inside tmux; Codex, only for jumps.
+   Onboarding sets tmux up for the mouse; `docs/tmux.md` covers the keys and running tmux
+   on a cluster's compute node.
 3. **Notifications.** Recommended: Notion. Each project gets a page in your Notion, kept in
    sync as the agents work, with a Feed of their messages that notifies you. Onboarding
    stores your integration's token in `~/.config/opsci/notion.env` with mode 600
@@ -28,8 +28,8 @@ guide covers the optional Claude Code and Codex plugins (`docs/agents.md`).
   `open-science-project:new-task`. You review a task's plan before work starts.
 - **One tmux window per project, one pane per task.** Each pane is registered to one
   context file, so it knows which work it drives.
-  To take over work in a pane, type `/open-science-context:continue-context`. Doing this in the
-  wrong pane resumes the wrong work; it prints which file it uses, so check that line.
+  To take over work in a pane, type `/open-science-context:continue-context` (Codex: ask for
+  it). In the wrong pane it resumes the wrong work; check the file it names.
 - **Agents clear their own conversation and type a prompt into their own pane.** This is
   called a jump. It keeps the context small; they resume from the context files and the
   log. Codex instead restarts in the same pane. Anything meant for you is sent before the

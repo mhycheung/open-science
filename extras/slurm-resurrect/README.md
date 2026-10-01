@@ -12,8 +12,8 @@ to the session jumps of the open-science-context plugin is described in `referen
 
 ## Requirements
 
-- **tmux is required.** The unit of resurrection is a tmux session. Claude must
-  run inside tmux, and the tmux server must run inside the SLURM job.
+- **tmux is required.** The unit of resurrection is a tmux session. Claude Code or Codex
+  must run inside tmux, and the tmux server must run inside the SLURM job.
 - A SLURM batch job. Account, partition and time limit are read from the
   running job each time you register; you do not configure them.
 - `bash`, `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel`.
@@ -25,18 +25,19 @@ to the session jumps of the open-science-context plugin is described in `referen
 
 Only you can register a session. Agents cannot: the skill is user-only
 (`disable-model-invocation`), and the script refuses `register`, `reset`, `set`
-and `set-notify` when it runs under Claude, other than through the prompt hook
-below. The refusal is logged. This stops an agent from registering by
+and `set-notify` when it runs under Claude Code (other than through the prompt
+hook below) or Codex. The refusal is logged. This stops an agent from registering by
 accident; it is not a security boundary.
 
-From any Claude pane in the tmux session, type:
+From any Claude Code pane in the tmux session, type:
 
 ```
 /slurm-resurrect:resurrect register
 ```
 
 The plugin's `UserPromptSubmit` hook runs the command before the model sees
-the prompt. Or run it in a plain terminal pane of the session:
+the prompt. Or run it in a plain terminal pane of the session (use this with Codex,
+which has no slash command for it):
 
 ```
 bash <plugin dir>/scripts/rr_registry.sh register
@@ -47,9 +48,9 @@ nothing. Run it again to register. The warning is not shown again.
 
 Options:
 
-- `--permission-mode MODE`: permission mode of the resumed sessions. Default
+- `--permission-mode MODE` (Claude Code only): permission mode of the resumed sessions. Default
   `bypassPermissions`.
-- `--remote-control on|off`: Remote Control for the resumed sessions. Default on.
+- `--remote-control on|off` (Claude Code only): Remote Control for the resumed sessions. Default on.
 - `session ...`: register named tmux sessions instead of the current one.
 
 Other commands: `status`, `timeleft`, `reset [N]` (new hop budget; the default
@@ -60,7 +61,8 @@ after the hop.
 
 To resume with a command other than `claude` (for example a wrapper that sets
 the config directory), run `set launch_cmd <command>`. The resumed process gets
-back the `CLAUDE_CONFIG_DIR` the original process had.
+back the `CLAUDE_CONFIG_DIR` the original process had. For Codex, use
+`set codex_launch_cmd <command>`.
 
 ## Codex
 
@@ -97,7 +99,8 @@ Codex panes in a registered tmux session are resumed too, with these differences
 ## Remote Control and permission mode
 
 A resumed session runs with no one watching. The first time you register, the
-plugin says so and explains the two defaults:
+plugin says so and explains the two defaults, which apply to Claude Code panes only
+(Codex panes keep their own options; see "Codex" above):
 
 - **Permission mode**, default `bypassPermissions`. In bypass mode a resumed
   session runs every command, including edits and deletions, without asking.

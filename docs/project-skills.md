@@ -1,7 +1,7 @@
 # Project skills (`open-science-project`)
 
-The `open-science-project` plugin is the project-structure component. It gives Claude Code
-seven skills and two hooks that work on a project made from the
+The `open-science-project` plugin is the project-structure component. It gives Claude Code and
+Codex seven skills, and hooks, that work on a project made from the
 [template](project-template.md). It needs git and `opsci`.
 
 ```bash
@@ -11,8 +11,9 @@ claude plugin install open-science-project@open-science
 For Codex: `codex plugin add open-science-project@open-science`, then restart and review
 the hooks with `/hooks`. See [Claude Code and Codex](agents.md).
 
-Always name the skills in full, for example `/open-science-project:new-task`. If your own
-skills directory (`~/.claude/skills/`) has a skill with the same short name, the model tends
+Always name the skills in full, for example `/open-science-project:new-task` (in Codex,
+ask for `open-science-project:new-task`). If your own skills directory (`~/.claude/skills/`,
+or `~/.codex/skills/` for Codex) has a skill with the same short name, the model tends
 to pick that one instead; `open-science:onboard` offers to move such skills to an archive
 folder.
 

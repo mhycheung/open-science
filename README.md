@@ -61,7 +61,7 @@ except context management, which needs project management.
 | # | component | plugin | what | needs |
 |---|---|---|---|---|
 | 1 | project management | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`, `private-investigation`) | git, `opsci` |
-| 2 | context management (for agents) | `open-science-context` | Claude Code agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`). Codex: see [Claude Code and Codex](docs/agents.md) | project management (installed with it), Claude Code running inside tmux, `opsci` |
+| 2 | context management (for agents) | `open-science-context` | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`). Codex: see [Claude Code and Codex](docs/agents.md) | project management (installed with it), Claude Code running inside tmux (Codex: tmux only for jumps), `opsci` |
 | 3 | publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
 
 There are also two [optional extras](#optional-extras).

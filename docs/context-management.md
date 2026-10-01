@@ -1,7 +1,7 @@
 # Context management and session jumps (`open-science-context`)
 
-Claude Code's session controls are described first below. Codex shares the same context
-files and handoff skills, with its own [session controls](#codex-session-controls).
+Codex shares the same context files and handoff skills as Claude Code; its session
+controls differ and are described in [Codex session controls](#codex-session-controls).
 
 An agent can hold only a limited amount of conversation. On long work it would otherwise
 slow down or lose track. With the `open-science-context` plugin, the agent saves where the
@@ -37,6 +37,7 @@ file it resumes from. It needs `jq`, `opsci`, and tmux.
 pane records which context file it drives. Outside tmux, `jump.sh` refuses and the Stop hook
 does nothing. [Working in tmux](tmux.md) shows how to arrange your work (one pane per task),
 how to set tmux up for the mouse, and how to run it on a compute node of a cluster.
+Codex needs tmux only for jumps ([Codex session controls](#codex-session-controls)).
 
 | skill | use it to |
 |---|---|
@@ -54,6 +55,10 @@ When the main agent starts driving a task it runs:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/pane_context.sh" set tasks/<id>/context.md
 ```
 
+Codex does not set `${CLAUDE_PLUGIN_ROOT}`; it runs the same script from the installed
+plugin's `scripts/` directory. Outside tmux, Codex registers the file for its session
+(`CODEX_THREAD_ID`) instead of the pane.
+
 `pane_context.sh get` prints the registered path, and `pane_context.sh clear` drops it. A new
 session in the same pane (after a jump, a SLURM resurrection or a plain `/clear`) keeps the
 registration. Subagents never register; they use the main agent's pane.
@@ -61,7 +66,8 @@ registration. Subagents never register; they use the main agent's pane.
 To take over work in a pane yourself, type `/open-science-context:continue-context`, with or
 without a file. With no file it uses the pane's registered file and prints which one; with
 nothing registered it lists candidates, newest first, and asks you. **Typing it in the wrong
-pane resumes the wrong work**, so check the line that names the file.
+pane resumes the wrong work**, so check the line that names the file. In Codex, ask it to use
+`open-science-context:continue-context`, with or without a file.
 
 ## Jumps
 
@@ -127,7 +133,9 @@ Outside tmux it does nothing. With `OPSCI_JUMPS=wait` it skips step 3; with
 
 Onboarding asks which jumps you want and records the answer as `OPSCI_JUMPS` in the `env`
 block of the Claude `settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` or
-`~/.claude/settings.json`). Edit it there to change it; new sessions pick it up.
+`~/.claude/settings.json`). Edit it there to change it; new sessions pick it up. Codex
+reads `OPSCI_JUMPS` from the environment it is started in, for example
+`OPSCI_JUMPS=wait codex --add-dir ~/.local/state/open-science`.
 
 | `OPSCI_JUMPS` | what happens |
 |---|---|
@@ -180,7 +188,7 @@ pane is the one write it makes.
 
 ## Codex session controls
 
-The Claude Code setup is above. For Codex, install these plugins after adding the marketplace:
+For Codex, install these plugins after adding the marketplace:
 
 ```bash
 codex plugin add open-science-project@open-science

@@ -5,9 +5,9 @@ only: **development on a compute node of a computing cluster that uses the SLURM
 scheduler**, with Claude Code or Codex running in tmux inside a batch job on that node. It is of no use
 on a laptop, a workstation, or a cluster login node.
 
-A batch job ends at its time limit, and every Claude Code session running in it ends with it.
+A batch job ends at its time limit, and every agent session running in it ends with it.
 This plugin rebuilds your tmux session in a new job and resumes every Claude Code session
-that was running in it, with `--resume`. Windows, panes, layout and working directories are
+that was running in it, with `--resume`, and every Codex session it can identify, with `codex resume`. Windows, panes, layout and working directories are
 restored. Nothing in the other open-science plugins depends on it. How to start such a job
 and connect to it is in [Working in tmux](tmux.md#on-a-computing-cluster).
 
@@ -15,12 +15,14 @@ and connect to it is in [Working in tmux](tmux.md#on-a-computing-cluster).
 claude plugin install slurm-resurrect@open-science
 ```
 
+For Codex: `codex plugin add slurm-resurrect@open-science` (see [Codex](#codex)).
+
 The full reference is `extras/slurm-resurrect/README.md`; how it works is in
 `extras/slurm-resurrect/reference/mechanism.md`.
 
 ## Requirements
 
-- **tmux.** Claude must run inside tmux, and the tmux server must run inside the SLURM
+- **tmux.** Claude Code or Codex must run inside tmux, and the tmux server must run inside the SLURM
   batch job.
 - A SLURM batch job. Account, partition and time limit are read from the running job each
   time you register.
@@ -31,7 +33,7 @@ The full reference is `extras/slurm-resurrect/README.md`; how it works is in
 
 ## Turn it on
 
-Only you can register a session. From any Claude pane in the tmux session, type:
+Only you can register a session. From any Claude Code pane in the tmux session, type:
 
 ```
 /slurm-resurrect:resurrect register
@@ -40,18 +42,20 @@ Only you can register a session. From any Claude pane in the tmux session, type:
 The plugin's `UserPromptSubmit` hook runs the command before the model sees the prompt. The
 first `register` only shows a warning about the two defaults below and registers nothing;
 run it again to register. The successor job is queued as soon as a session is registered.
+Codex has no such command: run `bash <plugin dir>/scripts/rr_registry.sh register` in a
+plain terminal pane of the session.
 
 Agents cannot register: the skill cannot be invoked by the model, and the script refuses
-`register`, `reset`, `set` and `set-notify` when it runs under Claude other than through the
-prompt hook, and logs the attempt. This stops an agent from registering by accident; it is
+`register`, `reset`, `set` and `set-notify` when it runs under Claude Code (other than through
+the prompt hook) or Codex, and logs the attempt. This stops an agent from registering by accident; it is
 not a security boundary.
 
 Options of `register`:
 
 | option | default | what |
 |---|---|---|
-| `--permission-mode MODE` | `bypassPermissions` | permission mode of the resumed sessions (any mode `claude --permission-mode` accepts, for example `acceptEdits`) |
-| `--remote-control on\|off` | `on` | whether the resumed sessions can be read and driven from any device logged in to your Claude account |
+| `--permission-mode MODE` | `bypassPermissions` | Claude Code only: permission mode of the resumed sessions (any mode `claude --permission-mode` accepts, for example `acceptEdits`) |
+| `--remote-control on\|off` | `on` | Claude Code only: whether the resumed sessions can be read and driven from any device logged in to your Claude account |
 | `session ...` | the current session | register named tmux sessions instead |
 
 A resumed session runs with no one watching. In `bypassPermissions` mode it runs every
@@ -82,7 +86,7 @@ Settings for `set`: `queue_mode`, `early_lead_seconds`, `handoff_timeout_seconds
 `core_scripts_dir`.
 
 To resume with a command other than `claude` (for example a wrapper that sets the config
-directory), run `set launch_cmd <command>`.
+directory), run `set launch_cmd <command>`; for Codex, `set codex_launch_cmd <command>`.
 
 To send resurrection notices through `opsci notify` (useful with the Slack back end), type
 `/slurm-resurrect:resurrect set-notify <path to opsci> notify "$RR_MSG"`, with the full path
@@ -97,8 +101,8 @@ from `command -v opsci`, since the batch job's `PATH` may differ.
 
 ## Before the limit
 
-At `winddown_threshold_seconds` before the limit (default 30 minutes) each active Claude pane
-gets one message: the job is near its limit and the session will be resumed; if the work in
+At `winddown_threshold_seconds` before the limit (default 30 minutes) each active Claude Code
+or Codex pane gets one message: the job is near its limit and the session will be resumed; if the work in
 hand will not finish, stop cleanly and leave a note for after the hop. At
 `pause_threshold_seconds` (default 120 seconds) the final snapshot is taken.
 
