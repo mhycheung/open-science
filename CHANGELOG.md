@@ -11,6 +11,15 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Two documents for the user to write: `ABSTRACT.md` and `WRITEUP.md` (a short page in the
+  user's words: main results and methods, or current work and thinking, each linked to its
+  task, result or context). Both say `TODO` in a new project. Agents do not fill them in
+  unless asked; they remind the user once a task finishes with a result and at a publish.
+  On the project site, a filled-in write-up gets a Write-up tab, and a filled-in abstract
+  makes Home the abstract followed by the write-up, with `README.md` moved to an About tab.
+  Both files are in the default publish manifest and need no `status` header. Existing
+  projects get the files, the manifest lines and the `AGENTS.md` lines through
+  `update-from-template`. No layout change.
 - Claude Code and Codex can use the same research records and publication tools. Codex
   gains native plugin manifests, startup instructions and agent roles, edit hooks, Notion
   sync hooks, and tmux context handoffs. The optional SLURM extra can restore mixed agent

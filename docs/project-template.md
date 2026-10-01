@@ -43,6 +43,8 @@ keeping `data/MANIFEST.yaml`, `messages/README.md` and `config/site.example.yaml
 |---|---|---|
 | `README.md` | the public front page: one paragraph on the project and a table of where things are | user |
 | `PROJECT.md` | what the project is about, in the user's words: the question, why it matters, approach, what counts as success, scope, key sources | user |
+| `ABSTRACT.md` | the abstract of the project, in the user's words. `TODO` until the user writes it; once written, the project site's home page shows it with the write-up | user; an agent only when asked |
+| `WRITEUP.md` | a short page in the user's words: the main results and methods, or the current tasks and what the user is thinking about, with each result, method and task linked to its page. `TODO` until the user writes it; then it is the site's Write-up tab and is on the home page under the abstract | user; an agent only when asked |
 | `AGENTS.md` | instructions for every agent, loaded at the start of every session: the rules that are never broken, a summary of `PROJECT.md`, how to work, the layout | user |
 | `CLAUDE.md` | Claude Code's startup file: loads `AGENTS.md`, then lists the framework's skills and the dispatch tiers | user |
 | `context.md` | where the project stands now: goal, task table, in flight, next step, what waits on the user, open questions; at most 200 lines | main agent |
@@ -257,14 +259,14 @@ The publish allowlist. Keys (any other key is refused):
 
 | key | what |
 |---|---|
-| `include` | list of `{path: ..., type: ...}` entries. Only these paths can leave the repository. An entry with a `type` (result, paper, page, dataset) must be covered by a node of that type. Default: `README.md`, `AGENTS.md`, `PROJECT.md`, `CITATION.cff`, `LICENSE`, `LICENSE-docs`, `context.md`, `map`, `log`, `citations`, `rules`, `tasks`, `docs` |
+| `include` | list of `{path: ..., type: ...}` entries. Only these paths can leave the repository. An entry with a `type` (result, paper, page, dataset) must be covered by a node of that type. Default: `README.md`, `AGENTS.md`, `PROJECT.md`, `ABSTRACT.md`, `WRITEUP.md`, `CITATION.cff`, `LICENSE`, `LICENSE-docs`, `context.md`, `map`, `log`, `citations`, `rules`, `tasks`, `docs` |
 | `never` | paths or globs that are never exported, even if `include` covers them. Default: `publish/PRIVATE_POLICY.md`, `lit_cache`, `data`, `config/site.local.yaml`, `private-docs` |
 | `policy.default_privacy` | the `privacy` tier of a node with none: `public` (template value), `soft-private` or `hard-private` |
 | `policy.collaborators_agreed` | `true` once co-authors have agreed that shared work may be public; the publish check fails until it is set |
 | `hard_private` | optional list of paths or globs of hard-private material that is not inside a hard-private task; never exported, and the export may not name it or copy its text |
 | `public_repo` | URL or path of the public repository, used by `opsci publish push` |
 | `site_url` | optional: the project site's URL when it is not the GitHub Pages URL of `public_repo` (a custom domain), or `""` for no site. The `site-link` check requires `README.md` to link to it |
-| `status_exempt` | markdown files that need no `status:` header, added to the default list (READMEs, plot captions `*.caption.md`, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `context.md`, `log/`, `map/`, `citations/`, `rules/`, task logs, task maps and `subcontext/`, `docs/`, and the same skeleton files under `brainstorm/`) |
+| `status_exempt` | markdown files that need no `status:` header, added to the default list (READMEs, plot captions `*.caption.md`, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `ABSTRACT.md`, `WRITEUP.md`, `context.md`, `log/`, `map/`, `citations/`, `rules/`, task logs, task maps and `subcontext/`, `docs/`, and the same skeleton files under `brainstorm/`) |
 
 Whatever the manifest says, `publish/`, `lit_cache/`, `data/`, `messages/`, `.opsci/`,
 `.env` and `config/site.local.yaml` are never exported.

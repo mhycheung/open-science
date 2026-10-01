@@ -78,6 +78,9 @@ def make_repo(r):
          "# Math of $\\iota_Q$ near $90^\\circ$\n\nInline $\\iota_Q(0) - 90^\\circ$ and $M = 10\\,\\rm M_\\odot$.\n\n"
          "$$\n\\langle h \\rangle = a_1 * b_2\n$$\n\n| q | value |\n|---|---|\n| $\\iota$ | $\\lvert\\cos\\iota\\rvert < 0.1$ |\n")
     page(r / "notes/extra.md", "# An extra page\n")
+    # the user's documents, not yet written: not on the site
+    page(r / "ABSTRACT.md", "# Abstract\n\n<!-- The user writes this file. -->\n\nTODO\n")
+    page(r / "WRITEUP.md", "# Write-up\n\n<!-- The user writes this file.\nTwo lines. -->\n\nTODO\n")
     return r
 
 
@@ -124,7 +127,7 @@ def test_only_the_site_pages_are_built(built):
     built_pages = {p.relative_to(out).as_posix() for p in out.rglob("*.html")} - {"404.html"}
     assert built_pages == {site.html_path(p) for p in SITE_PAGES}
     # the files merged into a page, the agent documents and the consulted list are not pages
-    for gone in ("AGENTS.html", "notes/extra.html", "src/index.html", "map/claims.html", "map/graph.html",
+    for gone in ("ABSTRACT.html", "WRITEUP.html", "about.html", "AGENTS.html", "notes/extra.html", "src/index.html", "map/claims.html", "map/graph.html",
                  "tasks/t01-fit/plan.html", "tasks/t01-fit/log.html", "tasks/t01-fit/S1/inputs.html",
                  "citations/consulted.html", "log/2026-09.html", "tasks/t01-fit/S1/hist.caption.html"):
         assert not (out / gone).exists(), gone
@@ -132,6 +135,40 @@ def test_only_the_site_pages_are_built(built):
     home = (out / "index.html").read_text()
     assert "agent rules" in home and "AGENTS" not in "".join(hrefs(home))  # a link to a left-out page: plain text
     assert 'href="map/index.html"' in home and 'href="citations/index.html"' in home
+
+
+def test_filled():
+    assert not site.filled("# Abstract\n\n<!-- how to\nwrite it -->\n\nTODO\n")
+    assert not site.filled("# Write-up\n")
+    assert site.filled("# Abstract\n\nWe fit the data.\n")
+
+
+def test_abstract_and_writeup_make_the_home_page(repo, tmp_path):
+    page(repo / "ABSTRACT.md", "# Abstract\n\n<!-- note -->\n\nWe fit the data; see [the fit](results/fit.md).\n")
+    page(repo / "WRITEUP.md", "# Write-up\n\n## Methods\n\nThe [fit task](tasks/t01-fit/context.md) "
+         "uses [@Abbott2016].\n")
+    out = tmp_path / "site"
+    assert site.build(repo, out) == []
+    home = (out / "index.html").read_text()
+    tabs = re.findall(r'class="md-tabs__link">\s*([^<]+?)\s*<', home)
+    assert tabs == ["Home", "Write-up", "Results", "Map", "Dead ends", "Tasks", "Citations", "Context", "Log",
+                    "About"]
+    assert re.search(r"<h1[^>]*>Demo project", home) and re.search(r'<h2 id="abstract"', home)
+    assert "We fit the data" in home and "Methods" in home and "note" not in home
+    assert {"results/fit.html", "tasks/t01-fit/context.html", "citations/index.html"} <= hrefs(home)
+    about = (out / "about.html").read_text()
+    assert "agent rules" in about and 'href="map/index.html"' in about  # the README, links kept
+    assert "Methods" in (out / "WRITEUP.html").read_text()
+
+
+def test_writeup_alone_is_a_tab(repo, tmp_path):
+    page(repo / "WRITEUP.md", "# Write-up\n\nWhat I am thinking about now.\n")
+    out = tmp_path / "site"
+    assert site.build(repo, out) == []
+    home = (out / "index.html").read_text()
+    tabs = re.findall(r'class="md-tabs__link">\s*([^<]+?)\s*<', home)
+    assert tabs[:3] == ["Home", "Write-up", "Results"] and "About" not in tabs
+    assert "agent rules" in home and not (out / "about.html").exists()
 
 
 def test_main_results_page(built):

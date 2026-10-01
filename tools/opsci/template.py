@@ -51,7 +51,8 @@ def apply_components(text: str, context_management: bool, notion: bool = False,
 
 # Files a fresh project must have.
 REQUIRED = (
-    "AGENTS.md", "CLAUDE.md", "README.md", "PROJECT.md", "context.md", "CITATION.cff",
+    "AGENTS.md", "CLAUDE.md", "README.md", "PROJECT.md", "ABSTRACT.md", "WRITEUP.md",
+    "context.md", "CITATION.cff",
     "LICENSE", "LICENSE-docs", ".gitignore", ".gitattributes",
     "log/README.md", "map/README.md",
     "citations/used.bib", "citations/consulted.md",

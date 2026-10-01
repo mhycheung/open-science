@@ -11,6 +11,8 @@ include:
   - path: README.md
   - path: AGENTS.md
   - path: PROJECT.md
+  - path: ABSTRACT.md
+  - path: WRITEUP.md
   - path: CITATION.cff
   - path: LICENSE
   - path: LICENSE-docs
@@ -45,7 +47,8 @@ never:
 #                             # preliminary; "" removes the banner (e.g. once it is published)
 # status_exempt:              # Markdown files that need no `status` header, in addition
 #   - <path or glob>          # to the defaults: README.md, **/README.md, **/*.caption.md,
-#                             # AGENTS.md, CLAUDE.md, PROJECT.md, context.md, log/**,
+#                             # AGENTS.md, CLAUDE.md, PROJECT.md, ABSTRACT.md, WRITEUP.md,
+#                             # context.md, log/**,
 #                             # map/**, citations/**, rules/**, tasks/*/log.md,
 #                             # tasks/*/map.md, tasks/*/subcontext/**, docs/**,
 #                             # brainstorm/context.md, brainstorm/log/**, brainstorm/map/**,

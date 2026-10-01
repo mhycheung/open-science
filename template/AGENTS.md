@@ -53,6 +53,10 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
   whether the request is a verification or new work, propose a verification task and ask. Never make the user say "task" or "not a task" before they get an answer. A
   side question that needs recorded work but does not drive the project is a private
   investigation (`open-science-project:private-investigation`), without asking.
+- **The user's documents.** `ABSTRACT.md` and `WRITEUP.md` are the user's to write. Do
+  not write or change them unless the user asks; when asked, help, and link every result,
+  method and task they mention to its page. While either says only `TODO`, remind the user
+  of it, in one sentence, when a task finishes with a result and before a publish.
 - **Literature.** Every source read in full is saved in `lit_cache/`, named by its
   identifier, and listed in `citations/consulted.md` or `citations/used.bib`. When more
   than one paper is consulted, subagents read the full texts (the `literature` tier in
@@ -110,6 +114,7 @@ a dispatch names their id, not before.
 | path | what | who edits |
 |---|---|---|
 | `PROJECT.md` | what the project is about: question, motivation, approach, success, scope, sources | user |
+| `ABSTRACT.md`, `WRITEUP.md` | the abstract, and a short page in the user's words (results and methods, or current work and thinking); the home page of the project site once filled in. `TODO` until then | user; agents only when asked (§2) |
 | `context.md` | project state now: goal, task table, in flight, next step, open questions. ≤200 lines | main agent |
 | `log/YYYY-MM.md` | append-only project log, one line per finished subtask | anyone, append only |
 | `map/README.md` | hand-written narrative of the project's logic, ≤150 lines | main agent, user |

@@ -1,7 +1,10 @@
 """`opsci site`: build the project site from a public repo with MkDocs (Material theme).
 
-Tabs: Home, Results, Map, Dead ends, Tasks, Citations, Context, Log; `sitepages` assembles
-the pages (one per task, one map page, the citations table, the log). Markdown files that
+Tabs: Home, Write-up, Results, Map, Dead ends, Tasks, Citations, Context, Log, About;
+`sitepages` assembles the pages (one per task, one map page, the citations table, the log).
+Once the user has filled in `ABSTRACT.md`, Home shows the abstract and the write-up
+(`WRITEUP.md`), and the README moves to the About tab; the Write-up tab appears once
+`WRITEUP.md` is filled in. Markdown files that
 are not pages of the site are left out. Pages with a node header get a status banner
 (active, failed, superseded, ...) and a verification line. The build runs in
 strict mode, so a broken link fails it, and the built site must pass the leak scan.
@@ -26,6 +29,8 @@ SKIP = (".git", ".github", ".opsci", "site", "_site")
 # Files never copied into the site: the list of works consulted but not used is private.
 DROP = {"citations/consulted.md"}
 RESULT_TYPES = ("result", "page", "paper", "dataset")
+# The user's own documents. Each holds only `TODO` until the user fills it in.
+ABSTRACT, WRITEUP, ABOUT = "ABSTRACT.md", "WRITEUP.md", "about.md"
 BANNERS = {
     "active": ("warning", "Work in progress", "This is active work. Its results may change."),
     "paused": ("warning", "Paused", "Work on this has stopped for now. Its results may be incomplete."),
@@ -151,6 +156,27 @@ def _rel_link(from_page: str, target: str) -> str:
     return up + target
 
 
+def filled(text: str) -> bool:
+    """Whether the user has written ``text``: something besides its title, comments and `TODO`."""
+    _, body = _header(text)
+    body = re.sub(r"<!--.*?-->", "", body, flags=re.S)
+    rest = "\n".join(l for l in body.splitlines() if not l.startswith("# ")).strip()
+    return rest not in ("", "TODO")
+
+
+def home_page(title: str, abstract: str, writeup: str | None) -> str:
+    """The home page: the project title, the abstract and, if filled in, the write-up, without
+    their comments (the template's guidance)."""
+    abstract, writeup = (re.sub(r"<!--.*?-->\n?", "", t, flags=re.S) if t is not None else None
+                         for t in (abstract, writeup))
+    _, a = sitepages.split_title(_header(abstract)[1])
+    parts = [f"# {title}", "## Abstract", sitepages.demote(a.strip(), 1)]
+    if writeup is not None:
+        w_title, w = sitepages.split_title(_header(writeup)[1])
+        parts += [f"## {w_title or 'Write-up'}", sitepages.demote(w.strip(), 1)]
+    return "\n\n".join(parts) + "\n"
+
+
 @dataclass
 class Staged:
     pages: list[str]  # the markdown pages of the site
@@ -186,6 +212,18 @@ def stage(src: Path, docs: Path) -> Staged:
     site.task_ids = {n.id: f"{d}/context.md" for d, n in tdirs.items()}
     result_pages = {n.path for n in scan.nodes if n.get("type") in RESULT_TYPES and n.path.endswith(".md")}
     home = next((p for p in ("index.md", "README.md") if p in md), None)
+    user_docs = {p: (docs / p).read_text(encoding="utf-8") for p in (ABSTRACT, WRITEUP) if p in md}
+    user_docs = {p: t for p, t in user_docs.items() if filled(t)}
+    about = None
+    if ABSTRACT in user_docs and home and ABOUT not in md:
+        # the README moves to the About tab; Home becomes the abstract and the write-up
+        about = ABOUT
+        shutil.copy2(docs / home, docs / ABOUT)
+        md.append(ABOUT)
+        site.pages.add(ABOUT)
+        site.moved[ABSTRACT] = (home, "abstract")
+    if WRITEUP in user_docs:
+        site.pages.add(WRITEUP)
 
     def is_result_page(p: str) -> bool:
         return p in result_pages or p.startswith(("results/", "paper/"))
@@ -226,6 +264,9 @@ def stage(src: Path, docs: Path) -> Staged:
     lg = sitepages.project_log(docs, site)
     if lg:
         generated["log/README.md"] = lg
+    if about:
+        text = home_page(_title(src), user_docs[ABSTRACT], user_docs.get(WRITEUP))
+        generated[home] = sitepages.fix_links(text, home, home, site)
     site.pages = {p for p in site.pages if p in generated or (docs / p).is_file()}
     for p in sorted(site.pages):
         if p in generated:
@@ -241,7 +282,7 @@ def stage(src: Path, docs: Path) -> Staged:
         if p not in site.pages:
             (docs / p).unlink()
     pages = sorted(site.pages)
-    return Staged(pages, navigation(docs, pages, home, tdirs, is_result_page))
+    return Staged(pages, navigation(docs, pages, home, tdirs, is_result_page, about))
 
 
 def html_path(page: str) -> str:
@@ -295,11 +336,14 @@ def _page_title(docs: Path, rel: str) -> str:
     return PurePosixPath(rel).stem.replace("-", " ").replace("_", " ")
 
 
-def navigation(docs: Path, pages: list[str], home: str | None, tdirs: dict, is_result_page) -> list:
-    """Tabs: Home, Results, Map, Dead ends, Tasks, Citations, Context, Log."""
+def navigation(docs: Path, pages: list[str], home: str | None, tdirs: dict, is_result_page,
+               about: str | None = None) -> list:
+    """Tabs: Home, Write-up, Results, Map, Dead ends, Tasks, Citations, Context, Log, About."""
     def entry(p: str, title: str | None = None) -> dict:
         return {title or _page_title(docs, p): p}
     nav: list = [{"Home": home}] if home else []
+    if WRITEUP in pages:
+        nav.append({"Write-up": WRITEUP})
     results = [p for p in pages if is_result_page(p)]
     if results:
         top = [entry(p, "Main results" if p == "results/README.md" else None)
@@ -325,6 +369,8 @@ def navigation(docs: Path, pages: list[str], home: str | None, tdirs: dict, is_r
         nav.append({"Context": "context.md"})
     if "log/README.md" in pages:
         nav.append({"Log": "log/README.md"})
+    if about:
+        nav.append({"About": about})
     return nav
 
 

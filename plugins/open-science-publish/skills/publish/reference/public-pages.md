@@ -49,11 +49,19 @@ entry needs:
 
 ## The site
 
-Tabs: Home (`README.md`); Results ("Main results", the milestone page, then each result
+Tabs: Home (`README.md`, or the abstract and the write-up, below); Write-up (`WRITEUP.md`,
+once filled in); Results ("Main results", the milestone page, then each result
 page grouped by task); Map (the logic of the project, the claims graph and the project
 graph on one page); Dead ends; Tasks (an overview, then one page per task with its
 context, results, figures with their captions, plan, map, working notes and log);
 Citations; Context; Log (every month's entries grouped by date, newest first, task ids
-linked). Other markdown files (`AGENTS.md`, `PROJECT.md`, `rules/`, `docs/`,
-`src/README.md`) are not pages; a link to one becomes plain text. `Not verified` and
-`unverified` labels are red and bold.
+linked); About (`README.md`, when Home shows the abstract).
+
+`ABSTRACT.md` and `WRITEUP.md` are written by the user and hold only `TODO` until then (a
+title and `<!-- ... -->` comments do not count). Once `ABSTRACT.md` is filled in, Home is the
+project title, the abstract and, if filled in, the write-up, and `README.md` moves to the
+About tab. A file that still says `TODO` is not on the site.
+
+Other markdown files (`AGENTS.md`, `PROJECT.md`, `rules/`, `docs/`, `src/README.md`) are not
+pages; a link to one becomes plain text. `Not verified` and `unverified` labels are red and
+bold.

@@ -258,8 +258,11 @@ Once, after the first publish, open the public repository on github.com and set
 `opsci site build [SRC] --out DIR` (default `_site`) builds the site of a public repository
 checkout with MkDocs and the Material theme:
 
-- the tabs are Home (`README.md`), Results, Map, Dead ends, Tasks, Citations, Context and
-  Log. Results starts with "Main results" (`results/README.md`), then each result page,
+- the tabs are Home, Write-up, Results, Map, Dead ends, Tasks, Citations, Context, Log and
+  About. Home is `README.md` until the user fills in `ABSTRACT.md`; then Home shows the
+  project title, the abstract and the write-up (`WRITEUP.md`), and `README.md` moves to
+  About. Write-up appears once `WRITEUP.md` is filled in. Until then each file says only
+  `TODO` and is not on the site. Results starts with "Main results" (`results/README.md`), then each result page,
   grouped by task. Map is one page: the hand-written `map/README.md`, the claims graph and
   the project graph. Tasks has an overview table and one page per task holding the whole
   task: its context, results (each figure with its caption), the other figures with their

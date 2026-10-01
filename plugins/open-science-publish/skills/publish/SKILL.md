@@ -106,7 +106,8 @@ and may be run whenever they help.
    readers of the public repo, from the exported diff only: no private material. The push
    appends the list of changed files. The user approves **this export id**, in this
    conversation. A general "go ahead" given earlier does not cover it. Without approval, do
-   not push.
+   not push. If `ABSTRACT.md` or `WRITEUP.md` is still `TODO`, say in one sentence that the
+   home page shows them once the user writes them; do not write them yourself.
 
 10. **Commit the report** (`publish/reports/` is tracked; the approved report is the record
    of the approval).
@@ -146,5 +147,4 @@ writes it into the site workflow.
   decision (omission markers, step 6, you add yourself).
 - A deterministic check that fails is fixed at its source, never by removing the check or
   widening the manifest without the user's decision.
-- Other skills are named by full name, for example `open-science-publish:zenodo-release` for the
-  data.
+- Other skills are named by full name, e.g. `open-science-publish:zenodo-release` for data.

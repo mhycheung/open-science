@@ -38,6 +38,7 @@ ALWAYS_NEVER = ("publish", "lit_cache", "data", "config/site.local.yaml", ".opsc
 PUBLIC_ONLY = (".github",)
 # Markdown files that need no `status` header. The manifest's `status_exempt` adds to this list.
 STATUS_EXEMPT = ("README.md", "**/README.md", "**/*.caption.md", "AGENTS.md", "CLAUDE.md", "PROJECT.md", "context.md",
+                 "ABSTRACT.md", "WRITEUP.md",
                  "log/**", "map/**", "citations/**", "rules/**", "tasks/*/log.md", "tasks/*/map.md",
                  "tasks/*/subcontext/**", "docs/**", "brainstorm/context.md", "brainstorm/log/**",
                  "brainstorm/map/**", "brainstorm/tasks/*/log.md",

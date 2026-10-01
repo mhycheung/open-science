@@ -11,6 +11,7 @@ reproduced and checked.
 | where | what |
 |---|---|
 | [`PROJECT.md`](PROJECT.md) | what the project is about, in the user's words |
+| [`ABSTRACT.md`](ABSTRACT.md), [`WRITEUP.md`](WRITEUP.md) | the abstract, and a short write-up of the results and methods or the current work, in the user's words |
 | [`context.md`](context.md) | where the project stands now |
 | [`map/README.md`](map/README.md) | the logic of the project; [`map/graph.md`](map/graph.md) is the task graph |
 | [`results/README.md`](results/README.md) | the main results; [`map/claims.md`](map/claims.md) shows what each rests on |
