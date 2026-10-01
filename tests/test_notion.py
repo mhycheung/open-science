@@ -250,6 +250,17 @@ def test_plots_in_versions_pdf_twin_and_data(tmp_path):
     assert ps[1]["caption"] == []
 
 
+def test_graph_image_line_becomes_its_png_and_its_pdf(tmp_path):
+    (tmp_path / "map").mkdir()
+    (tmp_path / "map" / "graph.svg").write_text('<?xml version="1.0"?>\n<!-- opsci-graph 0123 -->\n<svg/>\n')
+    (tmp_path / "map" / "graph.png").write_bytes(b"png")
+    (tmp_path / "map" / "graph.pdf").write_bytes(b"%PDF")
+    blocks = nb.md_to_blocks("Text.\n\n![Project graph](graph.svg)\n",
+                             mirror.image_resolver(tmp_path, tmp_path / "map"))
+    assert [(b["type"], b.get("_local", {}).get("path")) for b in blocks] == [
+        ("paragraph", None), ("image", "map/graph.png"), ("pdf", "map/graph.pdf")]
+
+
 def test_rich_text_limits_of_100_items():
     rt = nb.rich(" ".join(f"$a_{{{i}}}$" for i in range(150)))
     assert len(rt) > 100
@@ -861,4 +872,4 @@ def test_graph_image_uploads_its_png(tmp_path):
     resolve = mirror.image_resolver(tmp_path, tmp_path / "map")
     assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.svg"  # control: no PNG
     (tmp_path / "map/graph.png").write_bytes(b"\x89PNG")
-    assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.png"
+    assert [b["_local"]["path"] for b in resolve("graph.svg", "Project graph")] == ["map/graph.png"]

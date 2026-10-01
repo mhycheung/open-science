@@ -43,6 +43,7 @@ def test_stub_images_carry_the_drawing_hash(tmp_path, monkeypatch):
     G.render(d, tmp_path / "graph")
     assert G.is_current(tmp_path / "graph", d)
     assert (tmp_path / "graph.png").read_bytes().startswith(b"\x89PNG")
+    assert (tmp_path / "graph.pdf").read_bytes().startswith(b"%PDF")
     changed = G.drawing(CARDS[:2], BOXES, EDGES[:1], "used by")
     assert not G.is_current(tmp_path / "graph", changed)  # a changed graph is out of date
 
@@ -58,6 +59,7 @@ def test_real_render_is_repeatable(tmp_path, monkeypatch):
     assert G.is_current(tmp_path / "a", d)
     assert (tmp_path / "a.svg").read_bytes() == (tmp_path / "b.svg").read_bytes()
     assert (tmp_path / "a.png").read_bytes() == (tmp_path / "b.png").read_bytes()
+    assert (tmp_path / "a.pdf").read_bytes() == (tmp_path / "b.pdf").read_bytes()
     assert not re.search(r"/home|/tmp|/anvil", svg)  # no local path in the image
 
 

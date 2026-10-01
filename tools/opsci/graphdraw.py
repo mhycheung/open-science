@@ -2,8 +2,8 @@
 arrows, pdflatex typesets them with TikZ, so titles may hold $LaTeX$.
 
 A drawing is a plain dict (``drawing()``), built by ``mapbuild`` and ``results`` from the node
-headers. ``render`` writes ``<base>.svg`` (for the project site and GitHub) and ``<base>.png``
-(for Notion). The SVG starts with a comment holding the hash of the drawing, so an image is
+headers. ``render`` writes ``<base>.svg`` (for the project site and GitHub), ``<base>.png``
+(for Notion, at the column width) and ``<base>.pdf`` (for Notion's PDF viewer, which zooms). The SVG starts with a comment holding the hash of the drawing, so an image is
 redrawn only when its graph changed (``is_current``).
 
 Tools: Graphviz ``dot``, ``pdflatex`` with the TikZ, standalone, lmodern and xcolor
@@ -113,9 +113,9 @@ def missing_tools() -> list[str]:
 
 
 def is_current(base: Path, d: dict) -> bool:
-    """Whether ``<base>.svg`` and ``<base>.png`` exist and were drawn from ``d``."""
-    svg, png = Path(f"{base}.svg"), Path(f"{base}.png")
-    if not (svg.is_file() and png.is_file()):
+    """Whether ``<base>.svg``, ``<base>.png`` and ``<base>.pdf`` exist and were drawn from ``d``."""
+    svg = Path(f"{base}.svg")
+    if not all(Path(f"{base}.{x}").is_file() for x in ("svg", "png", "pdf")):
         return False
     with svg.open(encoding="utf-8", errors="replace") as f:
         head = f.read(300)
@@ -431,7 +431,7 @@ def _legend(d: dict, lay: dict) -> str:
 # ---------------------------------------------------------------- render
 
 def _stub(d: dict, base: Path) -> None:
-    """Placeholder images for ``d``: an empty SVG with the drawing's hash, a 1x1 PNG."""
+    """Placeholder images for ``d``: an empty SVG with the drawing's hash, a 1x1 PNG, an empty PDF."""
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
     png = (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 0, 0, 0, 0))
@@ -441,10 +441,14 @@ def _stub(d: dict, base: Path) -> None:
                                    + '\n<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1"/>\n',
                                    encoding="utf-8")
     Path(f"{base}.png").write_bytes(png)
+    Path(f"{base}.pdf").write_bytes(b"%PDF-1.4\n1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n"
+                                    b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n"
+                                    b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 1 1] >> endobj\n"
+                                    b"trailer << /Root 1 0 R >>\n%%EOF\n")
 
 
 def render(d: dict, base: Path) -> None:
-    """Write ``<base>.svg`` and ``<base>.png`` for drawing ``d``. Raises DrawError."""
+    """Write ``<base>.svg``, ``<base>.png`` and ``<base>.pdf`` for drawing ``d``. Raises DrawError."""
     base = Path(base)
     if os.environ.get("OPSCI_GRAPH_IMAGES") == "stub":
         return _stub(d, base)
@@ -473,3 +477,4 @@ def render(d: dict, base: Path) -> None:
         base.parent.mkdir(parents=True, exist_ok=True)
         Path(f"{base}.svg").write_text(svg, encoding="utf-8")
         shutil.copyfile(work / "graph.png", f"{base}.png")
+        shutil.copyfile(work / "graph.pdf", f"{base}.pdf")

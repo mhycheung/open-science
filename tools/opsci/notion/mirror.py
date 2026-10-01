@@ -1,7 +1,7 @@
 """The Notion mirror of a project: render the project files into pages, and write what changed.
 
 Pages under the project's root page: Project (PROJECT.md), Context, Map (the project graph and
-the claims graph as images (their PNG files), the node table closed under a toggle, and
+the claims graph, each as an image (its PNG file) and as a PDF that Notion's viewer zooms), the node table closed under a toggle, and
 the dead ends), Milestone results (results/README.md), Log,
 Rules, Brainstorm context, Private docs, the Feed (feed.py), and two databases:
 - Tasks: one row per task in tasks/, brainstorm/tasks/ and the verifications/ directories,
@@ -181,13 +181,9 @@ def task_finder(links: dict):
 
 def image_resolver(root: Path, base: Path):
     """For md_to_blocks: an image line whose file exists in the project becomes an image
-    placeholder with the file's path and hash (the sync uploads it and fills the block)."""
-    def resolve(target: str, alt: str):
-        if re.match(r"[a-z]+://", target):
-            return None
-        p = (base / target.split("#")[0]).resolve()
-        if p.suffix.lower() == ".svg" and p.with_suffix(".png").is_file():
-            p = p.with_suffix(".png")  # a graph image (opsci.graphdraw): Notion shows the PNG
+    placeholder with the file's path and hash (the sync uploads it and fills the block). A
+    graph image (opsci.graphdraw) becomes its PNG, then its PDF, which Notion's viewer zooms."""
+    def one(p: Path, alt: str):
         if not p.is_file() or p.suffix.lower() not in PLOT_EXT or not p.is_relative_to(root.resolve()) \
                 or p.stat().st_size > MAX_UPLOAD:
             return None
@@ -195,6 +191,15 @@ def image_resolver(root: Path, base: Path):
         kind = "pdf" if p.suffix.lower() == ".pdf" else "image"
         return {"object": "block", "type": kind, kind: {},
                 "_local": {"path": rel, "sha": _sha(p.read_bytes()), "alt": alt}}
+
+    def resolve(target: str, alt: str):
+        if re.match(r"[a-z]+://", target):
+            return None
+        p = (base / target.split("#")[0]).resolve()
+        if p.suffix.lower() == ".svg" and p.with_suffix(".png").is_file():
+            out = [b for b in (one(p.with_suffix(".png"), alt), one(p.with_suffix(".pdf"), alt)) if b]
+            return out or None
+        return one(p, alt)
     return resolve
 
 

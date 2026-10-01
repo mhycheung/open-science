@@ -195,7 +195,7 @@ IMAGE_LINE = re.compile(r"^!\[([^\]]*)\]\(([^)\s]+)\)$")
 
 def md_to_blocks(md: str, images=None) -> list:
     """Blocks for a markdown text. `images(target, alt)` turns a line holding only an image
-    (`![alt](path)`) into a block, or returns None to keep the line as text."""
+    (`![alt](path)`) into a block or a list of blocks, or returns None to keep the line as text."""
     lines = unwrap(strip_generated(md)).splitlines()
     out, stack = [], []          # stack: (indent, list block) for nesting
     i = 0
@@ -277,7 +277,8 @@ def md_to_blocks(md: str, images=None) -> list:
         if m and images:
             b = images(m.group(2), m.group(1))
             if b:
-                put(b)
+                for x in b if isinstance(b, list) else [b]:
+                    put(x)
                 i += 1
                 continue
         # paragraph; an indented paragraph under a list item becomes its child
