@@ -49,8 +49,8 @@ IN=$(cat)
 command -v jq >/dev/null 2>&1 || exit 0
 MODE=$(cm_jump_mode)
 
-wait_refused="open-science: wait jump refused and cancelled. Nothing is running that will wake the cleared session (no background subagent, background shell or cron). Either start the waker first (for SLURM jobs: the plugin's wait_slurm.sh, as open-science-context:context-management says) and request the wait jump again, or do an active jump (jump.sh active <context file>)."
-size_notice() { printf 'open-science: context is %s tokens, above %s. Do an active jump now (skill open-science-context:context-management): save the state to the context file, then run jump.sh active <context file>. If you are about to wait on running work, do a wait jump instead. If this turn ends waiting for the user (a question, a decision, something only the user can do), do not jump: say so in one line and stop.' "$1" "$THRESHOLD"; }
+wait_refused="open-science: wait jump refused and cancelled. Nothing is running that will wake the cleared session (no background subagent, background shell or cron). Either start the waker first (for SLURM jobs: the plugin's wait_slurm.sh, as open-science-context:context-management says) and request the wait jump again, or do an active jump (jump.sh active <context file> --report \"<report>\")."
+size_notice() { printf 'open-science: context is %s tokens, above %s. Do an active jump now (skill open-science-context:context-management): save the state to the context file, then run jump.sh active <context file> --report \"<report for the user>\". If you are about to wait on running work, do a wait jump instead. If this turn ends waiting for the user (a question, a decision, something only the user can do), do not jump: say so in one line and stop.' "$1" "$THRESHOLD"; }
 
 # Has the size notice already been given to this session at about this size? Records it if not.
 size_due() {  # <key> <sid> <tokens>

@@ -22,6 +22,7 @@ from conftest import REPO
 SCRIPTS = REPO / "plugins" / "open-science-context" / "scripts"
 PROJECT_SCRIPTS = REPO / "plugins" / "open-science-project" / "scripts"
 FAKE = REPO / "tests" / "fixtures" / "fake_claude"
+OPSCI_FAKE = REPO / "tests" / "fixtures" / "fake_opsci"
 
 needs_jq = pytest.mark.skipif(shutil.which("jq") is None, reason="jq not installed")
 needs_tmux = pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux not installed")
@@ -56,7 +57,8 @@ def env(tmp_path):
          if not k.startswith(("TMUX", "CLAUDE", "OPSCI", "SLURM"))}
     e.update(OPSCI_STATE_DIR=str(tmp_path / "state"), CLAUDE_CONFIG_DIR=str(tmp_path / "cfg"),
              TMUX=f"{SOCK},1,0", TMUX_PANE=PANE, OPSCI_JUMP_IDLE_TIMEOUT="2",
-             OPSCI_JUMP_RECOVER_WINDOW="1")
+             OPSCI_JUMP_RECOVER_WINDOW="1", PATH=f"{OPSCI_FAKE}:{e['PATH']}",
+             FAKE_OPSCI_LOG=str(tmp_path / "opsci.log"))
     (tmp_path / "state").mkdir()
     register(e, "sid-A")
     yield e
@@ -293,7 +295,11 @@ def test_jump_request_is_honoured_without_registration(env):
 
 # ---- jump.sh launcher refusals --------------------------------------------------------
 
-def jump(env, *args, fake_claude=True):
+def jump(env, *args, fake_claude=True, report="r"):
+    """jump.sh <args>, with `--report <report>` added to an active or wait jump unless
+    report is None."""
+    if args and args[0] in ("active", "wait") and report is not None:
+        args = (*args, "--report", report)
     cmd = ["bash", str(SCRIPTS / "jump.sh"), *map(str, args)]
     if fake_claude:
         cmd = [str(FAKE / "claude"), *cmd]
@@ -381,6 +387,38 @@ def test_jump_refusals(env, session, tmp_path, case):
     r = jump(env, *args, fake_claude=fake)
     assert r.returncode != 0, r.stdout
     assert request(env) is None
+    assert opsci_calls(env) == []                 # a refused jump reports nothing
+
+
+def opsci_calls(env):
+    log = Path(env["FAKE_OPSCI_LOG"])
+    return [json.loads(x) for x in log.read_text().splitlines()] if log.exists() else []
+
+
+@pytest.mark.parametrize("kind", ["active", "wait"])
+def test_jump_reports_to_the_user_before_it_is_requested(env, session, tmp_path, kind):
+    r = jump(env, kind, session["ctx"], report="Fit 3 done, chi2 1.02\n\nNext: fit 4.")
+    assert r.returncode == 0, r.stderr
+    [call] = opsci_calls(env)
+    assert call[:6] == ["notify", "--project-root", str(tmp_path), "--kind", "status", "--no-mention"]
+    assert call[6].startswith("Fit 3 done, chi2 1.02\n\nNext: fit 4.\n\n")
+    assert f"{kind.capitalize()} jump" in call[6] and "context.md" in call[6]
+    assert "Report sent" in r.stdout and request(env)["kind"] == kind
+
+
+@pytest.mark.parametrize("report", [None, "", "  \n "])
+def test_jump_without_a_report_is_refused(env, session, report):
+    r = jump(env, "active", session["ctx"], report=report)      # None: no --report at all
+    assert r.returncode != 0 and "no report" in r.stderr
+    assert request(env) is None and opsci_calls(env) == []
+
+
+def test_a_failed_report_does_not_stop_the_jump(env, session):
+    env["FAKE_OPSCI_RC"] = "3"
+    r = jump(env, "active", session["ctx"])
+    assert r.returncode == 0 and "WARNING: the jump report was not delivered" in r.stdout
+    assert request(env) is not None
+    assert "jump report FAILED" in (Path(env["OPSCI_STATE_DIR"]) / "cm.log").read_text()
 
 
 @pytest.mark.parametrize("mode,kind,ok", [("off", "active", False), ("off", "wait", False),

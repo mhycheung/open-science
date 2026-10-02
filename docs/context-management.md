@@ -88,14 +88,22 @@ pane resumes the wrong work**, so check the line that names the file. In Codex, 
 
 | jump | when | command |
 |---|---|---|
-| active | the context is above about 250k tokens, a subtask finished, or before a fan-out of subagents | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" active <context file>` |
-| wait | only background work is left (subagents, a background shell, a SLURM job) and it will take longer than about 45 minutes | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" wait <context file>` |
+| active | the context is above about 250k tokens, a subtask finished, or before a fan-out of subagents | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" active <context file> --report "<report>"` |
+| wait | only background work is left (subagents, a background shell, a SLURM job) and it will take longer than about 45 minutes | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" wait <context file> --report "<report>"` |
 | cache-cold | the plugin sends `[open-science] cache-cold: ...` to the session after 45 minutes idle with work still running | a wait jump, now |
 
 Before either command, in the same turn, the agent writes the jump's record: the task
 `context.md` (state, what is in flight and how to check it, the exact next step), the project
 `context.md` if it changed, one line in the task log, and `opsci notify` for anything you
 would otherwise miss. The `jump.sh` call is the last action of the turn.
+
+Every jump also reports to you. A jump clears the conversation, so in the session you see
+only `/clear`; `jump.sh` therefore requires `--report` and posts it with `opsci notify
+--kind status --no-mention` (to the project's Feed in Notion, or to your configured back
+end) before it requests the jump. The report gives a headline, what the session did, the
+state, what is running and what comes next, followed by the kind of jump and the context
+file. The agent does not wait for your approval. If the send fails, the jump still happens,
+and the message is kept in `messages/`.
 
 When the turn ends, the mod runs Claude Code's `/clear`, checks that a new session started,
 hands the registration to it, and, for an active jump, runs
@@ -125,6 +133,7 @@ resurrection, or a resume by hand) has lost them; the mod then runs
 
 | refusal | why |
 |---|---|
+| no `--report` text | a jump the user is not told about leaves them only `/clear` |
 | `OPSCI_JUMPS` is `off`, or `wait` for an active jump | you switched these jumps off |
 | not in tmux, without the mod | the fallback types into the pane |
 | the context file is missing, or was not saved in the last 15 minutes | the state to resume from was not written |

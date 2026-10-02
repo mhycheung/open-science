@@ -120,6 +120,8 @@ function armCold($, secs, notice) {
 
 // Queued SLURM wakers of this session: when their jobs have left the queue, send the
 // report (the same text a Codex waker sends), which starts a turn once the session is idle.
+// The reports of all wakers done in one poll go in one message, each distinct report once,
+// so wakers queued twice for the same jobs wake the session once.
 async function pollWakers($) {
   if (polling) return
   polling = true
@@ -127,15 +129,17 @@ async function pollWakers($) {
     const cur = await $.session.id()
     if (!(await $.fs.exists(await record($, 'wakers', 'claude-sid__' + key(cur))))) return
     const files = (await sh($, 'cm_mod.sh', ['wakers', cur])).stdout.split('\n').filter(Boolean)
+    const reports = new Set()
     for (const f of files) {
       const r = await sh($, 'wait_slurm.sh', ['--check', f], '', 120000)
       if (r.exitCode === 0 || r.exitCode === 1) {
         await log($, 'waker ' + f.split('/').pop() + ': jobs left the queue; report sent')
-        void $.prompt.submit({ text: '[open-science] ' + r.stdout.trim().replace(/\s*\n\s*/g, ' ') })
+        reports.add(r.stdout.trim().replace(/\s*\n\s*/g, ' '))
       } else if (r.exitCode !== 10) {
         await log($, 'waker ' + f + ': check failed (' + r.exitCode + '): ' + r.stderr.trim())
       }
     }
+    if (reports.size) void $.prompt.submit({ text: '[open-science] ' + [...reports].join(' ') })
   } finally {
     polling = false
   }

@@ -107,6 +107,16 @@ test('a waker whose jobs left the queue wakes the session with its report', asyn
   expect(calls.prompts).toEqual(['[open-science] open-science wait_slurm: jobs 7 have left the queue. job 7: COMPLETED'])
 })
 
+test('wakers done in the same poll with the same report wake the session once', async ($, on) => {
+  const { calls, clock } = setup(on, { scripts: {
+    'cm_mod.sh wakers': { exitCode: 0, stdout: '/state/wakers/k/1.json\n/state/wakers/k/2.json\n/state/wakers/k/3.json\n', stderr: '' },
+    'wait_slurm.sh --check': { exitCode: 0, stdout: 'open-science wait_slurm: jobs 7 have left the queue.\njob 7: COMPLETED\n', stderr: '' },
+  } })
+  await start($, clock)
+  await clock.advance(60000)
+  expect(calls.prompts).toEqual(['[open-science] open-science wait_slurm: jobs 7 have left the queue. job 7: COMPLETED'])
+})
+
 test('a waker whose jobs still run sends nothing', async ($, on) => {
   const { calls, clock } = setup(on, { scripts: {
     'cm_mod.sh wakers': { exitCode: 0, stdout: '/state/wakers/k/1.json\n', stderr: '' },
