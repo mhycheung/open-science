@@ -260,9 +260,24 @@ def test_graph_image_line_becomes_its_interactive_view(tmp_path):
     blocks = nb.md_to_blocks("Text.\n\n![Project graph](graph.svg)\n",
                              mirror.image_resolver(tmp_path, tmp_path / "map", {"t01-noise": "https://n/1"}))
     assert [(b["type"], b.get("_local", {}).get("path")) for b in blocks] == [
-        ("paragraph", None), ("embed", "map/graph.html")]
+        ("paragraph", None), ("embed", "map/graph.html"), ("toggle", None)]
     data = blocks[1]["_local"]["data"]
     assert '"url":"https://n/1"' in data and "../x.md" not in data  # the page link, not the file
+    # links from an HTML block open the browser in the Notion app on iPad: native page links too
+    (item,) = blocks[2]["toggle"]["children"]
+    assert item["bulleted_list_item"]["rich_text"] == [mirror.page_mention("https://n/1")]
+
+
+def test_map_page_lists_the_graph_pages_as_native_links(mirrored):
+    S, m = mirrored, mirrored.mock
+    run(S, "map", "build", cwd=S.proj)
+    run(S, "notion", "sync", cwd=S.proj)
+    page = state(S.proj)["pages"]["map"]["page_id"]
+    assert any(n["type"] == "embed" for n in m.kids(page))
+    lists = [n for n in m.kids(page) if n["type"] == "toggle" and text_of(n) == "Pages in this graph"]
+    assert lists, "no list of pages under the graph"
+    items = [MockNotion.plain(n["body"]["rich_text"]) for n in m.kids(lists[0]["id"])]
+    assert f"{TASK}: Demo task" in items             # a mention shows the page's title
 
 
 def test_rich_text_limits_of_100_items():

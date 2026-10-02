@@ -230,6 +230,11 @@ class MockNotion:
                 x["plain_text"], x["href"] = c, link["url"] if link else None
             elif t == "equation":
                 x["plain_text"], x["href"] = x["equation"]["expression"], None
+            elif t == "mention" and "page" in x["mention"]:
+                pid = _norm(x["mention"]["page"]["id"])
+                if pid not in self.pages:
+                    raise bad(f"mentioned page {pid} not found")
+                x["plain_text"], x["href"] = self.title_of(pid), "https://www.notion.so/" + pid
             elif t == "mention":
                 uid = x["mention"]["user"]["id"]
                 who = next((u for u in (self.bot, self.person) if _norm(u["id"]) == _norm(uid)), None)

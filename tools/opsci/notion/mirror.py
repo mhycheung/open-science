@@ -148,6 +148,11 @@ def page_url(page_id: str) -> str:
     return "https://www.notion.so/" + page_id.replace("-", "")
 
 
+def page_mention(url: str) -> dict:
+    """A rich text item that mentions the Notion page at ``url`` (``page_url``)."""
+    return {"type": "mention", "mention": {"type": "page", "page": {"id": url.rsplit("/", 1)[-1][-32:]}}}
+
+
 def task_links(st: dict) -> dict:
     """{task or result id: URL of its Notion page} for every such page the state knows."""
     return {k.split(":", 1)[1]: page_url(v["page_id"]) for k, v in (st.get("pages") or {}).items()
@@ -188,12 +193,18 @@ def image_resolver(root: Path, base: Path, links: dict | None = None):
     def view(p: Path, alt: str):
         if not p.is_file() or not p.is_relative_to(root.resolve()):
             return None
-        html = graphview.with_links(p.read_text(encoding="utf-8"), links or {})
+        raw = p.read_text(encoding="utf-8")
+        html = graphview.with_links(raw, links or {})
         if len(html.encode()) > MAX_UPLOAD:
             return None
-        return {"object": "block", "type": "embed", "embed": {},
+        out = [{"object": "block", "type": "embed", "embed": {},
                 "_local": {"path": str(p.relative_to(root.resolve())), "sha": _sha(html.encode()), "alt": alt,
-                           "data": html}}
+                           "data": html}}]
+        ids = graphview.linked_ids(raw, links or {})
+        if ids:  # links from the HTML block open the browser in the Notion app on iPad: native ones
+            out.append(nb.blk("toggle", nb.rich("Pages in this graph"), children=[
+                nb.blk("bulleted_list_item", [page_mention(links[i])]) for i in ids]))
+        return out
 
     def one(p: Path, alt: str):
         if not p.is_file() or p.suffix.lower() not in PLOT_EXT or not p.is_relative_to(root.resolve()) \
