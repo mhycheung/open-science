@@ -25,7 +25,8 @@ only in a new Codex session. If this Codex has no `plugin` command, say it must 
 
 **Step 6, `opsci`.** Take the repository URL from `codex plugin marketplace list`.
 
-**Branch 1, context management.** Say "Codex inside tmux". Codex must be started from a
+**Branch 1, context management.** Codex has no mods: skip 1m and say the text that follows
+it ("Until then, ...", without "Until then,"), with "Codex inside tmux". Codex must be started from a
 shell in the pane (not `exec codex`), so that a jump can start a new session there.
 - 1e, session names: Codex has no session names to set. Do not ask; say this in one line.
 - 1f, jumps: ask the "1f" text, but leave out the sentence about Claude's one-hour cache

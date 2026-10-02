@@ -109,9 +109,14 @@ hand will not finish, stop cleanly and leave a note for after the hop. At
 ## With context management
 
 If `open-science-context` is installed, the two plugins coordinate. From the wind-down
-message until the hop, session jumps are inhibited in the registered panes. After the hop, a
-jump that the time limit interrupted is finished, and a pane that was waiting after a wait
-jump is woken with `/open-science-context:continue-context`. Without `open-science-context`,
+message until the hop, session jumps are inhibited in the registered panes. Where Claude Code
+runs the context plugin's mod (the default on a recent Claude Code), the mod does the rest:
+a resumed session keeps its session id, and with it its registered task and its queued SLURM
+wakers, and a session that was waiting on background tasks, which ended with the old job, is
+woken with `/open-science-context:continue-context`. Without the mod, this plugin does it
+by typing into the panes: after the hop, a jump that the time limit interrupted is finished,
+and a pane that was waiting after a wait jump is woken with
+`/open-science-context:continue-context`. Without `open-science-context`,
 the plugin works the same way and skips these steps. Details:
 `extras/slurm-resurrect/reference/jump-hook.md`.
 

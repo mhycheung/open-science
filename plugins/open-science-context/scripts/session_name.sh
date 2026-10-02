@@ -14,7 +14,14 @@
 #
 # Usage:
 #   session_name.sh hook            SessionStart / UserPromptSubmit hook: reads the hook JSON
-#                                   on stdin, prints a sessionTitle when the name should change
+#                                   on stdin, prints a sessionTitle when the name should change.
+#                                   Does nothing when the Claude Code mod is loaded (OPSCI_MOD=1)
+#   session_name.sh want [--always] <sid> [dir]
+#                                   for the mod: print the name session <sid> should have, or
+#                                   nothing when it has it already (--always: print it anyway;
+#                                   a resumed session shows its name only once renamed). The
+#                                   mod renames the session at once (/rename), not at the next
+#                                   prompt
 #   session_name.sh launch [dir]    print a free name, for a launch wrapper that sets
 #                                   CLAUDE_CODE_SESSION_NAME (optional)
 #
@@ -70,14 +77,9 @@ task_short() {  # <context file> -> the task's short name; nothing for a project
   printf '%s' "$dir" | sed -E 's/^[0-9]{4}-[0-9]{2}-[0-9]{2}-//'
 }
 
-cmd_hook() {
-  local in sid cwd event f cur="" src="" base want doc task
-  in=$(cat) || return 0
-  sid=$(jq -r '.session_id // empty' <<<"$in" 2>/dev/null)
-  cwd=$(jq -r '.cwd // empty' <<<"$in" 2>/dev/null)
-  event=$(jq -r '.hook_event_name // empty' <<<"$in" 2>/dev/null)
-  [ -n "$sid" ] && [ -n "$event" ] || return 0
-  [ -n "$cwd" ] || cwd=$PWD
+# The name session <sid> should have, or nothing when it has it already (ALWAYS=1: print it anyway).
+want_name() {  # <sid> <cwd>
+  local sid="$1" cwd="$2" f cur="" src="" base want doc task
 
   f=$(grep -lF "\"sessionId\":\"$sid\"" "$SDIR"/*.json 2>/dev/null | head -n 1)
   if [ -n "$f" ]; then
@@ -93,12 +95,29 @@ cmd_hook() {
   fi
 
   want="$base"
-  if doc=$(bash "$HERE/pane_context.sh" get 2>/dev/null) && [ -n "$doc" ]; then
+  # This session's own record first (the mod's registration), then whatever this shell's
+  # pane or session has registered.
+  doc=$(jq -r '.doc_path // empty' "${OPSCI_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/open-science}/session_context/claude__$(printf '%s' "$sid" | tr -c 'A-Za-z0-9._-' '_').json" 2>/dev/null)
+  [ -n "$doc" ] && [ -f "$doc" ] || doc=$(bash "$HERE/pane_context.sh" get 2>/dev/null)
+  if [ -n "$doc" ]; then
     task=$(task_short "$doc")
     [ -n "$task" ] && want="$base$SEP$task"
   fi
 
-  [ "$want" = "$cur" ] && return 0
+  [ "$want" = "$cur" ] && [ "${ALWAYS:-0}" != 1 ] && return 0
+  printf '%s' "$want"
+}
+
+cmd_hook() {
+  local in sid cwd event want
+  in=$(cat) || return 0
+  [ "${OPSCI_MOD:-}" = 1 ] && return 0   # the mod renames the session itself
+  sid=$(jq -r '.session_id // empty' <<<"$in" 2>/dev/null)
+  cwd=$(jq -r '.cwd // empty' <<<"$in" 2>/dev/null)
+  event=$(jq -r '.hook_event_name // empty' <<<"$in" 2>/dev/null)
+  [ -n "$sid" ] && [ -n "$event" ] || return 0
+  want=$(want_name "$sid" "${cwd:-$PWD}")
+  [ -n "$want" ] || return 0
   jq -cn --arg e "$event" --arg t "$want" '{hookSpecificOutput: {hookEventName: $e, sessionTitle: $t}}'
 }
 
@@ -106,7 +125,9 @@ cmd_hook() {
 command -v jq >/dev/null 2>&1 || exit 0
 case "${1:-}" in
   hook)   cmd_hook ;;
+  want)   shift; ALWAYS=0; [ "${1:-}" = --always ] && { ALWAYS=1; shift; }
+          [ -n "${1:-}" ] && want_name "$1" "${2:-$PWD}" ;;
   launch) shift; pick "$(project_of "${1:-$PWD}")" ;;
-  *) echo "usage: session_name.sh {hook|launch [dir]}" >&2; exit 2 ;;
+  *) echo "usage: session_name.sh {hook|want <sid> [dir]|launch [dir]}" >&2; exit 2 ;;
 esac
 exit 0

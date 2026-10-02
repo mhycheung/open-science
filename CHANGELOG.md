@@ -11,6 +11,23 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- On Claude Code, session jumps are done by a Claude Code mod (`hooks/context_mod.js` in
+  `open-science-context`): code Claude Code runs inside itself (Claude Code 2.1.287 or
+  later, with mods switched on for the account). It clears the session with Claude Code's own
+  `/clear` and runs the resume command (no typing into the pane, no tmux), sends the
+  cache-cold notice, wakes a waiting session when its SLURM jobs leave the queue
+  (`wait_slurm.sh --notify`, now for Claude Code too), renames the session as soon as its task
+  changes (also its Remote Control name), reads the context size from Claude Code, and tells
+  a subagent above 200k tokens to checkpoint (`OPSCI_SUBAGENT_LIMIT`). Registrations and
+  wakers are kept by session id, so they follow the session through jumps and a SLURM
+  resurrection; a session that was waiting on background tasks when Claude Code restarted is
+  woken with `continue-context`. The policy stays in the shell scripts (`cm_stop.sh --mod`,
+  `cm_mod.sh`). Where the mod is not loaded, the tmux path runs as before, and its Stop hook
+  now copies a session's registration into a new pane after a resurrection. Onboarding checks
+  whether Claude Code runs mods (`claude_mods` from `onboard_check.sh`), recommends
+  `claude update` when it cannot, and makes tmux optional when it can. `wait_slurm.sh
+  --notify` without the mod exits 4 (was 2). The jump animation, which showed the plugin
+  typing into the pane, is removed. Codex is unchanged. No layout change.
 - The `open-science` plugin tells the user when a newer release exists. A SessionStart hook
   looks up the newest release's version in the background, at most once a day; a Stop
   hook shows the user one notice per session, with the update commands for Claude Code or

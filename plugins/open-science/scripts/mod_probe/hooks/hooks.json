@@ -1,0 +1,4 @@
+{
+  "description": "A mod that does nothing, for onboard_check.sh: `claude plugin test` on this directory passes only where Claude Code runs mods.",
+  "modules": ["./probe.js"]
+}

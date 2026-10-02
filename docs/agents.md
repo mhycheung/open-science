@@ -97,7 +97,8 @@ aliases into Codex settings.
 
 ## Sessions and concurrent work
 
-Claude Code's tmux session jumps retain their existing behavior. Codex uses the Codex
+Claude Code's session jumps are done by the context plugin's mod, from inside Claude Code
+(or, without the mod, by typing into the tmux pane). Codex has no mods: it uses the Codex
 instructions in the context skills; do not send Claude `/clear` sequences into Codex.
 Saving a task's context and starting another session from its explicit path works
 independently of terminal automation. Session-specific limitations are described in

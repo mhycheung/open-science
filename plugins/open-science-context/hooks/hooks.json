@@ -1,4 +1,8 @@
 {
+  "description": "Context management: the Claude Code mod (context_mod.js) does session jumps, wakes, renames and token counts inside Claude Code; the shell hooks are the fallback when the mod is not loaded.",
+  "modules": [
+    "./context_mod.js"
+  ],
   "hooks": {
     "Stop": [
       {

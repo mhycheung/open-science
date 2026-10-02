@@ -135,8 +135,12 @@ snapshot is taken.
 
 If the open-science-context plugin ("the core" here) is installed, the two plugins coordinate. From
 the wind-down message until the hop, the core's session jumps are inhibited in
-the registered panes. After the hop, a jump that the time limit interrupted is
-finished, and a pane that was waiting after a wait jump is woken with
+the registered panes. Where Claude Code runs the core's mod, the mod does the rest
+itself: a resumed session keeps its session id, and with it its registered task and its
+queued SLURM wakers, and a session that was waiting on background tasks (which died
+with the old job) is woken with `/open-science-context:continue-context`. Where the mod
+is not loaded, this plugin does it: after the hop, a jump that the time limit
+interrupted is finished, and a pane that was waiting after a wait jump is woken with
 `/open-science-context:continue-context`. Without the core, the plugin works the same
 way and skips these steps. Details: `reference/jump-hook.md`.
 

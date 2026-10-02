@@ -1,5 +1,10 @@
 # Shared helpers for the open-science context-management scripts. Source, do not run.
 #
+# On Claude Code the plugin's mod (hooks/context_mod.js) clears and resumes the session,
+# wakes it, renames it and tracks token use inside Claude Code itself; see "the Claude Code
+# mod" below. The tmux mechanics here are the fallback for a Claude Code that has not
+# loaded the mod, and the mechanics for Codex.
+#
 # Everything that types into a Claude Code pane lives here, so there is one
 # implementation of the tmux mechanics. The measured facts it relies on (Claude
 # Code 2.1.220 to 2.1.280):
@@ -30,6 +35,23 @@ cm_jump_mode() {
 }
 
 cm_key() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_'; }
+
+# ---- the Claude Code mod ----------------------------------------------------------
+# The mod sets OPSCI_MOD=1 when it loads, for Claude Code and every process it starts
+# after (hooks, tool shells). With it set, the plain Stop and naming hooks do nothing and
+# jump.sh, wait_slurm.sh --notify and the mod (through cm_stop.sh --mod and cm_mod.sh) key
+# their records by session id instead of by tmux pane, so tmux is not needed. A session
+# id survives `claude --resume`, so these records also survive a SLURM resurrection.
+cm_mod_active() { [ "${OPSCI_MOD:-}" = 1 ] && [ "$(cm_runtime)" = claude ]; }
+cm_sess_key() { printf 'claude-sid__%s' "$(cm_key "$1")"; }   # <session id>
+
+# The texts the Stop policy sends, the same for the mod and the tmux path.
+cm_cold_notice() {  # <seconds idle>
+  local idle
+  if [ "$1" -ge 60 ]; then idle="$(( $1 / 60 )) min"; else idle="$1 s"; fi
+  printf '[open-science] cache-cold: %s idle with work still running. Do a wait jump now (open-science-context:context-management).' "$idle"
+}
+cm_cold_seconds() { local m="${OPSCI_CACHE_COLD_MIN:-45}"; printf '%s' "${OPSCI_CACHE_COLD_SECONDS:-$(( m * 60 ))}"; }
 
 # Key for this pane: tmux socket + pane id. Pane ids are unique only per server.
 cm_pane_key() {  # [sock] [pane] -> key, or return 1 outside tmux

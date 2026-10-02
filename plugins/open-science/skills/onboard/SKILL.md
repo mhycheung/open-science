@@ -57,10 +57,14 @@ question also put the longer text in its `preview`. Do not shorten the texts int
    marketplace (`claude plugin marketplace list`). Verify with `opsci --help`.
 
 7. **One branch per chosen component**, in this order, with the texts in `explanations.md`:
-   - **Branch 1, context management.** Context management requires Claude Code inside tmux;
-     say so. Configure what is missing; skip what the checks say is done.
-     `tmux=missing`: tell the user to ask their system administrator, or to install it with
-     their package manager; the component does not work without it, so skip 1a-1c.
+   - **Branch 1, context management.** First 1m, Claude Code mods, from the check's
+     `claude_mods` (`on`, `off-build`, `off-rollout`, `unknown`): with mods, the plugin's mod
+     does the jumps inside Claude Code and tmux is optional; without them, context
+     management falls back to typing into the tmux pane, so tmux is required. Recommend
+     `claude update` for `off-build`; run it only after a yes. Then configure what is
+     missing; skip what the checks say is done. `tmux=missing`: tell the user to ask their
+     system administrator, or to install it with their package manager. Without mods the
+     jumps do not work without it; skip 1a-1c either way.
      - 1a, tmux settings, only if `tmux_conf_missing` is not `none`: show the lines of the
        recommended block in `explanations.md` for the settings it names, and offer to append
        them to `~/.tmux.conf` (one yes for the block; back up an existing file to

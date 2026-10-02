@@ -30,11 +30,18 @@ Codex project hooks must also be in a trusted project.
 [Context management and session jumps](context-management.md#what-jumpsh-refuses). The most
 common: the context file was not saved in the last 15 minutes (write it, then call `jump.sh`
 again), an active jump below 100k tokens without `--force`, and a wait jump with nothing
-running that could wake the session (start the waker, for example `wait_slurm.sh`, or do an
-active jump).
+running that could wake the session (start the waker, for example `wait_slurm.sh --notify`,
+or do an active jump). `jump.sh status` says whether the session's jumps are done by the
+mod or by typing into tmux.
+
+**Jumps type into my pane instead of happening inside Claude Code.** The mod is not loaded:
+Claude Code is older than 2.1.287 (`claude update`), mods are not yet switched on for your
+account, or the session was started with `--safe-mode`. The plugin then falls back to
+typing into the tmux pane. Run `/open-science:onboard` again to see which.
 
 **`continue-context` resumed the wrong work.** With no file named, it uses the file
-registered for the tmux pane it runs in. Typed in another pane, it resumes that pane's work.
+registered for the session (or, without the mod, the tmux pane) it runs in. Typed in another
+pane, it resumes that pane's work.
 Check the line that names the file, and give the file explicitly if in doubt:
 `/open-science-context:continue-context tasks/<id>/context.md`. In Codex, ask it to use
 `open-science-context:continue-context` with that file.

@@ -5,6 +5,10 @@ record (task and project context, log line, notification), and the subagent cont
 its `PAUSED`, `SUBMITTED` and `DONE` reports. `open-science-project:context-files` governs
 the context files. This file lists only what differs in Codex.
 
+Codex has no mods. Where `SKILL.md` says the mod does something (clearing, resuming,
+waking, renaming, counting a subagent's tokens), Codex uses the tmux path and the hooks
+below, as Claude Code does when its mod is not loaded.
+
 `${CLAUDE_PLUGIN_ROOT}`: Codex does not set it. Resolve the installed plugin root from this
 skill's directory (two parents). Below, `SCRIPTS` means that root's `scripts/` directory;
 use its actual path in each shell call.

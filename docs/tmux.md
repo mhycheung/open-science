@@ -1,10 +1,14 @@
 # Working in tmux
 
-**Context management requires tmux.** Claude Code must run inside a tmux pane for session
-jumps to work: a jump clears the conversation by typing into the agent's own pane, and the
-pane records which context file it drives. Outside tmux, `jump.sh` refuses to run and the
-plugin's Stop hook does nothing, so the agent's conversation only grows. Project management
-and publishing work without tmux.
+**With a recent Claude Code, context management does not need tmux.** The context plugin's
+mod clears and resumes the session from inside Claude Code
+([context management](context-management.md)). tmux is still useful: it keeps your sessions
+running after you disconnect, shows several agents side by side, and is required for
+[SLURM resurrection](slurm-resurrect.md). **Without the mod** (Claude Code before 2.1.287, or
+mods not yet switched on for your account), Claude Code must run inside a tmux pane for
+session jumps to work: the plugin clears the conversation by typing into the agent's own
+pane. Outside tmux, `jump.sh` then refuses to run and the plugin's Stop hook does nothing, so
+the agent's conversation only grows. Project management and publishing work without tmux.
 
 Codex needs tmux only for session jumps: a Codex jump ends the session and starts a new one
 from the same pane's shell. Outside tmux, Codex registers the context file for its session
@@ -42,9 +46,9 @@ tmux session "work"
 
 Why this matters:
 
-- **Each pane is registered to one context file.** When the agent starts driving a task it
-  records `tasks/<id>/context.md` for its pane, and after a jump it resumes from that file.
-  Two tasks in one pane would overwrite each other's registration; typing
+- **Each pane works on one context file.** When the agent starts driving a task it
+  records `tasks/<id>/context.md` for its session (and its pane), and after a jump it
+  resumes from that file. Two tasks in one pane would overwrite each other's registration; typing
   `/open-science-context:continue-context` in the wrong pane resumes the wrong task. It
   prints which file it uses, so check that line.
 - **You can see every task at a glance.** Name each window after its project, and the status

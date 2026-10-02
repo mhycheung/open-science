@@ -340,9 +340,9 @@ def test_wait_jump_with_a_waker_relaunches_and_the_waker_wakes_the_new_thread(en
     assert tid == new                          # the thread running in the pane now, not the ended one
 
 
-def test_notify_is_refused_under_claude(env):
+def test_notify_is_refused_under_claude_without_the_mod(env):
     r = run(dict(env, CLAUDECODE="1"), "wait_slurm.sh", "--notify", "123")
-    assert r.returncode == 2 and "background Bash" in r.stderr
+    assert r.returncode == 4 and "background Bash" in r.stderr and "mod is not loaded" in r.stderr
 
 
 # ---- follow-ups: sandbox state dir, waker claims, pid reuse, worker ordering -------------------

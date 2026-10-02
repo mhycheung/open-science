@@ -9,6 +9,7 @@ set -u
 NETWORK=1
 [ "${1:-}" = "--no-network" ] && NETWORK=0
 
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 OPSCI_CFG="${XDG_CONFIG_HOME:-$HOME/.config}/opsci"
 
@@ -64,6 +65,19 @@ kv batch_tools "${missing:+missing:$missing}${missing:-ok}"
 
 # Claude Code, Python, pixi, opsci
 if have claude; then kv claude "$(claude --version 2>/dev/null | awk '{print $1}')"; else kv claude missing; fi
+# Does this Claude Code run mods (context management's default; documented from 2.1.287)?
+# The probe's test passes only where it does; no model call. on | off-build (a build without
+# them: update) | off-rollout (new enough, not yet switched on for this account) | unknown.
+mods=unknown
+if have claude; then
+    out=$(timeout 60 claude plugin test "$HERE/mod_probe" 2>&1)
+    case "$out" in
+        *" 0 fail"*) mods=on ;;
+        *"rollout switch"*) mods=off-rollout ;;
+        *"not turned on in this build"*|*"unknown command"*|*"error: unknown"*) mods=off-build ;;
+    esac
+fi
+kv claude_mods "$mods"
 py=missing
 for p in python3 python; do
     if have "$p" && "$p" -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then

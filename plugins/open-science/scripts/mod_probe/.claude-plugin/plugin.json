@@ -1,0 +1,6 @@
+{
+  "name": "open-science-mod-probe",
+  "version": "1.0.0",
+  "description": "Not installed: onboard_check.sh runs its test to learn whether this Claude Code runs mods.",
+  "author": { "name": "open-science contributors" }
+}

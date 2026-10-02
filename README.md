@@ -61,14 +61,19 @@ except context management, which needs project management.
 | # | component | plugin | what | needs |
 |---|---|---|---|---|
 | 1 | project management | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`, `private-investigation`) | git, `opsci` |
-| 2 | context management (for agents) | `open-science-context` | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`). Codex: see [Claude Code and Codex](https://mhycheung.github.io/open-science/agents/) | project management (installed with it), Claude Code running inside tmux (Codex: tmux only for jumps), `opsci` |
+| 2 | context management (for agents) | `open-science-context` | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`). Codex: see [Claude Code and Codex](https://mhycheung.github.io/open-science/agents/) | project management (installed with it), `opsci`; on Claude Code, a version that runs mods (2.1.287 or later), else Claude Code inside tmux (Codex: tmux only for jumps) |
 | 3 | publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
 
 There are also two [optional extras](#optional-extras).
 
-Context management needs Claude Code to run inside tmux; the
-[tmux guide](https://mhycheung.github.io/open-science/tmux/) shows how to set it up, including on a cluster's compute node.
-Codex needs tmux only for session jumps; see [Claude Code and Codex](https://mhycheung.github.io/open-science/agents/).
+On Claude Code, context management does its session jumps through a
+[Claude Code mod](https://code.claude.com/docs/en/plugins/mods/overview), from inside
+Claude Code, so it needs no tmux. Mods need Claude Code 2.1.287 or later (`claude update`)
+and are being switched on for accounts step by step; onboarding checks. Without them, the
+plugin falls back to typing into the agent's tmux pane, which needs Claude Code to run inside
+tmux; the [tmux guide](https://mhycheung.github.io/open-science/tmux/) shows how to set it
+up, including on a cluster's compute node. Codex needs tmux only for session jumps; see
+[Claude Code and Codex](https://mhycheung.github.io/open-science/agents/).
 
 ## Optional extras
 

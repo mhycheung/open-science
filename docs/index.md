@@ -67,7 +67,7 @@ the onboarding skill.
 | # | component | what it does | pages |
 |---|---|---|---|
 | 1 | project management: the project template and the `open-science-project` plugin | the layout every project is copied from (description, tasks, map, rules, citations, context files, publish settings), and skills to create a project, start tasks, keep context files under their caps, migrate an old project, and take template updates | [Project template and layout](project-template.md), [Project skills](project-skills.md) |
-| 2 | context management: the `open-science-context` plugin, for agents | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files ("session jumps"); Claude Code must run inside tmux, Codex only for jumps. Codex: see [Claude Code and Codex](agents.md) | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
+| 2 | context management: the `open-science-context` plugin, for agents | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files ("session jumps"). On Claude Code the plugin's mod does the jumps (Claude Code 2.1.287 or later; without the mod, Claude Code must run inside tmux); Codex needs tmux only for jumps. Codex: see [Claude Code and Codex](agents.md) | [Context management and session jumps](context-management.md), [Working in tmux](tmux.md) |
 | 3 | publishing: `opsci publish` and the `open-science-publish` plugin | the checked, user-approved export to a public repository, the project website, and Zenodo data releases | [Publishing and the filter](publishing.md), [Zenodo releases](zenodo.md) |
 
 Also part of the framework:

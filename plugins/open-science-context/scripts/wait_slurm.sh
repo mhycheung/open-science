@@ -1,7 +1,18 @@
 #!/usr/bin/env bash
 # SLURM waker for a wait jump.
 #
-# Claude Code: run it as a BACKGROUND Bash task (run_in_background):
+# Claude Code with the open-science mod loaded, and Codex: queue a waker,
+#
+#   wait_slurm.sh --notify <jobid> [<jobid>...]
+#
+# which only writes a request (<state>/wakers/<key>/...json) and returns. Under Claude Code
+# the mod polls it (`wait_slurm.sh --check <request>`, every $OPSCI_WAIT_POLL seconds) and,
+# when the jobs have left the queue, sends their states to the session, which starts a
+# turn. The request is keyed by session id, so it survives a jump (the mod moves it to the
+# new session) and a SLURM resurrection (the resumed session keeps its id). Codex: below.
+#
+# Claude Code WITHOUT the mod (`--notify` says so and exits 4): run it as a BACKGROUND Bash
+# task (run_in_background):
 #
 #   wait_slurm.sh <jobid> [<jobid>...]
 #
@@ -12,11 +23,8 @@
 # Exit 0 when every job ended COMPLETED, 1 when any did not, 2 on a usage error.
 #
 # Codex: a background command's exit does not wake a Codex session, and a Codex jump
-# ends the process that ran it. Queue a waker instead:
-#
-#   wait_slurm.sh --notify <jobid> [<jobid>...]
-#
-# This only writes a request (<state>/wakers/<pane key or thread>/...json). The Codex Stop
+# ends the process that ran it, so it queues a waker too (`--notify`), keyed by pane or
+# thread. The Codex Stop
 # hook (cx_hook.sh) starts it detached, outside the sandbox, as
 # `wait_slurm.sh --run-waker <request>`: it polls the same way, then sends the job states
 # with `codex queue` to the Codex thread running in the pane AT THAT TIME (after a jump,
@@ -32,14 +40,17 @@ check_ids() {
   command -v squeue >/dev/null 2>&1 || { echo "squeue not found: this is not a SLURM host" >&2; exit 2; }
 }
 
+queued() { [ "$(squeue -h -j "$(IFS=,; echo "$*")" -o %i 2>/dev/null | wc -l)" -gt 0 ]; }
+
 # Poll until the jobs leave the queue; print the report; return 0 if all COMPLETED.
 wait_jobs() {
+  while queued "$@"; do sleep "$POLL"; done
+  report "$@"
+}
+
+report() {
   local ids j st rc=0
   ids=$(IFS=,; echo "$*")
-  while :; do
-    [ "$(squeue -h -j "$ids" -o %i 2>/dev/null | wc -l)" -eq 0 ] && break
-    sleep "$POLL"
-  done
   echo "open-science wait_slurm: jobs $ids have left the queue. Use open-science-context:continue-context if you have no context."
   for j in "$@"; do
     st=$(sacct -n -X -j "$j" -o State%20 2>/dev/null | head -1 | tr -d ' ')
@@ -54,7 +65,17 @@ case "${1:-}" in
     shift; check_ids "$@"
     # shellcheck source=cm_lib.sh
     . "$HERE/cm_lib.sh"
-    [ "$(cm_runtime)" = codex ] || { echo "wait_slurm.sh --notify is for Codex; under Claude Code run 'wait_slurm.sh <jobid>...' as a background Bash task" >&2; exit 2; }
+    if cm_mod_active; then
+      SID=$(cm_live_sid); [ -n "$SID" ] || { echo "no Claude session id found" >&2; exit 2; }
+      F="$OS_STATE/wakers/$(cm_sess_key "$SID")/$(date +%s)-$$.json"
+      cm_write_json "$F" --args --arg sid "$SID" --arg at "$(date -Iseconds)" \
+          '{version:1, runtime:"claude-mod", jobs:$ARGS.positional, session_id:$sid, requested_at:$at, state:"requested"}' "$@" \
+        || { echo "cannot write $F" >&2; exit 1; }
+      echo "Waker queued for jobs $*: when they leave the queue, the open-science mod sends their states to"
+      echo "this session (after a jump, to the new one), which starts a turn."
+      exit 0
+    fi
+    [ "$(cm_runtime)" = codex ] || { echo "the open-science mod is not loaded, so --notify cannot wake this Claude Code session; run 'wait_slurm.sh <jobid>...' as a background Bash task instead" >&2; exit 4; }
     TID="${CODEX_THREAD_ID:-}"; [ -n "$TID" ] || { echo "CODEX_THREAD_ID is not set" >&2; exit 2; }
     cm_state_writable || { cm_state_hint >&2; exit 3; }
     KEY=$(cm_pane_key) || KEY=""
@@ -69,6 +90,21 @@ case "${1:-}" in
     echo "Waker queued for jobs $*: it starts when this turn ends and, when the jobs leave the queue,"
     echo "sends their states to the Codex thread then running in ${TMUX_PANE:-this session} (codex queue)."
     exit 0 ;;
+  --check)
+    # For the mod: one poll of a queued Claude waker. Exit 10 while a job is queued or
+    # running; otherwise print the report, archive the request, and exit 0 (all COMPLETED)
+    # or 1.
+    F="${2:-}"; [ -f "$F" ] || { echo "no waker request: $F" >&2; exit 2; }
+    # shellcheck source=cm_lib.sh
+    . "$HERE/cm_lib.sh"
+    mapfile -t JOBS < <(jq -r '.jobs[]' "$F")
+    check_ids "${JOBS[@]}"
+    queued "${JOBS[@]}" && exit 10
+    report "${JOBS[@]}"; rc=$?
+    mkdir -p "$OS_STATE/wakers/done"
+    jq --arg at "$(date -Iseconds)" '.state="done" | .finished_at=$at' "$F" \
+      > "$OS_STATE/wakers/done/$(basename "$(dirname "$F")")-$(basename "$F")" && rm -f "$F"
+    exit "$rc" ;;
   --run-waker)
     F="${2:-}"; [ -f "$F" ] || { echo "no waker request: $F" >&2; exit 2; }
     # shellcheck source=cm_lib.sh

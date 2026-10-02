@@ -30,13 +30,15 @@ until now, possibly this one before a jump.
 ## Woken by a notification
 
 A cleared session can be woken by a subagent's report, a background shell exiting, or a
-watcher message. The context file's "In flight" section says what was expected.
+waker's message (`[open-science] open-science wait_slurm: jobs ... have left the queue`, sent
+by the plugin). The context file's "In flight" section says what was expected.
 
 - **The notice needs action** (a subagent reported, a job ended): do the procedure above,
   then act on it as "In flight" says.
 - **It repeats something already handled** (a second notice from the same subagent, a job
   already recorded as done): do not reload everything. Check that a waker is still running
-  for the work that is left (`jump.sh status`, the background tasks), then end the turn.
+  for the work that is left (the background tasks, or a waker queued with
+`wait_slurm.sh --notify`), then end the turn.
 
 ## Which file
 

@@ -5,6 +5,26 @@ state directory and runs the core's own `jump.sh`. The core does not know
 about slurm-resurrect and has no code for it. If the core is not installed,
 every step below is skipped or falls back to typing a prompt.
 
+## Sessions that run the core's mod
+
+On a Claude Code that runs mods, the core's mod (`hooks/context_mod.js`) clears and resumes
+the session from inside Claude Code and keys its records by session id, not by pane:
+`jump/claude-sid__<sid>.json`, `wakers/claude-sid__<sid>/`, `session_context/claude__<sid>.json`,
+`mod_waiting/claude-sid__<sid>.json`. A session resumed with `claude --resume <sid>` keeps its
+id, so after the hop:
+
+- its registration is still there (`pane_context.sh get` finds the session record; the
+  core's Stop hook copies it into the new pane's record when the mod is not loaded);
+- its queued SLURM wakers (`wait_slurm.sh --notify`) are polled again by the mod;
+- if it was left waiting by a wait jump and has no queued waker, its background tasks died
+  with the old job, so the mod runs `/open-science-context:continue-context` for it
+  (`cm_mod.sh resumed`).
+
+None of the steps below act on these sessions: their records do not match a pane key. A
+mod jump finishes within a second of the turn's end, so none is in flight at a hop; a
+request written just before the job ended is carried out at the resumed session's next stop.
+The inhibit file still applies: `jump.sh` checks `inhibit_jump_<pane key>` with the mod too.
+
 ## What the two plugins share
 
 | item | where | used for |

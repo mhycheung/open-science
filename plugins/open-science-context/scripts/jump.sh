@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Request a session jump: clear this Claude session and (for an active jump) resume
-# it from a context file. tmux is required.
+# it from a context file.
 #
 #   jump.sh active <context file> [--force]   clear, then type
 #                                            "/open-science-context:continue-context <context file>"
@@ -9,7 +9,16 @@
 #   jump.sh cancel                           drop this pane's pending request
 #   jump.sh status                           show it
 #
-# This script only VALIDATES and WRITES a request file. The plugin's Stop hook
+# This script only VALIDATES and WRITES a request file.
+#
+# With the Claude Code mod loaded (OPSCI_MOD=1, cm_mod_active) the request is keyed by
+# session id and tmux is not needed: at the stop the mod runs `cm_stop.sh --mod`, which
+# hands the request over, and the mod clears the session (Claude Code's own /clear,
+# run from inside), hands the registration to the new session (cm_mod.sh handover) and
+# runs the resume prompt. Everything below about panes and typing is the fallback when the
+# mod is not loaded.
+#
+# Without the mod, the plugin's Stop hook
 # (cm_stop.sh) reads it when the turn ends: for a wait jump it refuses when
 # nothing will wake the session; otherwise it starts the detached worker
 # (`jump.sh --worker <request>`) that waits for the pane to go idle, types /clear,
@@ -27,9 +36,9 @@
 # (a record of this thread in this pane), and Codex started from a shell in the pane.
 #
 # Refusals (exit 1): jumps switched off by $OPSCI_JUMPS (`off`: every jump; `wait`:
-# active jumps); not in tmux; context file missing; context file not modified
+# active jumps); not in tmux (without the mod); context file missing; context file not modified
 # in the last $OPSCI_JUMP_FRESH_MIN minutes (default 15: the state was not saved);
-# the session's state file cannot be found (a clear could not be confirmed);
+# the session's state file cannot be found (a clear could not be confirmed; without the mod);
 # active jump below $OPSCI_ACTIVE_JUMP_FLOOR tokens (default 100000) without
 # --force; an inhibit file exists ($OPSCI_STATE_DIR/inhibit_jump, or
 # inhibit_jump_<pane key>; an optional component such as SLURM resurrection may
@@ -212,13 +221,22 @@ fi
 # ---------------------------------------------------------------- launcher ----
 usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 CMD="${1:-}"; shift || true
-KEY=$(cm_pane_key) || { [ "$CMD" = status ] && { echo "not in tmux"; exit 0; }; die "not inside tmux: jumps need tmux"; }
+MOD=0
+if cm_mod_active; then
+  MOD=1; OLD=$(cm_live_sid)
+  [ -n "$OLD" ] || die "no Claude session id found (no state file, CLAUDE_CODE_SESSION_ID unset)"
+  KEY=$(cm_sess_key "$OLD"); PKEY=$(cm_pane_key) || PKEY=""
+else
+  KEY=$(cm_pane_key) || { [ "$CMD" = status ] && { echo "not in tmux, and the open-science mod is not loaded"; exit 0; }; die "not inside tmux, and the open-science mod is not loaded (it needs a recent Claude Code: run 'claude update'). Without the mod, jumps need tmux."; }
+  PKEY="$KEY"
+fi
 REQ=$(cm_request_path "$KEY")
 
 case "$CMD" in
   status)
     echo "jumps allowed: $(cm_jump_mode) (OPSCI_JUMPS)"
-    if [ -f "$REQ" ]; then jq . "$REQ"; else echo "no jump pending for pane $TMUX_PANE"; fi; exit 0 ;;
+    if [ "$MOD" = 1 ]; then echo "done by: the open-science mod (session ${OLD:0:8})"; else echo "done by: tmux typing (the open-science mod is not loaded)"; fi
+    if [ -f "$REQ" ]; then jq . "$REQ"; else echo "no jump pending"; fi; exit 0 ;;
   cancel)
     if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" = requested ]; then rm -f "$REQ"; echo "jump request cancelled"
     elif [ -f "$REQ" ]; then echo "a jump is already $(jq -r .phase "$REQ"); it cannot be cancelled" >&2; exit 1
@@ -244,7 +262,7 @@ while [ ! -f "$d/AGENTS.md" ] || [ ! -f "$d/config/framework.yaml" ]; do
   [ "$d" = / ] && die "$CTX is not inside a project made from the open-science template (no AGENTS.md and config/framework.yaml above it). Session jumps need the project management component: create the project with open-science-project:new-project or migrate it with open-science-project:migrate-project."
   d=$(dirname "$d")
 done
-for f in "$OS_STATE/inhibit_jump" "$OS_STATE/inhibit_jump_$KEY"; do
+for f in "$OS_STATE/inhibit_jump" "$OS_STATE/inhibit_jump_$KEY" ${PKEY:+"$OS_STATE/inhibit_jump_$PKEY"}; do
   [ -e "$f" ] && die "jumps are inhibited by $f: $(head -c 300 "$f" 2>/dev/null)"
 done
 age_min=$(( ( $(date +%s) - $(stat -c %Y "$CTX") ) / 60 ))
@@ -279,9 +297,11 @@ if [ "$(cm_runtime)" = codex ]; then
   echo "Finish anything you owe the user in this turn, then end the turn. Start no new work."
   exit 0
 fi
-CPID=$(cm_claude_pid) || die "no claude process above this shell; cannot confirm a clear"
-SF=$(cm_state_file "$CPID") || die "no state file for claude pid $CPID; cannot confirm a clear, refusing"
-OLD=$(cm_sid "$SF"); [ -n "$OLD" ] || die "state file $SF has no sessionId"
+if [ "$MOD" = 0 ]; then
+  CPID=$(cm_claude_pid) || die "no claude process above this shell; cannot confirm a clear"
+  SF=$(cm_state_file "$CPID") || die "no state file for claude pid $CPID; cannot confirm a clear, refusing"
+  OLD=$(cm_sid "$SF"); [ -n "$OLD" ] || die "state file $SF has no sessionId"
+fi
 
 if [ "$CMD" = active ]; then
   tokens=$(python3 "$HERE/ctx_usage.py" --session-id "$OLD" 2>/dev/null) || tokens=""
@@ -296,12 +316,14 @@ fi
 
 [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" != requested ] && die "a jump is already $(jq -r .phase "$REQ") for this pane"
 mkdir -p "$(dirname "$REQ")"
-jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${TMUX%%,*}" \
-      --arg pane "$TMUX_PANE" --arg key "$KEY" --arg sf "$SF" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
-  '{version:1, kind:$kind, context:$ctx, prompt:$prompt, sock:$sock, pane:$pane, key:$key,
+T="${TMUX:-}"
+jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${T%%,*}" \
+      --arg pane "${TMUX_PANE:-}" --arg key "$KEY" --arg sf "${SF:-}" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
+      --arg rt "$([ "$MOD" = 1 ] && echo claude-mod || echo claude)" \
+  '{version:1, runtime:$rt, kind:$kind, context:$ctx, prompt:$prompt, sock:$sock, pane:$pane, key:$key,
     state_file:$sf, old_sid:$sid, requested_at:$at, phase:"requested"}' > "$REQ.tmp" && mv "$REQ.tmp" "$REQ" \
   || die "could not write $REQ"
-cm_log "launcher $TMUX_PANE: $CMD jump requested (context $CTX)"
+cm_log "launcher ${TMUX_PANE:-session ${OLD:0:8}}: $CMD jump requested (context $CTX)"
 # Register the pane, so a session woken after a wait jump finds its file with
 # open-science-context:continue-context and no file named.
 bash "$HERE/pane_context.sh" set "$CTX" >/dev/null 2>&1 || true
@@ -311,6 +333,6 @@ if [ "$CMD" = active ]; then
   echo "  $PROMPT"
 else
   echo "Wait jump requested. When this turn ends the Stop hook checks that something will wake"
-  echo "the new session (a background subagent or shell). If nothing will, it refuses and tells you."
+  echo "the new session (a background subagent or shell, or a queued waker). If nothing will, it refuses and tells you."
 fi
 echo "Finish anything you owe the user in this turn, then end the turn. Start no new work."

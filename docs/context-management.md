@@ -6,23 +6,30 @@ controls differ and are described in [Codex session controls](#codex-session-con
 An agent can hold only a limited amount of conversation. On long work it would otherwise
 slow down or lose track. With the `open-science-context` plugin, the agent saves where the
 work stands in the project's context files, clears its own conversation, and carries on from
-those files. This is called a **jump**. You will see the agent type into its own tmux pane;
-that is expected.
+those files. This is called a **jump**.
 
-![Two agents clearing their context and resuming on their own](figures/context_jumps.svg)
-
-Left: the context is over 250k tokens, so the agent saves its state to the task's context
-file and the plugin clears the session and resumes it from that file. Right: the agent
-submits a SLURM job, saves its state and clears; the idle session is woken when the job
-leaves the queue and resumes from the context file. Clearing before a long wait matters
-because the prompt cache expires while the session sits idle: waking a session that still
-holds a long conversation would resend all of it uncached, which costs far more than a
-fresh start from the context file.
-
-The figure and cache-expiry explanation describe Claude Code. Codex does not use the
+There are two kinds. In an **active jump**, the context is over 250k tokens (or a piece of
+work is finished), so the agent saves its state to the task's context file and the plugin
+clears the session and resumes it from that file. In a **wait jump**, the agent submits a
+SLURM job, saves its state and clears; the idle session is woken when the job leaves the
+queue and resumes from the context file. Clearing before a long wait matters because the
+prompt cache expires while the session sits idle: waking a session that still holds a long
+conversation would resend all of it uncached, which costs far more than a fresh start from
+the context file. The cache-expiry explanation describes Claude Code; Codex does not use the
 Claude cache-cold timer or its fixed context thresholds.
 
-**Jumps are optional.** Without them, the plugin still registers each pane to its context
+**On Claude Code, the jumps are done by a Claude Code mod.** A mod is code that Claude Code
+runs inside itself (see Claude Code's [mods documentation](https://code.claude.com/docs/en/plugins/mods/overview)).
+The plugin's mod clears the session with Claude Code's own `/clear`, runs the resume
+command, wakes a waiting session when its SLURM jobs end, sends the cache-cold notice, names
+the session after its task, and reads the context size of the session and of each subagent.
+Nothing is typed into the terminal, and tmux is not needed. The mod needs Claude Code 2.1.287
+or later, and mods must be switched on for your account (Anthropic is switching them on step
+by step; `/open-science:onboard` checks). Where the mod is not loaded, the plugin falls back
+to [typing into the agent's tmux pane](#without-the-mod-the-tmux-fallback), and you will see
+the agent type into its own pane. `jump.sh status` says which one a session has.
+
+**Jumps are optional.** Without them, the plugin still registers each session to its context
 file, the agents still keep the context files current, and any session can take over a task
 with `open-science-context:continue-context`. See [Choosing which jumps](#choosing-which-jumps).
 
@@ -31,23 +38,22 @@ claude plugin install open-science-context@open-science
 ```
 
 Installing it also installs `open-science-project`: a jump is only as good as the context
-file it resumes from. It needs `jq`, `opsci`, and tmux.
-
-**Claude Code must run inside tmux.** A jump types into the agent's own tmux pane, and each
-pane records which context file it drives. Outside tmux, `jump.sh` refuses and the Stop hook
-does nothing. [Working in tmux](tmux.md) shows how to arrange your work (one pane per task),
-how to set tmux up for the mouse, and how to run it on a compute node of a cluster.
-Codex needs tmux only for jumps ([Codex session controls](#codex-session-controls)).
+file it resumes from. It needs `jq` and `opsci`. With the mod, tmux is optional; it is still
+useful for keeping sessions alive after you disconnect, and [SLURM resurrection](slurm-resurrect.md)
+needs it. [Working in tmux](tmux.md) shows how to arrange your work (one pane per task), how
+to set tmux up for the mouse, and how to run it on a compute node of a cluster. Without the
+mod, and for Codex's jumps ([Codex session controls](#codex-session-controls)), tmux is
+required.
 
 | skill | use it to |
 |---|---|
-| `open-science-context:context-management` | the rules for jumps, pane registration and subagent checkpoints; main agents load it at session start |
+| `open-science-context:context-management` | the rules for jumps, registration and subagent checkpoints; main agents load it at session start |
 | `open-science-context:continue-context` | take over the work a context file describes; the first step after every jump |
 | `open-science-context:advise-with-context` | ask questions about a context file or plan without acting on it |
 
-## Pane registration
+## Registration
 
-Each tmux pane records which context file it drives, so that
+Each session records which context file it drives, so that
 `open-science-context:continue-context` finds the right file after a jump with no file named.
 When the main agent starts driving a task it runs:
 
@@ -59,9 +65,18 @@ Codex does not set `${CLAUDE_PLUGIN_ROOT}`; it runs the same script from the ins
 plugin's `scripts/` directory. Outside tmux, Codex registers the file for its session
 (`CODEX_THREAD_ID`) instead of the pane.
 
-`pane_context.sh get` prints the registered path, and `pane_context.sh clear` drops it. A new
-session in the same pane (after a jump, a SLURM resurrection or a plain `/clear`) keeps the
-registration. Subagents never register; they use the main agent's pane.
+`pane_context.sh get` prints the registered path, and `pane_context.sh clear` drops it. The
+registration follows the session through a jump, a plain `/clear` and a SLURM resurrection.
+With the mod it is kept by session id: the mod hands it to the new session at every clear,
+and a session resumed with `claude --resume` keeps its id. Without the mod it is kept by tmux
+pane, and a new session in the same pane keeps it. Subagents never register; they use the
+main agent's registration.
+
+**Session names.** If you said yes in onboarding (`OPSCI_SESSION_NAMES=1`), the session is
+named after the project and, once registered, the task's short name, for example
+`quad-ratio-2 · pp-real`. This is also its name in the Remote Control list. With the mod the
+name changes as soon as the turn that registered the task ends; without it, at your next
+prompt.
 
 To take over work in a pane yourself, type `/open-science-context:continue-context`, with or
 without a file. With no file it uses the pane's registered file and prints which one; with
@@ -75,21 +90,27 @@ pane resumes the wrong work**, so check the line that names the file. In Codex, 
 |---|---|---|
 | active | the context is above about 250k tokens, a subtask finished, or before a fan-out of subagents | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" active <context file>` |
 | wait | only background work is left (subagents, a background shell, a SLURM job) and it will take longer than about 45 minutes | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" wait <context file>` |
-| cache-cold | the plugin types `[open-science] cache-cold: ...` into the pane after 45 minutes idle with work still running | a wait jump, now |
+| cache-cold | the plugin sends `[open-science] cache-cold: ...` to the session after 45 minutes idle with work still running | a wait jump, now |
 
 Before either command, in the same turn, the agent writes the jump's record: the task
 `context.md` (state, what is in flight and how to check it, the exact next step), the project
 `context.md` if it changed, one line in the task log, and `opsci notify` for anything you
 would otherwise miss. The `jump.sh` call is the last action of the turn.
 
-When the turn ends, the plugin's Stop hook starts the jump: it waits for the pane to be idle,
-types `/clear`, confirms that the session id changed, and, for an active jump, types
-`/open-science-context:continue-context <context file>`. The agent never types into its own
-pane itself.
+When the turn ends, the mod runs Claude Code's `/clear`, checks that a new session started,
+hands the registration to it, and, for an active jump, runs
+`/open-science-context:continue-context <context file>`. In our tests the resumed turn
+started about half a second after the old turn ended.
 
 A cleared session is woken by a background subagent's report, a background Bash task
-exiting, or a Monitor event. For SLURM jobs the agent starts a waker before a wait jump:
-`bash "${CLAUDE_PLUGIN_ROOT}/scripts/wait_slurm.sh" <jobid> [<jobid>...]`.
+exiting, a Monitor event, or a queued SLURM waker. For SLURM jobs the agent queues a waker
+before a wait jump: `bash "${CLAUDE_PLUGIN_ROOT}/scripts/wait_slurm.sh" --notify <jobid> [<jobid>...]`.
+The mod checks the queue every 60 seconds (`OPSCI_WAIT_POLL`); when the jobs have left it,
+it sends their final states to the session, which starts a turn. The waker follows the
+session through jumps, and because it is kept by session id it also survives a SLURM
+resurrection. A session that was waiting on background tasks when Claude Code restarted (a
+resurrection, or a resume by hand) has lost them; the mod then runs
+`/open-science-context:continue-context` for it at once.
 
 ### When the agent does not jump
 
@@ -105,29 +126,31 @@ exiting, or a Monitor event. For SLURM jobs the agent starts a waker before a wa
 | refusal | why |
 |---|---|
 | `OPSCI_JUMPS` is `off`, or `wait` for an active jump | you switched these jumps off |
-| not in tmux | the jump types into the pane |
+| not in tmux, without the mod | the fallback types into the pane |
 | the context file is missing, or was not saved in the last 15 minutes | the state to resume from was not written |
-| the session's state file cannot be found | the clear could not be confirmed |
+| the session's state file cannot be found, without the mod | the clear could not be confirmed |
 | an active jump below 100k tokens without `--force` | a jump costs a full reload; small contexts do not need one |
 | an inhibit file exists | another component owns the pane |
 | at the stop: a wait jump with nothing running that could wake the session | the session would never wake; start the waker or do an active jump |
 
 `jump.sh cancel` drops a pending request; `jump.sh status` shows it.
 
-### The Stop hook
+### At every stop
 
-At every stop of a main session inside tmux, the Stop hook:
+At every stop of a main session that has registered a task, the plugin:
 
 1. starts a pending jump, or refuses a wait jump that nothing would wake;
-2. arms the cache-cold timer if something will wake the session (a running background task
-   or a scheduled prompt), and stops it otherwise;
+2. arms the cache-cold timer if something will wake the session (a running background task,
+   a scheduled prompt or a queued waker), and stops it otherwise;
 3. if the context is above the threshold (250k tokens) and no jump is pending, blocks the
    stop once with an instruction to do an active jump. It blocks the same session again only
    after its context has grown by another 50k tokens, so a session waiting for you is not
    stopped at every reply.
 
-Outside tmux it does nothing. With `OPSCI_JUMPS=wait` it skips step 3; with
-`OPSCI_JUMPS=off` it only stops a leftover timer.
+The mod reads the context size from Claude Code and runs these steps through the plugin's
+Stop policy (`cm_stop.sh --mod`); without the mod, the Stop hook runs them itself and does
+nothing outside tmux. With `OPSCI_JUMPS=wait` step 3 is skipped; with `OPSCI_JUMPS=off`
+only a leftover timer is stopped.
 
 ### Choosing which jumps
 
@@ -141,11 +164,11 @@ reads `OPSCI_JUMPS` from the environment it is started in, for example
 |---|---|
 | `all` (the default, recommended) | active, wait and cache-cold jumps |
 | `wait` | no active jumps and no size notice from the Stop hook: the conversation grows as long as it needs to. Wait jumps and the cache-cold notice still clear the session before a long wait, when resending the conversation uncached would cost the most |
-| `off` | no jumps: `jump.sh` refuses every jump, and the Stop hook does nothing but stop a leftover cache-cold timer. Nothing types into your panes |
+| `off` | no jumps: `jump.sh` refuses every jump, and nothing is done at a stop but stopping a leftover cache-cold timer |
 
 Jumps are recommended: they reduce usage and keep the agent working from the current state
 of the work. Newer models cost less and work well with a long conversation, so keeping the
-conversation (`wait` or `off`) is a reasonable choice. With every setting, pane registration,
+conversation (`wait` or `off`) is a reasonable choice. With every setting, registration,
 the context files, `continue-context` and subagent checkpoints work as described on this page.
 
 ## Settings
@@ -160,7 +183,9 @@ Environment variables read by the scripts:
 | `OPSCI_ACTIVE_JUMP_FLOOR` | 100000 | below this, an active jump needs `--force` |
 | `OPSCI_CACHE_COLD_MIN` | 45 | minutes idle, with work running, before the cache-cold notice |
 | `OPSCI_JUMP_FRESH_MIN` | 15 | the context file must have been saved within this many minutes |
-| `OPSCI_STATE_DIR` | `$XDG_STATE_HOME/open-science`, else `~/.local/state/open-science` | where requests, timers, locks and the log `cm.log` are kept |
+| `OPSCI_SUBAGENT_LIMIT` | 200000 | with the mod: a subagent's context size (tokens) at which it is told to checkpoint |
+| `OPSCI_WAIT_POLL` | 60 | seconds between two checks of a SLURM waker's jobs |
+| `OPSCI_STATE_DIR` | `$XDG_STATE_HOME/open-science`, else `~/.local/state/open-science` | where registrations, requests, wakers, timers, locks and the log `cm.log` are kept |
 
 ## Subagents
 
@@ -176,8 +201,39 @@ The main agent dispatches subagents in the background. Every dispatch prompt sta
   the wait;
 - every report ends with `If you have no context, use the open-science-context:continue-context skill.`
 
+With the mod, the plugin also reads each subagent's context size from every request it sends
+to the model. Above 200k tokens (`OPSCI_SUBAGENT_LIMIT`) it sends that subagent one message,
+`open-science: your context is <n> tokens, above 200000. Stop at the next clean boundary,
+...`, so the subagent does not have to estimate its own size. Without the mod, the subagent
+checks its own size.
+
 On `PAUSED` or `SUBMITTED` the main agent dispatches a fresh subagent against the same
 document.
+
+## Without the mod: the tmux fallback
+
+If Claude Code does not load the mod (a version before 2.1.287, mods not yet switched on for
+your account, or a session started with `--safe-mode`), the plugin's shell hooks do the same
+work by typing into the agent's tmux pane:
+
+- **Claude Code must run inside tmux.** Outside tmux, `jump.sh` refuses and the Stop hook does
+  nothing.
+- **Jumps:** when the turn ends, the Stop hook starts a worker that waits for the pane to be
+  idle, types `/clear`, confirms that the session id changed, and, for an active jump, types
+  `/open-science-context:continue-context <context file>`. You will see the agent type into
+  its own pane. The agent never types into its own pane itself.
+- **Cache-cold notice:** a timer types the notice into the pane.
+- **SLURM wakers:** `wait_slurm.sh --notify` says the mod is not loaded; the agent runs
+  `wait_slurm.sh <jobid>...` as a background Bash task instead, and its exit wakes the
+  session.
+- **Registration** is kept by pane. After a SLURM resurrection the session runs in a new
+  pane; at its first stop the Stop hook copies the session's own record into the new pane's.
+- **Session names** change at your next prompt, from the `UserPromptSubmit` hook.
+- **Context size** is read from the session's transcript, one message behind.
+
+The plugin decides per session: when the mod loads, it sets `OPSCI_MOD=1` for Claude Code
+and everything it starts, and the shell hooks then leave the work to it. Nothing needs to be
+configured to switch between the two.
 
 ## `open-science-context:advise-with-context`
 

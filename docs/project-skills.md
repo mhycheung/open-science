@@ -154,7 +154,7 @@ Moves an existing project, ongoing or finished, into the layout without losing a
    copied to their new paths or moved.
 2. It instantiates the template into a scratch directory and copies over only the files the
    project does not have. It then creates the migration task, `tasks/t00-migration/`
-   (soft-private), and registers the tmux pane for its `context.md`. That file records the
+   (soft-private), and registers the session for its `context.md`. That file records the
    worktree, the inventory, your answers and the next step, and its `plan.md` holds the
    approved mapping, so a large migration can stop and be taken over by another session
    with `open-science-context:continue-context`.

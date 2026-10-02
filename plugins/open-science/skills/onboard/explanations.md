@@ -46,11 +46,11 @@ later by running this again."
   work it would otherwise forget things or slow down. With this part, the agent keeps where
   the work stands in the project's records, so a new session can take over at any time.
   Optionally (you choose later in the setup), when its memory gets full or before a long
-  wait, the agent clears its own conversation and carries on from the records; you will then
-  see the agent type into its own window, which is expected. It never does this while
-  waiting for your answer. **Needs the project management part** (the records it resumes
-  from) and tmux, a program that keeps terminal windows alive and lets the agent type into
-  its own window.
+  wait, the agent clears its own conversation and carries on from the records. It never does
+  this while waiting for your answer. **Needs the project management part** (the records it
+  resumes from). A recent Claude Code does the clearing from inside itself; with an older
+  one, or with Codex, it also needs tmux, a program that keeps terminal windows alive and
+  lets the agent type into its own window.
 - **Publishing**: Each project gets two copies. The private one is where you work; it can
   hold drafts, notes and data. The public one is what the world sees. You never copy files
   to it by hand: publishing collects only the files you allowed in a list, checks them for
@@ -87,9 +87,30 @@ Choosing neither is the default; nothing is installed for them.
 
 ## Branch 1 — context management
 
-Say first: "Context management needs Claude Code to run inside tmux, a program that keeps
-terminal windows running after you disconnect and lets the agent type into its own window.
-I will set up what is missing."
+**1m — Claude Code mods** (no question unless an update is offered; say the text for the
+check's `claude_mods` value):
+- `on`: "Your Claude Code runs mods: small extensions that Claude Code runs inside itself.
+  The context management plugin has one, so clearing and resuming the conversation, waking
+  the agent when a job ends, and naming the session all happen inside Claude Code. tmux is
+  optional: it keeps your sessions running after you disconnect, and the SLURM extra needs
+  it."
+- `off-build`: "Your Claude Code (version <claude>) cannot run mods. Context management
+  works best with them: clearing and resuming the conversation, waking the agent when a job
+  ends, and naming the session then happen inside Claude Code. I recommend updating Claude
+  Code with `claude update`; the new version starts with your next session. May I run it?"
+  After a yes, run `claude update` and check again (`onboard_check.sh` prints `claude_mods`).
+- `off-rollout` or `unknown`: "Your Claude Code can run mods, but they are not switched on
+  for your account yet: Anthropic is turning them on for accounts step by step. Context
+  management works without them, as below. Once they are on, the plugin uses them by itself;
+  there is nothing to change."
+
+Unless `claude_mods=on`, then say: "Until then, context management needs Claude Code to run
+inside tmux, a program that keeps terminal windows running after you disconnect and lets the
+agent type into its own window. I will set up what is missing."
+
+With `claude_mods=on`, ask instead: "Do you want to use tmux? It keeps your sessions running
+after you disconnect, and shows several agents side by side." Options: **Yes, set up tmux**
+(1a-1c below) and **No**: skip 1a-1c.
 
 **1a — tmux settings** (skip if the check found them all): "These settings let you use tmux
 with the mouse: click a pane or a window name to switch to it, drag a border to resize, scroll
@@ -105,8 +126,9 @@ set -ag terminal-overrides ",xterm-256color:RGB"   # full colour, as in the term
 ```
 
 **1b — how to arrange your work** (no question): "Keep one tmux session for your work, one
-window per project, and one pane per task. Each pane runs one agent on one task and remembers
-which task that is, so after the agent clears its conversation it resumes the right work.
+window per project, and one pane per task. Each pane runs one agent on one task, and the
+agent remembers which task that is, so after it clears its conversation it resumes the right
+work.
 The keys start with Ctrl-b: Ctrl-b c makes a new window, Ctrl-b % splits a pane, Ctrl-b d
 leaves tmux running and disconnects, and `tmux attach` brings you back. With the mouse
 settings you can also right-click a pane or a window name for a menu. The full guide is the
@@ -150,7 +172,7 @@ task name appears after your next message. Turn this on?"
 - **No**: Claude Code keeps its own names, such as `quad-ratio-3f`.
 
 **1f — session jumps** (skip if the check found a setting): "With context management, the
-agent always keeps a short context file for each task, records which task each tmux pane
+agent always keeps a short context file for each task, records which task each session
 works on, and can take over a task from its file in a new session. On top of that, it can
 clear its own conversation and carry on from the context file. This is called a jump, and it
 is optional. There are three kinds:
@@ -170,8 +192,8 @@ to keep the conversation and not jump; you can change this later. Which jumps do
 - **All jumps (recommended)**: active, wait and cache-cold jumps.
 - **Only wait jumps**: the agent keeps its conversation however long it grows, but clears it
   before a long wait, when resending it would cost the most.
-- **No jumps**: the agent never clears its own conversation. The context files, pane
-  records and taking over a task still work; nothing types into your panes.
+- **No jumps**: the agent never clears its own conversation. The context files, the record
+  of each session's task and taking over a task still work.
 
 **1d — older skills with the same names** (skip if the check found none)
 - **Move them to an archive folder (recommended)**: they are moved, not deleted, and can be

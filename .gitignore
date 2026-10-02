@@ -9,3 +9,5 @@ __pycache__/
 *.egg-info/
 # Framework documentation site: the output of `mkdocs build`
 /site/
+# written by `claude plugin test` next to a mod
+/plugins/**/tsconfig.json

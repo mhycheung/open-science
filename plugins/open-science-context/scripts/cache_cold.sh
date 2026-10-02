@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cache-cold timer, started detached by cm_stop.sh when a session stops while
+# Cache-cold timer of the tmux path (the mod keeps its own), started detached by cm_stop.sh when a session stops while
 # something that will wake it is still running. The Stop hook kills and restarts
 # it at every stop, so it fires only after $OPSCI_CACHE_COLD_MIN minutes (default
 # 45; the prompt cache is assumed to last 1 hour) with no stop at all.
@@ -14,10 +14,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=cm_lib.sh
 . "$HERE/cm_lib.sh"
 SOCK="$1"; PANE="$2"; KEY="$3"; SID="$4"; SF="${5:-}"
-MIN="${OPSCI_CACHE_COLD_MIN:-45}"
-SECS="${OPSCI_CACHE_COLD_SECONDS:-$(( MIN * 60 ))}"   # seconds override, for tests
-if [ "$SECS" -ge 60 ]; then IDLE="$(( SECS / 60 )) min"; else IDLE="${SECS} s"; fi
-NOTICE="[open-science] cache-cold: ${IDLE} idle with work still running. Do a wait jump now (open-science-context:context-management)."
+SECS=$(cm_cold_seconds)   # OPSCI_CACHE_COLD_SECONDS overrides the minutes, for tests
+NOTICE=$(cm_cold_notice "$SECS")
 
 sleep "$SECS"
 me=$$

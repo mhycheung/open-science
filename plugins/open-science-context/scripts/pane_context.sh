@@ -17,8 +17,11 @@
 # The same `set` also records the file under this SESSION (runtime + session id:
 # $CLAUDE_CODE_SESSION_ID or the Claude state file, $CODEX_THREAD_ID under Codex), so
 # `get` works outside tmux too: it tries the pane record first, then this session's.
-# The session record does not follow a jump (the new session has a new id); in tmux the
-# pane record does.
+# With the Claude Code mod loaded the session record is the registration: the mod hands
+# it to the new session at every clear (cm_mod.sh handover), and it survives
+# `claude --resume`, so a SLURM resurrection keeps it. Without the mod the session record
+# does not follow a jump; in tmux the pane record does, and the Stop hook copies a
+# session's record into a new pane that has none (after a resurrection).
 #
 # Usage:
 #   pane_context.sh set <path-to-context.md>        register (overwrites)
@@ -70,7 +73,7 @@ cmd_set() {
     fi
   fi
   if ! rec=$(record_path); then
-    echo "pane_context: not inside tmux (TMUX_PANE unset) -- no pane registered." >&2
+    cm_mod_active || echo "pane_context: not inside tmux (TMUX_PANE unset) -- no pane registered." >&2
     return 0
   fi
   mkdir -p "$REG_DIR" || { echo "pane_context: cannot write $REG_DIR" >&2; return 1; }
@@ -119,6 +122,7 @@ cmd_check() {
 
 cmd_status() {
   local sdoc
+  if cm_mod_active; then echo "the open-science mod is loaded: the session record is the registration"; fi
   if sdoc=$(session_doc); then echo "$(cm_runtime) session $(cm_live_sid): $sdoc"; fi
   if [ -z "${TMUX_PANE:-}" ]; then echo "not inside tmux -- no pane registration possible"; return 0; fi
   local rec; rec=$(record_path)

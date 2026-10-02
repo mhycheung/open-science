@@ -20,6 +20,8 @@ PLUGINS = {
 PLUGIN_OF = {s: p for p, ss in PLUGINS.items() for s in ss}
 SKILLS = tuple(PLUGIN_OF)
 MAX_LINES = 150  # "keep each SKILL.md short"
+# Skills read once per setup, not at every session start, may be longer (user ruling 2026-10-02).
+MAX_LINES_ONCE = {"onboard": 250}
 
 SCRIPT_RE = re.compile(r"\$\{CLAUDE_PLUGIN_ROOT\}/scripts/([\w.-]+)")
 OPSCI_RE = re.compile(r"\bopsci ([a-z][\w-]*)(?: ([a-z][\w-]*))?")
@@ -46,8 +48,9 @@ def problems(skill_md: Path, name: str, plugin: Path | None = None) -> list[str]
         out.append(f"front matter name {fm.get('name')!r} != directory {name!r}")
     if len(fm.get("description", "")) < 40:
         out.append("description missing or too short to trigger on")
-    if len(text.splitlines()) > MAX_LINES:
-        out.append(f"{len(text.splitlines())} lines > {MAX_LINES}")
+    cap = MAX_LINES_ONCE.get(name, MAX_LINES)
+    if len(text.splitlines()) > cap:
+        out.append(f"{len(text.splitlines())} lines > {cap}")
     for s in SCRIPT_RE.findall(text):
         if not (plugin / "scripts" / s).is_file():
             out.append(f"names missing plugin script {s}")
