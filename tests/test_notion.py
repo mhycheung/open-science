@@ -349,7 +349,8 @@ def test_text_edit_shows_in_diff_and_sync_fixes_it(mirrored):
     ctx = S.proj / "context.md"
     ctx.write_text(ctx.read_text() + "\nA new line about $\\beta$.\n")
     assert run(S, "notion", "diff", cwd=S.proj).stdout == "text   context\n"
-    assert run(S, "notion", "sync", cwd=S.proj).stdout == "text   context\n"
+    # a line added at the end: the new block is appended, the others are kept
+    assert run(S, "notion", "sync", cwd=S.proj).stdout == "text   context\n  0 block(s) replaced by 1\n"
     assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
     page = state(S.proj)["pages"]["context"]["page_id"]
     texts = [text_of(n) for n in m.kids(page)]
@@ -877,3 +878,51 @@ def test_graph_image_uploads_its_png(tmp_path):
     assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.svg"  # control: no PNG
     (tmp_path / "map/graph.png").write_bytes(b"\x89PNG")
     assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.png"
+
+
+def test_text_change_rewrites_only_the_changed_blocks(mirrored):
+    S, m = mirrored, mirrored.mock
+    ctx = S.td / "context.md"
+    head = ctx.read_text().split("# ")[0]
+    paras = ["First paragraph.", "Second paragraph.", "Third paragraph.", "Fourth paragraph."]
+    ctx.write_text(head + f"# {TASK}: Demo task\n\n" + "\n\n".join(paras) + "\n")
+    run(S, "notion", "sync", cwd=S.proj)
+    pid = task_page(S.proj)
+    before = live_ids(m, pid)
+    texts = [text_of(n) for n in m.kids(pid)]
+    assert texts[:4] == paras
+    # a change in the middle: one block deleted, one appended in its place, the rest kept
+    paras[2] = "Third paragraph, revised."
+    ctx.write_text(head + f"# {TASK}: Demo task\n\n" + "\n\n".join(paras) + "\n")
+    m.requests.clear()
+    r = run(S, "notion", "sync", cwd=S.proj)
+    assert "1 block(s) replaced by 1" in r.stdout
+    assert [x for x in m.requests if x[0] == "DELETE"] == [("DELETE", f"/blocks/{before[2]}")]
+    after = live_ids(m, pid)
+    assert [text_of(n) for n in m.kids(pid)][:4] == paras
+    assert after[:2] == before[:2] and after[3:] == before[3:] and after[2] != before[2]
+    assert [m.file_of(e["image"]["id"])[0] for e in plot_entries(m, pid)] == ["x_2026-09-25.png"]  # plots kept
+    # a change at the first block cannot be inserted before it: the page is written whole
+    paras[0] = "First paragraph, revised."
+    ctx.write_text(head + f"# {TASK}: Demo task\n\n" + "\n\n".join(paras) + "\n")
+    run(S, "notion", "sync", cwd=S.proj)
+    assert [text_of(n) for n in m.kids(pid)][:4] == paras
+    assert not set(live_ids(m, pid)) & set(after)
+    assert "in sync" in run(S, "notion", "diff", cwd=S.proj).stdout
+
+
+def test_a_sync_waits_for_a_running_one_and_the_hook_skips(tmp_path, monkeypatch):
+    import threading
+    from opsci.notion import setup as ns
+    proj = type("P", (), {"main": tmp_path})()
+    with ns.sync_lock(proj, wait=False) as held:
+        assert held
+        with ns.sync_lock(proj, wait=False) as other:
+            assert other is False                       # the hook's sync: skipped
+        got = []
+        t = threading.Thread(target=lambda: got.append(ns.sync_lock(proj, wait=True).__enter__()))
+        t.start()
+        t.join(0.5)
+        assert t.is_alive() and not got                 # a manual sync: waits
+    t.join(5)
+    assert got == [True]

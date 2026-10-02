@@ -369,6 +369,12 @@ TASKS_DB_PROPERTIES = {
 
 # ---------------------------------------------------------------- change detection
 
+def _block_shas(blocks: list) -> list[str]:
+    """A hash of each top-level block as rendered (before its figures are uploaded), so that
+    a sync can tell which blocks of a page changed."""
+    return [_sha_json(b) for b in blocks]
+
+
 def changes(pages: list[dict], st: dict) -> list[tuple[str, dict]]:
     out = []
     known = st.get("pages", {})
@@ -443,9 +449,12 @@ class Mirror:
             out.append(b)
         return out
 
-    def _write_body(self, page: dict, page_id: str) -> dict:
+    def _write_body(self, page: dict, page_id: str) -> tuple[dict, list]:
+        """Clear the page and write it whole. Returns its plots and its text blocks, as
+        [sha, block id] (``_block_shas``)."""
         self._clear(page_id)
-        blocks = self._resolve_images(page["blocks"]) + self._plot_blocks(page)
+        text = self._resolve_images(page["blocks"])
+        blocks = text + self._plot_blocks(page)
         ids = self.c.append(page_id, blocks)
         by_key = {x["key"]: x for x in page["plots"]}
         out = {}
@@ -455,7 +464,35 @@ class Mirror:
                 out[x["key"]] = {"block": i, "file": _plot_id(x)}
             elif "_cap" in b:
                 out[b["_cap"]]["caption_block"] = i
-        return out
+        return out, [list(x) for x in zip(_block_shas(page["blocks"]), ids[:len(text)])]
+
+    def _patch_body(self, page: dict, ent: dict, log) -> list | None:
+        """Write only the text blocks that changed since the last sync: keep the blocks
+        that open and close the page unchanged, delete the old ones between them, and
+        insert the new ones after the last kept block. Returns the text blocks as
+        [sha, block id], or None when the page must be written whole (no record of its
+        blocks, or a change at its first block, before which nothing can be inserted)."""
+        old = ent.get("blocks")
+        if not old:
+            return None
+        new = _block_shas(page["blocks"])
+        olds = [sha for sha, _ in old]
+        head = 0
+        while head < min(len(olds), len(new)) and olds[head] == new[head]:
+            head += 1
+        tail = 0
+        while tail < min(len(olds), len(new)) - head and olds[-1 - tail] == new[-1 - tail]:
+            tail += 1
+        if head == len(olds) == len(new):
+            return old
+        if head == 0:
+            return None
+        for _, bid in old[head:len(old) - tail]:
+            self.c.delete(bid)
+        mid = page["blocks"][head:len(new) - tail]
+        ids = self.c.append(ent["page_id"], self._resolve_images(mid), after=old[head - 1][1]) if mid else []
+        log(f"  {len(old) - head - tail} block(s) replaced by {len(mid)}")
+        return old[:head] + [list(x) for x in zip(new[head:len(new) - tail], ids)] + old[len(old) - tail:]
 
     def _replace_caption(self, block_id: str, x: dict) -> None:
         cap = caption_blocks(x["caption"], x["path"])["callout"]
@@ -553,8 +590,16 @@ class Mirror:
             if page.get("icon"):
                 body["icon"] = {"type": "emoji", "emoji": page["icon"]}
             self.c.call("PATCH", f"/pages/{ent['page_id']}", body)
+        if how == "text":
+            old = ent.pop("blocks", None)   # until this page is written, no record of its blocks:
+            self.save()                     # a failure midway leads the next sync to rewrite it whole
+            blocks = self._patch_body(page, {**ent, "blocks": old}, log)
+            if blocks is not None:
+                ent["plots"], ent["blocks"] = self._update_plots(page, ent, log), blocks
+                ent["text_sha"] = page["text_sha"]
+                return
         if how in ("new", "text"):
-            ent["plots"] = self._write_body(page, ent["page_id"])
+            ent["plots"], ent["blocks"] = self._write_body(page, ent["page_id"])
         else:
             ent["plots"] = self._update_plots(page, ent, log)
         ent["text_sha"] = page["text_sha"]

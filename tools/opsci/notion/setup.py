@@ -13,6 +13,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import json
 import os
@@ -282,16 +283,31 @@ def run_hook(project_root: str | None = None) -> int:
     return 0
 
 
-def locked_sync(project_root: str | None = None) -> int:
-    """Sync unless another sync of this checkout is running (then that one will catch up)."""
-    import datetime as dt
-    proj = Project(project_root)
+@contextlib.contextmanager
+def sync_lock(proj: Project, wait: bool):
+    """Hold the sync lock of this checkout, so that two syncs never write the same pages at
+    once. Yields whether it is held: with ``wait``, after any running sync has finished;
+    without, False at once when another sync is running."""
     lock = proj.main / LOCK_FILE
     lock.parent.mkdir(parents=True, exist_ok=True)
     with open(lock, "w") as fh:
         try:
             fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
+            if not wait:
+                yield False
+                return
+            print("waiting for another sync of this checkout to finish", flush=True)
+            fcntl.flock(fh, fcntl.LOCK_EX)
+        yield True
+
+
+def locked_sync(project_root: str | None = None) -> int:
+    """Sync unless another sync of this checkout is running (then that one will catch up)."""
+    import datetime as dt
+    proj = Project(project_root)
+    with sync_lock(proj, wait=False) as held:
+        if not held:
             return 0
         print(f"--- {dt.datetime.now():%Y-%m-%d %H:%M:%S} sync", flush=True)
         try:

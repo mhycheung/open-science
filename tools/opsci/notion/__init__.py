@@ -54,7 +54,12 @@ def cmd_sync(a):
         return setup.run_hook(a.project_root)
     if a.locked:
         return setup.locked_sync(a.project_root)
-    done = mirror.sync(Project(a.project_root), only=a.only, plots_only=a.plots_only, dry_run=a.dry_run)
+    proj = Project(a.project_root)
+    if a.dry_run:
+        done = mirror.sync(proj, only=a.only, plots_only=a.plots_only, dry_run=True)
+    else:
+        with setup.sync_lock(proj, wait=True):
+            done = mirror.sync(proj, only=a.only, plots_only=a.plots_only)
     if not done:
         print("in sync")
 
