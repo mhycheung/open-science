@@ -241,10 +241,9 @@ def _html_box(w: float, h: float) -> str:
 
 def layout(work: Path, d: dict, dims: dict) -> dict:
     """Graphviz's placement: node centres and sizes, box corners, edge splines, in pt. The
-    graph is laid out left to right and top to bottom, and the narrower of the two is kept:
-    Notion and most pages fit an image to the column width, so a wide image is drawn small."""
-    lays = [_layout(work, d, dims, rd) for rd in ("LR", "TB")]
-    return min(lays, key=lambda lay: (lay["bb"][2] - lay["bb"][0], lay["rankdir"] != "LR"))
+    graph is always laid out left to right: an arrow points from a node to the work that uses
+    it, so the project reads from left to right."""
+    return _layout(work, d, dims, "LR")
 
 
 def _layout(work: Path, d: dict, dims: dict, rankdir: str) -> dict:

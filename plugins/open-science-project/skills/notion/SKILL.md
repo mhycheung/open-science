@@ -11,7 +11,8 @@ an @mention from it notifies the user. Full reference: `docs/notion.md` in the f
 repo.
 
 What is in Notion, under the project's page:
-- Project, Context, Map (the project graph and the claims graph as images),
+- Project, Context, Map (the project graph and the claims graph as images and interactive
+  HTML views, drawn left to right by `opsci map build`; never draw them top to bottom),
   Milestone results, Log, Rules, Brainstorm context and Private docs pages.
 - The **Tasks** database: one row per task, holding the task's context, then its results
   page, plan, task map, task log and subcontext files, then its plots.
