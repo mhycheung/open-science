@@ -941,3 +941,21 @@ def test_a_sync_waits_for_a_running_one_and_the_hook_skips(tmp_path, monkeypatch
         assert t.is_alive() and not got                 # a manual sync: waits
     t.join(5)
     assert got == [True]
+
+
+def test_plots_in_prunes_skipped_dirs_and_caches_hashes(tmp_path, monkeypatch):
+    from opsci.notion import mirror
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
+    td = tmp_path / "tasks" / "t01"
+    (td / "data").mkdir(parents=True)
+    (td / "data" / "skip.png").write_bytes(b"x")         # under a skipped directory
+    (td / "a.png").write_bytes(b"one")
+    (td / "notes.txt").write_text("not a plot")
+    first = mirror.plots_in(tmp_path, td)
+    assert [x["path"] for x in first] == ["tasks/t01/a.png"]
+    reads = []
+    real = Path.read_bytes
+    monkeypatch.setattr(Path, "read_bytes", lambda self: reads.append(self) or real(self))
+    assert mirror.plots_in(tmp_path, td) == first and reads == []   # unchanged: hash from cache
+    (td / "a.png").write_bytes(b"changed")
+    assert mirror.plots_in(tmp_path, td)[0]["sha"] != first[0]["sha"]   # a control: change seen

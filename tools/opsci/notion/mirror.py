@@ -31,6 +31,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -108,14 +109,68 @@ def is_graph_image(p: Path) -> bool:
         return "<!-- opsci-graph " in f.read(300)
 
 
-def plots_in(root: Path, task_dir: Path) -> list[dict]:
+def _plot_files(task_dir: Path):
+    """The plot files under a task directory. Walks with os.scandir and prunes SKIP_PARTS, so a
+    task holding many run outputs costs no stat per file: on a network file system a stat is
+    slow, and task directories may hold hundreds of thousands of untracked files."""
+    stack = [task_dir]
+    while stack:
+        d = stack.pop()
+        try:
+            it = os.scandir(d)
+        except OSError:
+            continue
+        with it:
+            for e in it:
+                if e.name in SKIP_PARTS:
+                    continue
+                if e.is_dir(follow_symlinks=False):
+                    stack.append(Path(e.path))
+                elif Path(e.name).suffix.lower() in PLOT_EXT and e.is_file():
+                    yield Path(e.path)
+
+
+class _HashCache:
+    """sha of each plot file, keyed by path, size and mtime, so an unchanged image is not read
+    again. Kept in the user's cache directory (outside the repo); a lost cache costs one read."""
+
+    def __init__(self, root: Path):
+        base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "opsci"
+        self.path = base / f"plot-hashes-{_sha(str(root.resolve()).encode())}.json"
+        try:
+            self.data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self.data = {}
+        self.dirty = False
+
+    def sha(self, p: Path, st: os.stat_result) -> str:
+        key, stamp = str(p), [st.st_size, st.st_mtime_ns]
+        hit = self.data.get(key)
+        if hit and hit[0] == stamp:
+            return hit[1]
+        h = _sha(p.read_bytes())
+        self.data[key], self.dirty = [stamp, h], True
+        return h
+
+    def save(self) -> None:
+        if not self.dirty:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(f".{os.getpid()}.tmp")
+            tmp.write_text(json.dumps(self.data), encoding="utf-8")
+            tmp.replace(self.path)
+        except OSError:
+            pass
+        self.dirty = False
+
+
+def plots_in(root: Path, task_dir: Path, cache: _HashCache | None = None) -> list[dict]:
     """The newest version of each plot in a task directory."""
+    own = cache is None
+    cache = cache or _HashCache(root)
     best = {}
-    for p in sorted(task_dir.rglob("*")):
-        if not p.is_file() or p.suffix.lower() not in PLOT_EXT:
-            continue
-        if SKIP_PARTS & set(p.relative_to(task_dir).parts):
-            continue
+    for p in sorted(_plot_files(task_dir)):
         if p.suffix.lower() == ".pdf" and any(p.with_suffix(e).exists() for e in (".png", ".jpg", ".svg")):
             continue                                   # the PDF twin of a PNG is the same figure
         if is_graph_image(p):
@@ -123,18 +178,21 @@ def plots_in(root: Path, task_dir: Path) -> list[dict]:
         rel = str(p.relative_to(root))
         key = DATE_IN_NAME.sub("", rel)
         m = DATE_IN_NAME.search(rel)
-        rank = (m.group(1) if m else "", p.stat().st_mtime)
+        st = p.stat()
+        rank = (m.group(1) if m else "", st.st_mtime)
         if key not in best or rank > best[key][0]:
-            best[key] = (rank, p)
+            best[key] = (rank, p, st)
     out = []
-    for key, (_, p) in sorted(best.items()):
+    for key, (_, p, st) in sorted(best.items()):
         rel = str(p.relative_to(root))
-        big = p.stat().st_size > MAX_UPLOAD
+        big = st.st_size > MAX_UPLOAD
         paras = caption_paragraphs(p)
         out.append({"key": key, "path": rel, "too_big": big,
-                    "sha": "" if big else _sha(p.read_bytes()),
+                    "sha": "" if big else cache.sha(p, st),
                     "caption": paras, "cap_sha": _sha_json(paras), "has_caption": bool(paras),
                     "kind": "pdf" if p.suffix.lower() == ".pdf" else "image"})
+    if own:
+        cache.save()
     return out
 
 
@@ -236,6 +294,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
     """The project as Notion pages. `links` ({task or result id: URL}) turns references to
     tasks and results into links to their pages."""
     pages = []
+    hashes = _HashCache(root)
     finder = task_finder(links or {})
 
     def md(path: Path, text: str | None = None) -> list:
@@ -308,7 +367,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
                      "Area": "brainstorm" if tr.startswith("brainstorm") else "project",
                      "Privacy": fm.get("privacy"), "Verification": fm.get("verification"),
                      "Summary": str(fm.get("summary", ""))}
-            page(f"task:{tid}", props["Name"], blocks, kind="task", props=props, plots=plots_in(root, td))
+            page(f"task:{tid}", props["Name"], blocks, kind="task", props=props, plots=plots_in(root, td, hashes))
 
     for n in sorted(scan(root).nodes, key=lambda n: n.path):
         if n.get("type") != "result" or Path(n.path).name == "README.md":
@@ -322,6 +381,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
                  "Milestone": bool(n.get("milestone")), "Verification": n.get("verification"),
                  "Task": task, "Summary": str(n.get("summary", ""))}
         page(f"result:{n.id}", props["Name"], md(f, body), kind="result", props=props)
+    hashes.save()
     return pages
 
 
