@@ -43,7 +43,7 @@ def test_stub_images_carry_the_drawing_hash(tmp_path, monkeypatch):
     G.render(d, tmp_path / "graph")
     assert G.is_current(tmp_path / "graph", d)
     assert (tmp_path / "graph.png").read_bytes().startswith(b"\x89PNG")
-    assert (tmp_path / "graph.pdf").read_bytes().startswith(b"%PDF")
+    assert G.SVG_MARK.format(G.digest(d)) in (tmp_path / "graph.html").read_text()
     changed = G.drawing(CARDS[:2], BOXES, EDGES[:1], "used by")
     assert not G.is_current(tmp_path / "graph", changed)  # a changed graph is out of date
 
@@ -59,7 +59,7 @@ def test_real_render_is_repeatable(tmp_path, monkeypatch):
     assert G.is_current(tmp_path / "a", d)
     assert (tmp_path / "a.svg").read_bytes() == (tmp_path / "b.svg").read_bytes()
     assert (tmp_path / "a.png").read_bytes() == (tmp_path / "b.png").read_bytes()
-    assert (tmp_path / "a.pdf").read_bytes() == (tmp_path / "b.pdf").read_bytes()
+    assert (tmp_path / "a.html").read_bytes() == (tmp_path / "b.html").read_bytes()
     assert not re.search(r"/home|/tmp|/anvil", svg)  # no local path in the image
 
 
@@ -72,3 +72,23 @@ def test_layout_keeps_the_narrower_direction(tmp_path):
     assert lay["rankdir"] == "TB"  # a long chain is drawn top to bottom, not as a wide strip
     x1, y1, x2, y2 = lay["bb"]
     assert x2 - x1 < y2 - y1
+
+
+def test_interactive_view_holds_the_drawing_and_takes_page_links():
+    from opsci import graphview
+    cards = [dict(CARDS[0], summary="The noise.", href="../tasks/t01-noise/context.md"), CARDS[1]]
+    d = G.drawing(cards, BOXES, EDGES[:1], "used by")
+    lay = {"bb": (0, 0, 400, 200), "pos": {"c0": (100, 150, 160, 40), "c1": (300, 50, 160, 40)},
+           "bbs": {"b0": (10, 100, 190, 195)},
+           "splines": {"e0": ([(100, 130), (150, 100), (250, 80), (300, 70)], (300, 72), None)}}
+    html = graphview.page(d, lay, {"done": ["dcfce7", "15803d"]}, G.EDGE_LABELS, "<!-- m -->")
+    D = __import__("json").loads(graphview.DATA_RE.search(html).group(2))
+    c0 = D["cards"][0]
+    assert (c0["x"], c0["y"], c0["w"], c0["h"]) == (36.0, 46.0, 160, 40)  # top left, y down, margin 16
+    assert c0["summary"] == "The noise." and c0["href"] == "../tasks/t01-noise/context.md"
+    assert D["edges"][0]["d"].startswith("M116.0 86.0 C") and D["edges"][0]["d"].endswith("L316.0 144.0")
+    assert "</script>" not in graphview.DATA_RE.search(html).group(2)
+    linked = graphview.with_links(html, {"t01-noise": "https://www.notion.so/abc"})
+    L = __import__("json").loads(graphview.DATA_RE.search(linked).group(2))
+    assert L["cards"][0]["url"] == "https://www.notion.so/abc" and "href" not in L["cards"][0]
+    assert "url" not in L["cards"][1] and L["onlyUrls"] is True  # no page: no link at all

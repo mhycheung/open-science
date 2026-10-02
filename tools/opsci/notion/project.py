@@ -81,6 +81,14 @@ class Project:
             cache[key] = self.client.upload(path)
         return cache[key]
 
+    def upload_data(self, st: dict, rel: str, data: bytes, digest: str) -> str:
+        """Upload ``data``, written for Notion from the project file ``rel``, once per content."""
+        cache = st.setdefault("uploads", {})
+        key = f"{rel}@{digest}"
+        if key not in cache:
+            cache[key] = self.client.upload_bytes(Path(rel).name, data)
+        return cache[key]
+
     # ------------------------------------------------------------ ledger
 
     @property

@@ -250,15 +250,19 @@ def test_plots_in_versions_pdf_twin_and_data(tmp_path):
     assert ps[1]["caption"] == []
 
 
-def test_graph_image_line_becomes_its_png_and_its_pdf(tmp_path):
+def test_graph_image_line_becomes_its_interactive_view(tmp_path):
     (tmp_path / "map").mkdir()
     (tmp_path / "map" / "graph.svg").write_text('<?xml version="1.0"?>\n<!-- opsci-graph 0123 -->\n<svg/>\n')
     (tmp_path / "map" / "graph.png").write_bytes(b"png")
-    (tmp_path / "map" / "graph.pdf").write_bytes(b"%PDF")
+    (tmp_path / "map" / "graph.html").write_text(
+        '<html><script id="opsci-graph-data" type="application/json">'
+        '{"cards":[{"id":"t01-noise","href":"../x.md"}],"boxes":[]}</script></html>')
     blocks = nb.md_to_blocks("Text.\n\n![Project graph](graph.svg)\n",
-                             mirror.image_resolver(tmp_path, tmp_path / "map"))
+                             mirror.image_resolver(tmp_path, tmp_path / "map", {"t01-noise": "https://n/1"}))
     assert [(b["type"], b.get("_local", {}).get("path")) for b in blocks] == [
-        ("paragraph", None), ("image", "map/graph.png"), ("pdf", "map/graph.pdf")]
+        ("paragraph", None), ("embed", "map/graph.html")]
+    data = blocks[1]["_local"]["data"]
+    assert '"url":"https://n/1"' in data and "../x.md" not in data  # the page link, not the file
 
 
 def test_rich_text_limits_of_100_items():
@@ -872,4 +876,4 @@ def test_graph_image_uploads_its_png(tmp_path):
     resolve = mirror.image_resolver(tmp_path, tmp_path / "map")
     assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.svg"  # control: no PNG
     (tmp_path / "map/graph.png").write_bytes(b"\x89PNG")
-    assert [b["_local"]["path"] for b in resolve("graph.svg", "Project graph")] == ["map/graph.png"]
+    assert resolve("graph.svg", "Project graph")["_local"]["path"] == "map/graph.png"

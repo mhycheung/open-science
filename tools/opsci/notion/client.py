@@ -175,18 +175,23 @@ class Client:
 
     def upload(self, path: Path) -> str:
         """Upload one file (single part, at most MAX_UPLOAD); return the file upload id."""
-        size = path.stat().st_size
-        if size > MAX_UPLOAD:
+        if path.stat().st_size > MAX_UPLOAD:
             raise NotionError(f"{path.name} is over {MAX_UPLOAD // 2**20} MiB, the upload limit")
-        ctype = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
-        fu = self.call("POST", "/file_uploads", {"filename": path.name, "content_type": ctype})
+        return self.upload_bytes(path.name, path.read_bytes())
+
+    def upload_bytes(self, name: str, data: bytes) -> str:
+        """Upload ``data`` as a file called ``name``; return the file upload id."""
+        if len(data) > MAX_UPLOAD:
+            raise NotionError(f"{name} is over {MAX_UPLOAD // 2**20} MiB, the upload limit")
+        ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
+        fu = self.call("POST", "/file_uploads", {"filename": name, "content_type": ctype})
         boundary = uuid.uuid4().hex
-        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{path.name}\"\r\n"
-                f"Content-Type: {ctype}\r\n\r\n").encode() + path.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
+        body = (f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{name}\"\r\n"
+                f"Content-Type: {ctype}\r\n\r\n").encode() + data + f"\r\n--{boundary}--\r\n".encode()
         r = self._request("POST", f"{self.base}/file_uploads/{fu['id']}/send", body,
                           {"Content-Type": f"multipart/form-data; boundary={boundary}"})
         if r.get("status") != "uploaded":
-            raise NotionError(f"upload of {path.name} did not complete (status {r.get('status')})")
+            raise NotionError(f"upload of {name} did not complete (status {r.get('status')})")
         return fu["id"]
 
 

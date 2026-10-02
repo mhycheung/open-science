@@ -34,6 +34,7 @@ import json
 import re
 from pathlib import Path
 
+from .. import graphview
 from ..nodes import TASK_ROOT_GLOBS, scan
 from . import blocks as nb
 from .client import MAX_UPLOAD, NotionError
@@ -179,10 +180,21 @@ def task_finder(links: dict):
 
 # ---------------------------------------------------------------- render
 
-def image_resolver(root: Path, base: Path):
+def image_resolver(root: Path, base: Path, links: dict | None = None):
     """For md_to_blocks: an image line whose file exists in the project becomes an image
     placeholder with the file's path and hash (the sync uploads it and fills the block). A
-    graph image (opsci.graphdraw) becomes its PNG, then its PDF, which Notion's viewer zooms."""
+    graph image (opsci.graphdraw) becomes its interactive view, an HTML block whose cards
+    link to their pages (``links``: {task or result id: URL}); without one, its PNG."""
+    def view(p: Path, alt: str):
+        if not p.is_file() or not p.is_relative_to(root.resolve()):
+            return None
+        html = graphview.with_links(p.read_text(encoding="utf-8"), links or {})
+        if len(html.encode()) > MAX_UPLOAD:
+            return None
+        return {"object": "block", "type": "embed", "embed": {},
+                "_local": {"path": str(p.relative_to(root.resolve())), "sha": _sha(html.encode()), "alt": alt,
+                           "data": html}}
+
     def one(p: Path, alt: str):
         if not p.is_file() or p.suffix.lower() not in PLOT_EXT or not p.is_relative_to(root.resolve()) \
                 or p.stat().st_size > MAX_UPLOAD:
@@ -196,16 +208,17 @@ def image_resolver(root: Path, base: Path):
         if re.match(r"[a-z]+://", target):
             return None
         p = (base / target.split("#")[0]).resolve()
+        if p.suffix.lower() == ".svg" and p.with_suffix(".html").is_file():
+            return view(p.with_suffix(".html"), alt) or one(p.with_suffix(".png"), alt)
         if p.suffix.lower() == ".svg" and p.with_suffix(".png").is_file():
-            out = [b for b in (one(p.with_suffix(".png"), alt), one(p.with_suffix(".pdf"), alt)) if b]
-            return out or None
+            return one(p.with_suffix(".png"), alt)
         return one(p, alt)
     return resolve
 
 
-def _md(root: Path, path: Path, text: str | None = None) -> list:
+def _md(root: Path, path: Path, text: str | None = None, links: dict | None = None) -> list:
     """md_to_blocks for a project file, with its figures resolved relative to the file."""
-    return nb.md_to_blocks(text if text is not None else _read(path), images=image_resolver(root, path.parent))
+    return nb.md_to_blocks(text if text is not None else _read(path), images=image_resolver(root, path.parent, links))
 
 
 def render(root: Path, links: dict | None = None) -> list[dict]:
@@ -213,6 +226,9 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
     tasks and results into links to their pages."""
     pages = []
     finder = task_finder(links or {})
+
+    def md(path: Path, text: str | None = None) -> list:
+        return _md(root, path, text, links)
 
     def page(key, title, blocks, kind="page", props=None, plots=(), icon=None):
         self_url = (links or {}).get(key.split(":", 1)[1]) if key.startswith(("task:", "result:")) else None
@@ -235,11 +251,11 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
         blocks = nb.md_to_blocks(_read(root / "map" / "README.md"))
         for f in ("graph.md", "claims.md", "dead_ends.md"):
             if (root / "map" / f).exists():
-                blocks += [nb.blk("divider")] + nb.collapse(nb.demote(_md(root, root / "map" / f)), {"Nodes"})
+                blocks += [nb.blk("divider")] + nb.collapse(nb.demote(md(root / "map" / f)), {"Nodes"})
         page("map", "Map", blocks, icon="🗺️")
 
     if (root / "results" / "README.md").exists():
-        page("results", "Milestone results", _md(root, root / "results" / "README.md"), icon="🏆")
+        page("results", "Milestone results", md(root / "results" / "README.md"), icon="🏆")
 
     logs = sorted((root / "log").glob("[0-9]*.md"), reverse=True)
     blocks = [b for p in logs for b in nb.demote(nb.md_to_blocks(_read(p)))]
@@ -263,10 +279,10 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
             fm, body = nb.split_front_matter(_read(ctx))
             tid = fm.get("id", td.name)
             body = re.sub(r"\A\s*# .*\n", "", nb.strip_generated(body))   # the row title has it
-            blocks = _md(root, ctx, body)
+            blocks = md(ctx, body)
             res = td / "results" / "README.md"
             if res.exists():
-                inner = _md(root, res, re.sub(r"\A\s*# .*\n", "", nb.strip_generated(_read(res))))
+                inner = md(res, re.sub(r"\A\s*# .*\n", "", nb.strip_generated(_read(res))))
                 blocks.append(nb.toggle("Results", nb.demote(inner, 2)))
             for name, label in (("plan.md", "Plan"), ("map.md", "Task map"), ("log.md", "Task log")):
                 if (td / name).exists():
@@ -294,7 +310,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
                  "Kind": n.get("kind"), "Status": n.get("status"),
                  "Milestone": bool(n.get("milestone")), "Verification": n.get("verification"),
                  "Task": task, "Summary": str(n.get("summary", ""))}
-        page(f"result:{n.id}", props["Name"], _md(root, f, body), kind="result", props=props)
+        page(f"result:{n.id}", props["Name"], md(f, body), kind="result", props=props)
     return pages
 
 
@@ -414,7 +430,10 @@ class Mirror:
         for b in blocks:
             if "_local" in b:
                 loc = b["_local"]
-                fid = self.p.upload(self.st, self.p.root / loc["path"], loc["sha"])
+                if "data" in loc:  # a file written for Notion (a graph's view with its page links)
+                    fid = self.p.upload_data(self.st, loc["path"], loc["data"].encode(), loc["sha"])
+                else:
+                    fid = self.p.upload(self.st, self.p.root / loc["path"], loc["sha"])
                 cap = nb._t(loc["path"], {"code": True, "color": "gray"})
                 b = nb.media(fid, cap, kind=b["type"])
             else:

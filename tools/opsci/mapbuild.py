@@ -4,6 +4,7 @@ map/dead_ends.md from the node headers."""
 from __future__ import annotations
 
 import fnmatch
+import posixpath
 import subprocess
 from pathlib import Path, PurePosixPath
 
@@ -194,7 +195,26 @@ def drawings(all_nodes: list[Node], root_has, bib: dict[str, str] | None = None,
                                                      if n.path.startswith(pre)], badges)
             out[f"{sub}/map/claims"] = results.claims_drawing([n for n in all_nodes if n.path.startswith(pre)], bib,
                                                               badges)
-    return {k: v for k, v in out.items() if v}
+    return {k: _with_details(v, k, all_nodes) for k, v in out.items() if v}
+
+
+HIDDEN_BADGES = ("not published", "hard private")
+
+
+def _with_details(d: dict, base: str, all_nodes: list[Node]) -> dict:
+    """Drawing ``d`` (image ``base``) with each card's summary and each card's and box's
+    link to its file, relative to the image, for the interactive view (``graphview``). A
+    node labelled as not published gets neither."""
+    by_id = {n.id: n for n in all_nodes}
+    home = posixpath.dirname(base)
+    for x in d["cards"] + d["boxes"]:
+        n = by_id.get(x["id"])
+        if n is None or x.get("badge") in HIDDEN_BADGES:
+            continue
+        x["href"] = posixpath.relpath(n.path, home)
+        if "kicker" not in x and n.get("summary"):
+            x["summary"] = str(n.get("summary"))
+    return d
 
 
 def draw(root: Path, draws: dict[str, dict], res: ScanResult, only: set[str] | None = None) -> list[str]:

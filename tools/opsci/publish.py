@@ -458,11 +458,11 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
         unexported = {n.id: "not published" for n in map_nodes if n.path not in set(files)}
         for base, d in mapbuild.drawings(map_nodes, lambda sub: f"{sub}/map/graph.md" in files,
                                          results.read_bib(snap), unexported).items():
-            if not any(f"{base}.{x}" in files for x in ("svg", "png", "pdf")):
+            if not any(f"{base}.{x}" in files for x in ("svg", "png", "html")):
                 continue
             try:
                 graphdraw.render(d, tree / base)
-                rebuilt += [f for f in (f"{base}.svg", f"{base}.png", f"{base}.pdf") if f in files]
+                rebuilt += [f for f in (f"{base}.svg", f"{base}.png", f"{base}.html") if f in files]
             except (graphdraw.DrawError, OSError, subprocess.SubprocessError) as exc:
                 rprobs.append(Problem("map", f"{base}.svg", f"cannot redraw the graph image for the export: {exc}"))
     return Export(sha, files, excluded, export_id(tree, files), tree, snap, exported_nodes, rebuilt,
