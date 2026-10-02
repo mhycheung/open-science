@@ -175,7 +175,7 @@ function tint(hex,a){var n=parseInt(hex,16),r=n>>16,g=(n>>8)&255,b=n&255;functio
 function link(x){return x.url||(D.onlyUrls?null:x.href)||null}
 // In the Notion app on iPad and iPhone a link from an HTML block opens the browser (notion://
 // links do nothing): the sync lists the pages as native links under the block instead.
-var UA=navigator.userAgent,MOBILE=/iPad|iPhone|iPod/.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1);
+var UA=navigator.userAgent,MOBILE=['iPad','iPhone','iPod'].some(function(w){return UA.indexOf(w)>=0})||(UA.indexOf('Macintosh')>=0&&navigator.maxTouchPoints>1);
 function rel(map,a,b){(map[a]=map[a]||[]).push(b)}
 // boxes, under the arrows
 D.boxes.forEach(function(b){boxById[b.id]=b;var e=el('div','box'+(b.style==='brainstorm'?' brain':''));world.insertBefore(e,svg);place(e,b);
