@@ -109,13 +109,14 @@ html,body{margin:0;height:100%;overflow:hidden;font:13px/1.35 -apple-system,Blin
 .box .hd a{color:inherit;text-decoration:none;cursor:pointer}
 .box .hd a:hover b{text-decoration:underline}
 .box.brain .hd{color:#c2410c}
-.card{position:absolute;box-sizing:border-box;background:#fff;border:1px solid;border-radius:4px;padding:3px 5px 3px 9px;overflow:hidden;cursor:pointer;line-height:1.2}
+.card{position:absolute;box-sizing:border-box;background:#fff;border:1px solid;border-radius:4px;padding:3px 5px 3px 9px;overflow:hidden;cursor:pointer;line-height:1.2;font-size:10px}
+.card.grow{height:auto !important;z-index:1}
 .card:hover{box-shadow:0 0 0 2px #93c5fd}
 .card .bar{position:absolute;left:1px;top:1px;bottom:1px;width:3px}
-.card .id{font:8px/1.2 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#6b7280;word-break:break-all}
-.card .t{font-size:10px;margin-top:1px}
-.card .m{font-size:8px;font-style:italic;color:#6b7280;margin-top:2px}
-.card .g{font:8px ui-monospace,Menlo,monospace;color:#6d28d9;margin-top:2px}
+.card .id{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.8em;color:#6b7280;word-break:break-all}
+.card .t{margin-top:1px}
+.card .m{font-size:.8em;font-style:italic;color:#6b7280;margin-top:2px}
+.card .g{font-family:ui-monospace,Menlo,monospace;font-size:.8em;color:#6d28d9;margin-top:2px}
 .card.premise{background:#fafafa}
 .card.premise .t{color:#555}
 .card.verif{border-style:double;border-width:3px}
@@ -134,7 +135,8 @@ html,body{margin:0;height:100%;overflow:hidden;font:13px/1.35 -apple-system,Blin
 #panel h3{margin:4px 0 4px;font-size:14px}
 #panel .pid{font:11px ui-monospace,Menlo,monospace;color:#6b7280;word-break:break-all;margin-top:4px}
 #panel .meta{color:#6b7280;font-style:italic;font-size:12px}
-#panel a.open{display:inline-block;margin:8px 0 2px;padding:4px 10px;background:#2563eb;color:#fff;border-radius:4px;text-decoration:none}
+#panel a.open{display:inline-block;margin:8px 6px 2px 0;padding:4px 10px;background:#2563eb;color:#fff;border-radius:4px;text-decoration:none}
+#panel a.open.alt{background:#fff;color:#2563eb;border:1px solid #2563eb;padding:3px 9px}
 #panel p{margin:8px 0}
 #panel b.h{display:block;margin-top:10px;font-size:12px;color:#374151}
 #panel ul{padding-left:16px;margin:3px 0}
@@ -162,10 +164,15 @@ function stat(s){return C[s]?s:'active'}
 function badge(parent,b){var s=el('span','badge',parent,b);s.style.background=BADGE[b]||'#555';return s}
 function tint(hex,a){var n=parseInt(hex,16),r=n>>16,g=(n>>8)&255,b=n&255;function m(c){return Math.round(255-(255-c)*a)}return 'rgb('+m(r)+','+m(g)+','+m(b)+')'}
 function link(x){return x.url||(D.onlyUrls?null:x.href)||null}
+// A notion.so link opens the browser from inside an HTML block; notion:// opens the Notion app.
+var UA=navigator.userAgent,APP=/iPad|iPhone|iPod/.test(UA)||(/Macintosh/.test(UA)&&navigator.maxTouchPoints>1)||/Notion\//.test(UA);
+function appUrl(u){return /^https:\/\/(www\.)?notion\.so\//.test(u||'')?u.replace(/^https:\/\//,'notion://'):null}
+function primary(x){var u=link(x),a=appUrl(u);return APP&&a?a:u}
+function go(u){if(/^notion:/.test(u))window.location.href=u;else window.open(u,'_blank','noopener')}
 function rel(map,a,b){(map[a]=map[a]||[]).push(b)}
 // boxes, under the arrows
 D.boxes.forEach(function(b){boxById[b.id]=b;var e=el('div','box'+(b.style==='brainstorm'?' brain':''));world.insertBefore(e,svg);place(e,b);
-  var h=el('div','hd',e),u=link(b),k=u?el('a',null,h):h;if(u){k.href=u;k.target='_blank';k.rel='noopener';k.title=D.linkLabel}
+  var h=el('div','hd',e),u=primary(b),k=u?el('a',null,h):h;if(u){k.href=u;k.title=D.linkLabel;if(/^notion:/.test(u))k.onclick=function(ev){ev.preventDefault();go(u)};else{k.target='_blank';k.rel='noopener'}}
   el('b',null,k,b.kicker);if(b.badge){h.appendChild(document.createTextNode(' '));badge(h,b.badge)}
   if(b.title){el('br',null,h);el('i',null,h,b.title)}b.el=e;
   if(u)k.addEventListener('pointerdown',function(ev){ev.stopPropagation()})});
@@ -188,7 +195,12 @@ D.cards.forEach(function(c){byId[c.id]=c;var s=stat(c.status),col=C[s],e=el('div
   if(c.tags&&c.tags.length)el('div','g',e,'['+c.tags.join(', ')+']');if(c.badge){badge(e,c.badge);e.classList.add('hasb')}
   c.el=e;if(c.box){rel(UP,c.id,c.box);rel(DOWN,c.box,c.id)}
   e.addEventListener('click',function(ev){ev.stopPropagation();if(!moved)select(c)});
-  e.addEventListener('dblclick',function(ev){ev.stopPropagation();var u=link(c);if(u)window.open(u,'_blank','noopener')})});
+  e.addEventListener('dblclick',function(ev){ev.stopPropagation();var u=primary(c);if(u)go(u)})});
+// the text of a card was measured by LaTeX; a browser font may need more room: shrink it, then grow the card
+function fitCards(){D.cards.forEach(function(c){var e=c.el,s=10;e.classList.remove('grow');e.style.fontSize='';
+  while(e.scrollHeight>e.clientHeight+1&&s>7){s-=0.5;e.style.fontSize=s+'px'}
+  if(e.scrollHeight>e.clientHeight+1)e.classList.add('grow')})}
+fitCards();
 // status filters
 var chips=document.getElementById('chips');
 Object.keys(C).forEach(function(s){if(!D.cards.some(function(c){return stat(c.status)===s}))return;
@@ -209,10 +221,13 @@ function select(c){sel=c;var up=walk(c.id,UP),dn=walk(c.id,DOWN);lineage={};line
 function clear(){sel=null;lineage=null;P.style.display='none';refresh()}
 function showPanel(c){P.innerHTML='';var x=el('button','x',P,'×');x.title='Close';x.onclick=clear;
   el('div','pid',P,c.id);el('h3',null,P,c.title||c.id);if(c.meta)el('div','meta',P,c.meta);
-  var u=link(c);if(u){var a=el('a','open',P,D.linkLabel+' ↗');a.href=u;a.target='_blank';a.rel='noopener'}
+  var u=link(c),au=appUrl(u);
+  if(u&&au){button(au,'Open in the Notion app',!APP);button(u,'Open in the browser',APP)}else if(u)button(u,D.linkLabel+' ↗',false);
   if(c.summary)el('p',null,P,c.summary);if(c.tags&&c.tags.length)el('p',null,P,'Uses: '+c.tags.join(', '));
   list('Rests on',(UP[c.id]||[]));list(D.legend?D.legend.charAt(0).toUpperCase()+D.legend.slice(1):'Used by',(DOWN[c.id]||[]));
   P.style.display='block';math(P)}
+function button(u,label,alt){var a=el('a','open'+(alt?' alt':''),P,label);a.href=u;
+  if(/^notion:/.test(u))a.onclick=function(e){e.preventDefault();go(u)};else{a.target='_blank';a.rel='noopener'}}
 function list(t,ids){ids=ids.filter(function(i){return byId[i]||boxById[i]});if(!ids.length)return;el('b','h',P,t);var ul=el('ul',null,P);
   ids.forEach(function(i){var a=el('a',null,el('li',null,ul),i);a.onclick=function(){if(byId[i]){select(byId[i]);centerOn(byId[i])}else centerOn(boxById[i])}})}
 // pan and zoom
@@ -261,7 +276,7 @@ function math(root){if(window.renderMathInElement)renderMathInElement(root,{deli
 function load(src,cb){var s=document.createElement('script');s.src=src;s.onload=cb;document.head.appendChild(s)}
 if(D.cards.concat(D.boxes).some(function(x){return /\$[^$]+\$/.test((x.title||'')+(x.summary||''))})){
   var css=document.createElement('link');css.rel='stylesheet';css.href='https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css';document.head.appendChild(css);
-  load('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js',function(){load('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js',function(){math(world)})})}
+  load('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js',function(){load('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js',function(){math(world);fitCards()})})}
 window.addEventListener('resize',drawMini);
 first();refresh();
 })();
