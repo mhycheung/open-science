@@ -11,6 +11,12 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- The first publish no longer stops at the `site-link` check. When the README does not link
+  to the project site, the export adds `The project site: <URL>` under its title (the URL is
+  `site_url:` or the GitHub Pages URL of `public_repo:`), and the publish report says so in
+  a note; the private README is not changed. The `site-link` check now fails only for a
+  README the export cannot change. `open-science-publish:publish` step 3 is updated. No
+  layout change.
 - On Claude Code, session jumps are done by a Claude Code mod (`hooks/context_mod.js` in
   `open-science-context`): code Claude Code runs inside itself (Claude Code 2.1.287 or
   later, with mods switched on for the account). It clears the session with Claude Code's own

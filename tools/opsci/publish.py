@@ -130,6 +130,7 @@ class Export:
     redacted: dict = field(default_factory=dict)  # exported path -> number of redacted spans
     redaction_problems: list = field(default_factory=list)
     omitted: dict = field(default_factory=dict)  # exported path -> number of omitted spans
+    site_link: str = ""  # the site URL whose line the export added to README.md; "" if none was added
 
 
 # --------------------------------------------------------------------------- git helpers
@@ -376,6 +377,34 @@ def omit(text: str) -> tuple[str, int, list[str]]:
     return new, len(spans), probs
 
 
+def add_site_link(text: str, url: str) -> str | None:
+    """``text`` (a README) with the line `The project site: <url>` under its title, the first
+    `# ` heading outside the front matter and code blocks; at the top of the body when it has
+    no title. None when the text already links to ``url``."""
+    if url.rstrip("/") in text:
+        return None
+    lines = text.splitlines(keepends=True)
+    start = 0
+    _, present = nodes.read_front_matter(text)
+    if present and lines and lines[0].strip() == "---":
+        start = next((i + 1 for i in range(1, len(lines)) if lines[i].strip() == "---"), 0)
+    at, fence = None, False
+    for i in range(start, len(lines)):
+        if lines[i].lstrip().startswith(("```", "~~~")):
+            fence = not fence
+        elif not fence and lines[i].startswith("# "):
+            at = i + 1
+            break
+    line = f"The project site: <{url}>\n"
+    if at is None:
+        rest = "".join(lines[start:])
+        return "".join(lines[:start]) + line + ("\n" + rest if rest.strip() else "")
+    head, rest = "".join(lines[:at]), "".join(lines[at:])
+    if not head.endswith("\n"):
+        head += "\n"
+    return head + "\n" + line + ("\n" + rest.lstrip("\n") if rest.strip() else "")
+
+
 def _reparse(node, text: str):
     """The node with its header read from redacted text, or None if the header broke."""
     raw = text if PurePosixPath(node.path).name == "node.yaml" else nodes.read_front_matter(text)[0]
@@ -438,6 +467,15 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
                                           "redaction: put the redacted value in quotes"))
                 else:
                     exported_nodes[by_path[f]] = node
+    # The public README links to the project site. A README without the link gets it at the
+    # export, so that the first publish needs no edit before the site exists.
+    url, linked = site_url(man), ""
+    if url and "README.md" in files:
+        text = _read(tree / "README.md")
+        new = add_site_link(text, url) if text is not None else None
+        if new is not None:
+            (tree / "README.md").write_text(new, encoding="utf-8")
+            linked = url
     rebuilt, map_nodes = [], []
     if is_template_project(snap):
         # The committed map links every node. The exported copy is rebuilt: it leaves out the
@@ -466,7 +504,7 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
             except (graphdraw.DrawError, OSError, subprocess.SubprocessError) as exc:
                 rprobs.append(Problem("map", f"{base}.svg", f"cannot redraw the graph image for the export: {exc}"))
     return Export(sha, files, excluded, export_id(tree, files), tree, snap, exported_nodes, rebuilt,
-                  map_nodes, map_private if rebuilt else [], hard, redacted, rprobs, omitted)
+                  map_nodes, map_private if rebuilt else [], hard, redacted, rprobs, omitted, linked)
 
 
 def apply_map_overrides(map_nodes: list, exported: set, path: Path) -> tuple[list, list[Problem], list[str]]:
@@ -1123,7 +1161,9 @@ def site_url(man: Manifest) -> str | None:
 
 
 def check_site_link(ex: Export, man: Manifest) -> list[Problem]:
-    """The published README links to the project site, so that a reader of the public repo finds it."""
+    """The published README links to the project site, so that a reader of the public repo finds
+    it. The export adds the link when the README lacks it (`add_site_link`); this check catches
+    a README the export could not change (not UTF-8 text)."""
     url = site_url(man)
     if not url or "README.md" not in ex.files:
         return []
@@ -1161,6 +1201,10 @@ def run_checks(root: Path, ex: Export) -> tuple[list[Problem], dict]:
     every = all_nodes(ex.snapshot)
     pp, pnotes = check_private_content(ex, every)
     rp, rnotes = check_redaction(ex)
+    if ex.site_link:
+        rnotes.append(f"site link: the export added `The project site: <{ex.site_link}>` under the title "
+                      "of README.md (the private README.md does not link to the site; add the line there "
+                      "to keep it in the private repo too)")
     probs += cp + vp + check_references(ex, every) + pp + rp
     notes += rnotes + pnotes
     _, ran = secretscan.scan(ex.tree, [])  # names of the scanners only

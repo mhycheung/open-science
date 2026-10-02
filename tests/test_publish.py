@@ -282,23 +282,64 @@ def test_pages_url(repo, url):
     assert publish.pages_url(repo) == url
 
 
-def test_readme_must_link_the_site(proj):
+def test_export_adds_the_site_link(proj):
+    # the first publish needs no README edit: the export adds the line under the title
     m = proj / "publish/manifest.yaml"
     base = m.read_text()
     m.write_text(base + "public_repo: git@github.com:some-lab/demo.git\n")
     commit(proj, "public repo")
-    probs = [p for p in problems(proj)[0] if p.check == "site-link"]
-    assert len(probs) == 1 and "https://some-lab.github.io/demo/" in probs[0].message
     readme = proj / "README.md"
-    readme.write_text(readme.read_text().replace("\n", "\n\nThe project site: <https://some-lab.github.io/demo/>\n", 1))
+    private = readme.read_text()
+    probs, ex = problems(proj)
+    assert "site-link" not in {p.check for p in probs}
+    out = (ex.tree / "README.md").read_text()
+    title = private.splitlines()[0]
+    assert private.startswith(f"{title}\n\n")
+    assert out == private.replace(f"{title}\n\n", f"{title}\n\nThe project site: <https://some-lab.github.io/demo/>\n\n", 1)
+    assert ex.site_link == "https://some-lab.github.io/demo/"
+    assert any("site link" in n for n in publish.run_checks(proj, ex)[1]["notes"])
+    assert readme.read_text() == private  # the private file is not changed
+    # a README that already links to the site is exported as it is
+    readme.write_text(private.replace("\n", "\n\nThe project site: <https://some-lab.github.io/demo/>\n", 1))
     commit(proj, "site link")
-    assert "site-link" not in checks_of(proj)
+    _, ex = problems(proj)
+    assert (ex.tree / "README.md").read_text() == readme.read_text() and ex.site_link == ""
+    # a custom domain: the export adds its link too
     m.write_text(base + "public_repo: git@github.com:some-lab/demo.git\nsite_url: https://qnm.example.org\n")
     commit(proj, "custom domain")
-    assert "site-link" in checks_of(proj)
+    probs, ex = problems(proj)
+    assert "site-link" not in {p.check for p in probs} and ex.site_link == "https://qnm.example.org"
+    assert "The project site: <https://qnm.example.org>" in (ex.tree / "README.md").read_text()
+    # no site: nothing is added
     m.write_text(base + "public_repo: git@github.com:some-lab/demo.git\nsite_url: \"\"\n")
     commit(proj, "no site")
-    assert "site-link" not in checks_of(proj)
+    probs, ex = problems(proj)
+    assert "site-link" not in {p.check for p in probs} and ex.site_link == ""
+
+
+def test_add_site_link():
+    url = "https://a.github.io/b/"
+    line = f"The project site: <{url}>"
+    assert publish.add_site_link(f"# T\n\nText <{url}>.\n", url) is None
+    assert publish.add_site_link(f"see https://a.github.io/b\n", url) is None
+    assert publish.add_site_link("# T\nText.\n", url) == f"# T\n\n{line}\n\nText.\n"
+    assert publish.add_site_link("# T", url) == f"# T\n\n{line}\n"
+    # the front matter and code blocks are not the title
+    assert publish.add_site_link("---\nid: x\n---\n```\n# no\n```\n# T\n", url) \
+        == f"---\nid: x\n---\n```\n# no\n```\n# T\n\n{line}\n"
+    # no title: the line goes at the top of the body
+    assert publish.add_site_link("Text.\n", url) == f"{line}\n\nText.\n"
+    assert publish.add_site_link("", url) == f"{line}\n"
+
+
+def test_site_link_check_catches_a_readme_the_export_cannot_change(proj):
+    m = proj / "publish/manifest.yaml"
+    m.write_text(m.read_text() + "public_repo: git@github.com:some-lab/demo.git\n")
+    commit(proj, "public repo")
+    ex = publish.export(proj, proj.parent / "exsl")
+    (ex.tree / "README.md").write_text("# T\n")
+    probs = publish.check_site_link(ex, publish.load_manifest(proj))
+    assert len(probs) == 1 and "https://some-lab.github.io/demo/" in probs[0].message
 
 
 def test_check_builds_the_site_of_the_export(proj):

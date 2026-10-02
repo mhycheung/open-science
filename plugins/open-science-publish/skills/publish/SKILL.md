@@ -49,9 +49,9 @@ and may be run whenever they help.
    this is an ongoing, unpublished project. Many results are very preliminary and
    unverified." The user may change the text or decline. Write the answer into the manifest
    (`site_banner: "<text>"`, or `""` for none) and commit. Never skip the question.
-   The `site-link` check refuses a `README.md` that does not link to the project site (the
-   GitHub Pages URL of `public_repo`, or `site_url:` in the manifest for a custom domain):
-   add `The project site: <URL>` under the README's title, commit, and check again.
+   A README without a link to the site gets `The project site: <URL>` under its title in
+   the export (a report note says so); tell the user. `site-link` fails only when the export
+   cannot add it: then add the line by hand, commit, and check again.
 
 4. **Hard-private mentions: the user decides each one.** When `references` or
    `private-content` reports hard-private material (`AGENTS.md` §6), list **all** of the
