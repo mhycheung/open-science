@@ -31,14 +31,15 @@ the map and the node headers.
 2. **The export is a snapshot of one commit.** `opsci publish export` takes the committed
    tree of one commit (default `HEAD`), so uncommitted changes and the working tree never
    leak. It copies the allowed files and computes an **export id**, a hash of every exported
-   path and its content. It refuses a symbolic link among the exported files. It replaces
+   path and its content, and of your overrides (see [Overriding a finding](#overriding-a-finding)). It refuses a symbolic link among the exported files. It replaces
    each redaction marker with `[redacted (<reason>)]` (see [Redaction](#redaction)), and
    drops each omission span (see [Omission](#omission)). It
    rebuilds `map/graph.md` and `map/dead_ends.md`: hard-private nodes are left out, and
    every other node whose files are not exported is named without a link (see
    [Unpublished nodes in the map](#unpublished-nodes-in-the-map)).
 3. **The checks.** `opsci publish check` runs every check below on the export and writes a
-   report. Any problem fails the publish.
+   report. Any problem fails the publish, unless it is of a kind you may override and you
+   have overridden it (see [Overriding a finding](#overriding-a-finding)).
 4. **The review.** You read the diff since the last publish. If you publish with the
    `open-science-publish:publish` skill, the agent also reviews it with the review rubric
    and writes its findings into the report. The review never blocks the publish by itself;
@@ -74,9 +75,65 @@ the map and the node headers.
 
 The `map` and `status` checks run only in a project made from the template (one with
 `AGENTS.md` and `config/framework.yaml`); elsewhere the report notes that they were skipped.
-The leak scan has no override flag: if a legitimate string matches, change the string. A
-failed check is fixed at its source, never by removing the check or widening the manifest
-without your decision.
+A failed check is fixed at its source, never by removing the check or widening the manifest
+without your decision. A few kinds of finding are often legitimate; you may accept those
+instead (next section). For every other finding, if a legitimate string matches, change the
+string.
+
+## Overriding a finding
+
+Some findings are worth a look but are not always wrong. You may accept them, kind by kind,
+in `overrides:` in `publish/manifest.yaml`:
+
+| check | kind | why it is flagged |
+|---|---|---|
+| `leak` | `slurm-job-id` | a SLURM job number (`SLURM` or `jobid=` followed by a number) records that work ran on a batch cluster; with other details it could tie the text to an account there, but by itself it names no person, machine or path |
+| `leak` | `slurm-array-id` | a number such as `<job>_<task>` (six to nine digits, an underscore, a short number) looks like a SLURM array job and task number (it may also be an ordinary number) |
+| `leak` | `slurm-out-file` | a SLURM log name such as `slurm-<job>.out` carries a job number |
+| `copyright` | `long-quote` | a quotation of more than 150 words may copy more of another author's text than fair use allows; a quote marked as a quote and cited next to it is usually fine |
+| `copyright` | `lit-cache-text` | a run of 40 or more words shared with a source in `lit_cache/` may copy another author's text without saying so; text marked as a quote and cited next to it is usually fine |
+
+```yaml
+overrides:
+  - check: leak
+    kind: slurm-job-id
+    paths: [tasks/**]          # optional: only these paths or globs; omit for every file
+    reason: Job numbers in run notes name no person or machine.
+    date: 2026-10-02           # the date of your decision
+  - check: copyright
+    kind: long-quote
+    reason: Quotes are marked as quotes and cited next to them.
+    date: 2026-10-02
+```
+
+Each entry needs `check`, `kind`, `reason` and `date`; `paths` is optional. An overridden
+finding does not fail the publish. The report lists every one of them under "Overridden by
+the user", under the override that covers it, so your approval still shows them. A leak in
+the built site (the `site` check) is overridden with the same text in the exported files, or
+by an override of its pattern with no `paths`. The overrides are part of the export id: a
+new override needs a new check and a new approval. The push writes the overridden leak
+patterns into the site workflow (`opsci site build --allow-leak <pattern>`), so the site
+build on the public repository accepts them too; `opsci site preview` accepts them as well.
+The report notes an override that no longer covers any finding.
+
+With the `open-science-publish:publish` skill, the agent lists the findings of each
+overridable kind, tells you why the kind is flagged, and asks whether to fix them or accept
+them. It writes an override only on your answer, never on its own judgement.
+
+Every other check and kind is never overridden, and the manifest refuses an entry for it:
+
+- `secret`: a token, key or password; once public it must be revoked;
+- the other `leak` patterns: your user name, the host name and domain, the values in
+  `config/site.local.yaml`, email addresses, IP addresses and absolute paths each name a
+  person, a machine or an account. The patterns in `publish/PRIVATE_POLICY.md` are your own
+  list: change the list instead;
+- `private-content`, `references`, `redaction` and `omission`: they protect hard-private
+  material and the markers that hide it;
+- `human-verified`: only you set that level, in a commit of your own;
+- `copyright` for a whole PDF, EPUB or DjVu outside a `type: paper` node: a copy of a work;
+- `policy`, `citation`, `status`, `map`, `evidence`, `site-link`, `map-overrides`, and a
+  `site` build that fails for a broken link: each has a direct fix in the private
+  repository.
 
 ## The report
 
@@ -85,7 +142,9 @@ since the last publish as `.diff` (the whole export on the first publish). The r
 
 - the private commit, the export id, the date of the last publish;
 - the number of files exported and excluded;
-- the result of the checks, with every problem;
+- the result of the checks, with every problem; the failures of a kind you may override,
+  grouped by kind with why each kind is flagged; and every finding you overrode, under
+  "Overridden by the user";
 - the verification level of every exported node;
 - every excluded file, with the reason (not in the manifest, listed under `never` or
   `hard_private`, the task's or node's `privacy` tier);
@@ -208,7 +267,7 @@ It refuses when:
 
 - the export of the commit has a different id from the one you approved (the export changed
   since the report; check and review again);
-- any check fails;
+- any check fails (an overridden finding does not fail);
 - the public repository has changes the private one lacks (drift);
 - no public repository is set: set `public_repo:` in `publish/manifest.yaml` or pass
   `--public-repo <URL or path>`;
@@ -314,7 +373,7 @@ repository or a push, so you can look at it before publishing. It uses the manif
 
 | where | key | what |
 |---|---|---|
-| `publish/manifest.yaml` | `include`, `never`, `hard_private`, `policy`, `public_repo`, `status_exempt` | see [Project template and layout](project-template.md#publishmanifestyaml) |
+| `publish/manifest.yaml` | `include`, `never`, `hard_private`, `policy`, `public_repo`, `status_exempt`, `overrides` | see [Project template and layout](project-template.md#publishmanifestyaml) |
 | `publish/PRIVATE_POLICY.md` | the fenced block under "Patterns" | one regular expression per line, added to the leak scan |
 | `config/site.local.yaml` | `scratch`, `batch.account`, `batch.partition`, `identifiers` | literal values added to the leak scan |
 | `publish/LAST_PUBLISHED` | written by `opsci publish push` | the private and public commits of the last publish; `none` before the first |

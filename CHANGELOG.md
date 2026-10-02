@@ -11,6 +11,24 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Some publish-check findings can be overridden by the user. SLURM job numbers (`leak`
+  kinds `slurm-job-id`, `slurm-array-id`, `slurm-out-file`) and quotations (`copyright`
+  kinds `long-quote`, `lit-cache-text`) are often legitimate; a new manifest key
+  `overrides:` (entries with `check`, `kind`, `reason`, `date`, optional `paths`) accepts
+  them. Overridden findings no longer fail `opsci publish check` or the push; the report
+  lists each under `## Overridden by the user`, and lists the failures of overridable kinds
+  under `### Findings the user may override`, with why each kind is flagged. Leaks of the
+  same text in the built site follow the export's overrides. The overrides are part of the
+  export id. The push writes the overridden leak patterns into the site workflow, through
+  the new `opsci site build --allow-leak PATTERN`. Every other check and kind (secrets,
+  site identifiers, emails, IP addresses, absolute paths, private-policy patterns,
+  hard-private material, redaction, `human-verified`, whole PDFs) stays non-overridable,
+  and the manifest refuses an entry for it. `open-science-publish:publish` has a new step 4:
+  the agent explains each overridable kind and asks the user whether to fix or accept it,
+  and writes an override only on the user's answer (`reference/check-overrides.md`). The
+  template manifest shows a commented example. No layout change: existing manifests need
+  no edit.
+
 - The first publish no longer stops at the `site-link` check. When the README does not link
   to the project site, the export adds `The project site: <URL>` under its title (the URL is
   `site_url:` or the GitHub Pages URL of `public_repo:`), and the publish report says so in

@@ -408,9 +408,16 @@ def _dump(cfg: dict) -> str:
 
 
 def build(src: Path, out: Path, keep_config: Path | None = None,
-          banner: str | None = DEFAULT_BANNER) -> list[str]:
+          banner: str | None = DEFAULT_BANNER, allow_leaks=(), leaks: list | None = None) -> list[str]:
     """Build the site of public repo ``src`` into ``out``, with ``banner`` at the top of every
-    page (None or "" for none). Returns problems (empty = success)."""
+    page (None or "" for none). Returns problems (empty = success).
+
+    ``allow_leaks``: names of leak patterns the user overrode (``leakscan.OVERRIDABLE`` only);
+    their hits in the built site are not problems. ``leaks``: a list that receives the leak
+    hits instead of the problems, for a caller that decides on them itself (the publish check)."""
+    bad = set(allow_leaks) - set(leakscan.OVERRIDABLE)
+    if bad:
+        raise ValueError(f"leak pattern(s) {sorted(bad)} cannot be overridden")
     src, out = Path(src).resolve(), Path(out).resolve()
     work = Path(tempfile.mkdtemp(prefix="opsci-site-"))
     docs = work / "docs"
@@ -457,9 +464,17 @@ def build(src: Path, out: Path, keep_config: Path | None = None,
     staged = {p.relative_to(docs).as_posix() for p in docs.rglob("*") if p.is_file()}
     files = sorted(r for r in (p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file())
                    if r in staged or r not in theme)
-    hits = leakscan.scan_tree(out, leakscan.patterns_for(None), files)
-    problems += [f"leak in built site: {h.path} {h.pattern}: {h.match!r}" for h in hits]
+    hits = [h for h in leakscan.scan_tree(out, leakscan.patterns_for(None), files)
+            if h.pattern not in set(allow_leaks)]
+    if leaks is not None:
+        leaks += hits
+    else:
+        problems += [leak_message(h) for h in hits]
     return problems
+
+
+def leak_message(hit) -> str:
+    return f"leak in built site: {hit.path} {hit.pattern}: {hit.match!r}"
 
 
 def _theme_files() -> set[str]:
@@ -506,11 +521,13 @@ def running_commit() -> str | None:
     return None
 
 
-def workflow(root: Path, banner: str | None = DEFAULT_BANNER) -> str:
+def workflow(root: Path, banner: str | None = DEFAULT_BANNER, allow_leaks=()) -> str:
     """The GitHub Actions workflow that builds the site on the public repo and deploys it to Pages.
     It installs opsci over https from the framework repo in config/framework.yaml, at the commit of
-    the opsci running this publish (else at the recorded copied_at_commit). The banner is written
-    into the workflow, as the manifest that sets it is not published."""
+    the opsci running this publish (else at the recorded copied_at_commit). The banner, and the
+    leak patterns the user overrode (``allow_leaks``), are written into the workflow, as the
+    manifest that sets them is not published."""
+    allow = "".join(f" --allow-leak {name}" for name in sorted(set(allow_leaks)))
     repo, copied = _framework(root)
     url = _https(str(repo)) if repo else None
     commit = running_commit() or copied
@@ -543,7 +560,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: {install}
-      - run: opsci site build . --out _site --banner "$OPSCI_SITE_BANNER"
+      - run: opsci site build . --out _site --banner "$OPSCI_SITE_BANNER"{allow}
         env:
           OPSCI_SITE_BANNER: {json.dumps((banner or "").strip())}
       - uses: actions/upload-pages-artifact@v3

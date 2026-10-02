@@ -49,8 +49,10 @@ Check the line that names the file, and give the file explicitly if in doubt:
 ## Publishing
 
 **`opsci publish check` fails.** Fix each problem at its source in the private repository,
-commit, and check again. The leak scan has no override flag: if a legitimate string matches,
-change the string. Do not remove a check, and do not widen `publish/manifest.yaml` without
+commit, and check again. A few kinds of finding (SLURM job numbers, long or shared
+quotations) you may accept instead, in `overrides:` of the manifest; see
+[Overriding a finding](publishing.md#overriding-a-finding). For the rest, if a legitimate
+string matches, change the string. Do not remove a check, and do not widen `publish/manifest.yaml` without
 the user's decision. The checks are listed in
 [Publishing and the filter](publishing.md#the-checks).
 

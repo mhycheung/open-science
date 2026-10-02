@@ -74,7 +74,7 @@ def cmd_pull_public(args) -> int:
 
 
 def cmd_site_build(args) -> int:
-    problems = S.build(Path(args.src), Path(args.out), banner=args.banner)
+    problems = S.build(Path(args.src), Path(args.out), banner=args.banner, allow_leaks=args.allow_leak or ())
     for p in problems:
         print(f"error: {p}", file=sys.stderr)
     if not problems:
@@ -89,8 +89,12 @@ def cmd_site_preview(args) -> int:
     except P.PublishError as exc:
         return _fail(exc)
     args.src = ex.tree
+    man = P.load_manifest(ex.snapshot)
     if args.banner is None:
-        args.banner = P.load_manifest(ex.snapshot).site_banner
+        args.banner = man.site_banner
+    # The preview accepts the overridden leak patterns everywhere; `opsci publish check` applies
+    # each override's `paths`.
+    args.allow_leak = P.overridden_leak_patterns(man)
     return cmd_site_build(args)
 
 
@@ -135,6 +139,9 @@ def add_parser(sub) -> None:
     b.add_argument("--out", default="_site")
     b.add_argument("--banner", default=S.DEFAULT_BANNER,
                    help='text of the banner at the top of every page; "" for none (default: the preliminary-work warning)')
+    b.add_argument("--allow-leak", action="append", choices=sorted(P.leakscan.OVERRIDABLE), metavar="PATTERN",
+                   help="a leak pattern the user overrode in publish/manifest.yaml: its hits do not fail the "
+                        f"build (repeatable; one of {', '.join(sorted(P.leakscan.OVERRIDABLE))})")
     b.set_defaults(func=cmd_site_build)
     v = st.add_parser("preview", help="build the site of this project's current export, before publishing")
     v.add_argument("root", nargs="?", default=".")

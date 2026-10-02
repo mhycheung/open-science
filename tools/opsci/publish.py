@@ -46,7 +46,8 @@ STATUS_EXEMPT = ("README.md", "**/README.md", "**/*.caption.md", "AGENTS.md", "C
                  "verifications/*/log.md", "verifications/*/map.md", "verifications/*/subcontext/**",
                  "brainstorm/verifications/*/log.md", "brainstorm/verifications/*/map.md",
                  "brainstorm/verifications/*/subcontext/**")
-MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo", "site_banner", "site_url"}
+MANIFEST_KEYS = {"policy", "include", "never", "hard_private", "status_exempt", "public_repo", "site_banner", "site_url",
+                 "overrides"}
 POLICY_KEYS = {"default_privacy", "collaborators_agreed"}
 PRIVACY_TIERS = nodes.PRIVACY_TIERS
 # How unpublished nodes appear in the published map: groups that replace several nodes with
@@ -67,6 +68,23 @@ OMIT_LEFT_RE = re.compile(r"<!--\s*/?omit\b")
 PUBLISHER_SUFFIXES = (".pdf", ".epub", ".djvu")
 MAX_QUOTE_WORDS = 150
 SHARED_RUN_WORDS = 40
+# Findings the user may override in the manifest's `overrides:`: check -> finding kind -> why
+# the kind is flagged, in plain words for the user who decides (the report and the publish
+# skill show it). Only findings that are often legitimate and name no person, machine, path,
+# secret or private material are here. A `leak` found in the built site (check `site`) is
+# covered by the override of its pattern. Everything else is fixed at its source.
+OVERRIDABLE: dict[str, dict[str, str]] = {
+    "leak": dict(leakscan.OVERRIDABLE),
+    "copyright": {
+        "long-quote": f"A quotation of more than {MAX_QUOTE_WORDS} words may copy more of another "
+                      "author's text than fair use allows. A quote that is marked as a quote and "
+                      "cited next to it is usually fine.",
+        "lit-cache-text": f"The file shares a run of {SHARED_RUN_WORDS} or more words with a source "
+                          "in lit_cache/, so it may copy another author's text without saying so. "
+                          "Text that is marked as a quote and cited next to it is usually fine.",
+    },
+}
+OVERRIDE_KEYS = {"check", "kind", "paths", "reason", "date"}
 # Private-content check: a run of this many words shared with a non-exported file refuses.
 PRIVATE_RUN_WORDS = 12
 # Template and task-skeleton text is recognised in runs of this many words.
@@ -96,9 +114,34 @@ class Problem:
     check: str
     path: str
     message: str
+    kind: str = ""  # the finding's kind, for the overrides: a leak pattern, a copyright kind
+    match: str = ""  # the matched text of a leak finding
+
+    @property
+    def overridable(self) -> bool:
+        check = "leak" if self.check == "site" else self.check
+        return self.kind in OVERRIDABLE.get(check, {})
 
     def __str__(self) -> str:
         return f"[{self.check}] {self.path}: {self.message}"
+
+
+@dataclass(frozen=True)
+class Override:
+    """A finding kind the user accepts: an entry of the manifest's `overrides:`."""
+    check: str
+    kind: str
+    reason: str
+    date: str
+    paths: tuple[str, ...] = ()  # globs; empty: every file
+
+    def covers(self, p: Problem) -> bool:
+        return (p.check == self.check and p.kind == self.kind
+                and (not self.paths or any(_matches(p.path, g) for g in self.paths)))
+
+    def label(self) -> str:
+        where = f", paths {', '.join(self.paths)}" if self.paths else ""
+        return f"{self.check} `{self.kind}`{where}: \"{self.reason}\" ({self.date})"
 
 
 @dataclass
@@ -112,6 +155,7 @@ class Manifest:
     hard_private: list[str] = field(default_factory=list)
     site_banner: str = ""  # the project site's banner; "" for none
     site_url: str | None = None  # the project site's URL, when it is not the GitHub Pages URL of public_repo
+    overrides: list[Override] = field(default_factory=list)  # finding kinds the user accepts
 
 
 @dataclass
@@ -202,6 +246,7 @@ def load_manifest(root: Path) -> Manifest:
     if site_url is not None and not isinstance(site_url, str):
         raise PublishError(f"{MANIFEST}: site_url must be a URL, or \"\" for no site")
     return Manifest(
+        overrides=_overrides(m.get("overrides")),
         site_banner=banner.strip(),
         site_url=site_url.strip() if site_url is not None else None,
         include=include,
@@ -212,6 +257,63 @@ def load_manifest(root: Path) -> Manifest:
         public_repo=m.get("public_repo"),
         hard_private=lists["hard_private"] or [],
     )
+
+
+def _overridable_list() -> str:
+    return "; ".join(f"{c}: {', '.join(sorted(k))}" for c, k in OVERRIDABLE.items())
+
+
+def _overrides(val) -> list[Override]:
+    """The manifest's `overrides:` entries, checked: each names an overridable check and kind,
+    a reason and the date of the user's decision, and optionally the paths it covers."""
+    if val is None:
+        return []
+    if not isinstance(val, list):
+        raise PublishError(f"{MANIFEST}: overrides must be a list of {{check, kind, reason, date}} entries")
+    out = []
+    for i, o in enumerate(val):
+        where = f"{MANIFEST}: overrides[{i}]"
+        if not isinstance(o, dict):
+            raise PublishError(f"{where}: must be a mapping with check, kind, reason and date")
+        if set(o) - OVERRIDE_KEYS:
+            raise PublishError(f"{where}: unknown key(s) {sorted(set(o) - OVERRIDE_KEYS)} "
+                               f"(allowed: {', '.join(sorted(OVERRIDE_KEYS))})")
+        check, kind = str(o.get("check", "")), str(o.get("kind", ""))
+        if kind not in OVERRIDABLE.get(check, {}):
+            raise PublishError(f"{where}: check '{check}', kind '{kind}' cannot be overridden; "
+                               f"the overridable kinds are {_overridable_list()}")
+        reason = o.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise PublishError(f"{where}: `reason` must say why the user accepts these findings")
+        date = o.get("date")
+        if isinstance(date, dt.date):
+            date = date.isoformat()
+        if not isinstance(date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date.strip()):
+            raise PublishError(f"{where}: `date` must be the date of the user's decision, YYYY-MM-DD")
+        paths = o.get("paths", [])
+        if isinstance(paths, str):
+            paths = [paths]
+        if not isinstance(paths, list) or not all(isinstance(g, str) and g.strip() for g in paths):
+            raise PublishError(f"{where}: `paths` must be a list of paths or globs")
+        out.append(Override(check, kind, " ".join(reason.split()), date.strip(), tuple(paths)))
+    return out
+
+
+def overridden_leak_patterns(man: Manifest) -> list[str]:
+    """The leak patterns the manifest overrides (for any path)."""
+    return sorted({o.kind for o in man.overrides if o.check == "leak"})
+
+
+def apply_overrides(probs: list[Problem], overrides: list[Override]) -> tuple[list[Problem], list]:
+    """(the problems no override covers, [(problem, override)] for the ones the user overrode)."""
+    failed, overridden = [], []
+    for p in probs:
+        o = next((o for o in overrides if o.covers(p)), None)
+        if o is None:
+            failed.append(p)
+        else:
+            overridden.append((p, o))
+    return failed, overridden
 
 
 def _matches(path: str, pattern: str) -> bool:
@@ -415,12 +517,16 @@ def _reparse(node, text: str):
     return nodes.Node(node.path, header) if isinstance(header, dict) and "id" in header else None
 
 
-def export_id(tree: Path, files: list[str]) -> str:
+def export_id(tree: Path, files: list[str], overrides: list[Override] = ()) -> str:
+    """A hash of every exported path and its content, and of the user's overrides (if any): a
+    new override needs a new check and a new approval."""
     h = hashlib.sha256()
     for f in files:
         p = tree / f
         h.update(f.encode() + b"\0")
         h.update(hashlib.sha256(p.read_bytes()).hexdigest().encode() + b"\n")
+    for o in overrides:
+        h.update(repr((o.check, o.kind, o.paths, o.reason, o.date)).encode() + b"\n")
     return h.hexdigest()[:16]
 
 
@@ -503,7 +609,7 @@ def export(root: Path, dest: Path, commit: str = "HEAD") -> Export:
                 rebuilt += [f for f in (f"{base}.svg", f"{base}.png", f"{base}.html") if f in files]
             except (graphdraw.DrawError, OSError, subprocess.SubprocessError) as exc:
                 rprobs.append(Problem("map", f"{base}.svg", f"cannot redraw the graph image for the export: {exc}"))
-    return Export(sha, files, excluded, export_id(tree, files), tree, snap, exported_nodes, rebuilt,
+    return Export(sha, files, excluded, export_id(tree, files, man.overrides), tree, snap, exported_nodes, rebuilt,
                   map_nodes, map_private if rebuilt else [], hard, redacted, rprobs, omitted, linked)
 
 
@@ -659,7 +765,8 @@ def check_scans(root: Path, ex: Export) -> list[Problem]:
     except leakscan.LeakScanError as exc:
         return [Problem("leak", "publish/PRIVATE_POLICY.md", str(exc))]
     for h in leakscan.scan_tree(ex.tree, pats, ex.files):
-        probs.append(Problem("leak", h.path, f"{h.pattern} [{h.where}, line {h.line_number}]: {h.match!r}"))
+        probs.append(Problem("leak", h.path, f"{h.pattern} [{h.where}, line {h.line_number}]: {h.match!r}",
+                             kind=h.pattern, match=h.match))
     hits, _ = secretscan.scan(ex.tree, ex.files)
     for h in hits:
         probs.append(Problem("secret", h.path, f"{h.pattern} line {h.line_number}: {h.match}"))
@@ -774,7 +881,8 @@ def check_copyright(root: Path, ex: Export) -> tuple[list[Problem], list[str]]:
             else:
                 if start is not None and words > MAX_QUOTE_WORDS:
                     probs.append(Problem("copyright", f, f"lines {start}-{i - 1}: a quotation of {words} words "
-                                         f"(limit {MAX_QUOTE_WORDS}); quote less and cite"))
+                                         f"(limit {MAX_QUOTE_WORDS}); quote less and cite",
+                                         kind="long-quote"))
                 start = None
     lit = Path(root) / "lit_cache"
     sources = {}
@@ -794,7 +902,7 @@ def check_copyright(root: Path, ex: Export) -> tuple[list[Problem], list[str]]:
             for src, sh in sources.items():
                 if mine & sh:
                     probs.append(Problem("copyright", f, f"shares a run of {SHARED_RUN_WORDS}+ words with "
-                                         f"lit_cache/{src}; quote less and cite"))
+                                         f"lit_cache/{src}; quote less and cite", kind="lit-cache-text"))
     return probs, notes
 
 
@@ -1180,6 +1288,8 @@ def is_template_project(snap: Path) -> bool:
 
 
 def run_checks(root: Path, ex: Export) -> tuple[list[Problem], dict]:
+    """(the problems that fail the publish, info). The findings the user overrode are not among
+    the problems; info["overridden"] lists each with its override."""
     man = load_manifest(ex.snapshot) if (ex.snapshot / MANIFEST).is_file() else load_manifest(root)
     structured = is_template_project(ex.snapshot)
     probs = check_policy(man) + check_site_link(ex, man) + check_scans(root, ex) + check_citations(ex)
@@ -1208,7 +1318,10 @@ def run_checks(root: Path, ex: Export) -> tuple[list[Problem], dict]:
     probs += cp + vp + check_references(ex, every) + pp + rp
     notes += rnotes + pnotes
     _, ran = secretscan.scan(ex.tree, [])  # names of the scanners only
-    return probs, {"notes": notes, "levels": levels, "secret_scanners": ran}
+    # The findings the user overrode leave the failures; the report lists each of them.
+    probs, overridden = apply_overrides(probs, man.overrides)
+    return probs, {"notes": notes, "levels": levels, "secret_scanners": ran, "overridden": overridden,
+                   "overrides": man.overrides}
 
 
 # --------------------------------------------------------------------------- LAST_PUBLISHED
@@ -1263,6 +1376,60 @@ def review_diff(root: Path, ex: Export, work: Path) -> str:
     return r.stdout
 
 
+def _kind_key(p: Problem) -> tuple[str, str]:
+    return ("leak" if p.check == "site" else p.check), p.kind
+
+
+def _verdict(probs: list[Problem], overridden: list) -> str:
+    over = (f" {len(overridden)} finding(s) overridden by the user: see \"Overridden by the user\"."
+            if overridden else "")
+    if not probs:
+        return "PASSED: no problems." + over
+    can = (" The user may override some of them instead: see \"Findings the user may override\"."
+           if any(p.overridable for p in probs) else "")
+    return (f"**FAILED: {len(probs)} problem(s).** Fix them in the private repo, commit, and check again."
+            + can + over)
+
+
+def _overridable_section(probs: list[Problem]) -> list[str]:
+    """The failed findings of a kind the user may override, grouped by kind, with why each kind
+    is flagged."""
+    groups: dict[tuple[str, str], list[Problem]] = {}
+    for p in probs:
+        if p.overridable:
+            groups.setdefault(_kind_key(p), []).append(p)
+    if not groups:
+        return []
+    n = sum(len(g) for g in groups.values())
+    out = ["### Findings the user may override", "",
+           f"{n} of the problems above are of a kind the user may accept instead of fixing. Ask the "
+           f"user about each kind; only the user's answer adds an entry to `overrides:` in {MANIFEST} "
+           "(see the publish skill).", ""]
+    for (check, kind), g in sorted(groups.items()):
+        files = len({p.path for p in g if p.check != "site"})
+        site_n = sum(1 for p in g if p.check == "site")
+        where = f"{files} file(s)" + (f" and {site_n} in the built site" if site_n else "")
+        out.append(f"- {check} `{kind}`: {len(g)} finding(s), in {where}. Why it is flagged: "
+                   f"{OVERRIDABLE[check][kind]}")
+    return out + [""]
+
+
+def _overridden_section(overridden: list) -> list[str]:
+    """Every finding the user overrode, under the override that covers it."""
+    if not overridden:
+        return []
+    out = ["## Overridden by the user", "",
+           f"{len(overridden)} finding(s) that the user accepted in `overrides:` of {MANIFEST}. They do "
+           "not fail the publish, and they are published as they are.", ""]
+    by: dict = {}
+    for p, o in overridden:
+        by.setdefault(o, []).append(p)
+    for o, ps in by.items():
+        out.append(f"- {o.label()}: {len(ps)} finding(s)")
+        out += [f"  - {p}" for p in ps]
+    return out + [""]
+
+
 def write_report(root: Path, ex: Export, probs: list[Problem], info: dict, diff: str) -> Path:
     """Write the review report and diff under publish/reports/ (never exported). Returns its path."""
     rdir = Path(root) / REPORT_DIR
@@ -1282,10 +1449,12 @@ def write_report(root: Path, ex: Export, probs: list[Problem], info: dict, diff:
         "",
         "## Deterministic checks",
         "",
-        "PASSED: no problems." if not probs else f"**FAILED: {len(probs)} problem(s).** Fix them in the private repo, commit, and check again.",
+        _verdict(probs, info.get("overridden", [])),
         "",
         *[f"- {p}" for p in probs],
         "",
+        *_overridable_section(probs),
+        *_overridden_section(info.get("overridden", [])),
         "## Verification level of each published node",
         "",
         *([f"- {l}" for l in info["levels"]] or ["- (no nodes exported)"]),
@@ -1313,7 +1482,32 @@ def check_site(root: Path, ex: Export, work: Path) -> tuple[list[Problem], list[
     if importlib.util.find_spec("mkdocs") is None:
         return [], [f"the site was not built: mkdocs is not installed (pip install {site.MKDOCS_PINS})"]
     man = load_manifest(ex.snapshot) if (ex.snapshot / MANIFEST).is_file() else load_manifest(root)
-    return [Problem("site", "site", m) for m in site.build(ex.tree, work / "site", banner=man.site_banner)], []
+    leaks = []
+    probs = [Problem("site", "site", m) for m in site.build(ex.tree, work / "site", banner=man.site_banner,
+                                                             leaks=leaks)]
+    probs += [Problem("site", "site", site.leak_message(h), kind=h.pattern, match=h.match) for h in leaks]
+    return probs, []
+
+
+def override_site_leaks(probs: list[Problem], overrides: list[Override], overridden: list,
+                        failed: list[Problem]) -> tuple[list[Problem], list]:
+    """(site problems still failing, [(problem, override)] overridden). A leak in the built site
+    is text of an exported file. It is overridden when an override of its pattern covers every
+    file (no `paths`), or when the same text was overridden in the export and fails nowhere in it."""
+    done = {(p.kind, p.match): o for p, o in overridden if p.check == "leak"}
+    bad = {(p.kind, p.match) for p in failed if p.check == "leak"}
+    still, over = [], []
+    for p in probs:
+        o = None
+        if p.check == "site" and p.kind:
+            o = next((o for o in overrides if o.check == "leak" and o.kind == p.kind and not o.paths), None)
+            if o is None and (p.kind, p.match) not in bad:
+                o = done.get((p.kind, p.match))
+        if o is None:
+            still.append(p)
+        else:
+            over.append((p, o))
+    return still, over
 
 
 def check(root: Path, commit: str = "HEAD", build_site: bool = True) -> tuple[int, Path, Export]:
@@ -1324,8 +1518,13 @@ def check(root: Path, commit: str = "HEAD", build_site: bool = True) -> tuple[in
     probs, info = run_checks(root, ex)
     if build_site:
         sp, snotes = check_site(root, ex, work)
+        sp, sover = override_site_leaks(sp, info["overrides"], info["overridden"], probs)
         probs += sp
+        info["overridden"] += sover
         info["notes"] += snotes
+    used = {o for _, o in info["overridden"]}
+    info["notes"] += [f"the override {o.label()} covers no finding of this export: ask the user whether "
+                      f"to remove it from {MANIFEST}" for o in info["overrides"] if o not in used]
     diff = review_diff(root, ex, work)
     return len(probs), write_report(root, ex, probs, info, diff), ex
 
@@ -1447,7 +1646,11 @@ def push(root: Path, export_id_expected: str, public_repo: str | None = None, co
     from . import site  # the site workflow is generated at every publish
     wf = co / SITE_WORKFLOW
     wf.parent.mkdir(parents=True, exist_ok=True)
-    wf.write_text(site.workflow(root, load_manifest(root).site_banner), encoding="utf-8")
+    man = load_manifest(ex.snapshot) if (ex.snapshot / MANIFEST).is_file() else load_manifest(root)
+    # The public repo's site build accepts the leak patterns the user overrode. The check above
+    # already applied each override's `paths` to this export, which the public repo now equals.
+    wf.write_text(site.workflow(root, load_manifest(root).site_banner, overridden_leak_patterns(man)),
+                  encoding="utf-8")
     _git(co, "add", "-A")
     ident = _identity(root)
     if _git(co, "diff", "--cached", "--quiet", check=False).returncode == 0:

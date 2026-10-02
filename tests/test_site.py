@@ -270,6 +270,28 @@ def test_leak_in_built_site_fails(repo, tmp_path):
     assert any("leak in built site" in p and "absolute-path" in p for p in problems)
 
 
+def test_overridden_leak_patterns_do_not_fail_the_build(repo, tmp_path):
+    page(repo / "context.md", "# Context\n\nRan as SLURM 20742356 in /scratch/grp/run1.\n")
+    problems = site.build(repo, tmp_path / "a")
+    assert any("slurm-job-id" in p for p in problems) and any("absolute-path" in p for p in problems)
+    problems = site.build(repo, tmp_path / "b", allow_leaks=["slurm-job-id"])
+    assert not any("slurm-job-id" in p for p in problems) and any("absolute-path" in p for p in problems)
+    leaks = []
+    assert site.build(repo, tmp_path / "c", leaks=leaks) == []  # the caller decides on the hits
+    assert {h.pattern for h in leaks} == {"slurm-job-id", "absolute-path"}
+    with pytest.raises(ValueError, match="cannot be overridden"):
+        site.build(repo, tmp_path / "d", allow_leaks=["absolute-path"])
+
+
+def test_workflow_carries_the_overridden_leak_patterns(tmp_path, monkeypatch):
+    monkeypatch.setattr(site, "running_commit", lambda: "f" * 40)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/framework.yaml").write_text('framework_repo: "https://github.com/a/b"\n')
+    step = [s for s in yaml.safe_load(site.workflow(tmp_path, "", ["slurm-out-file", "slurm-job-id"]))
+            ["jobs"]["build"]["steps"] if "site build" in s.get("run", "")][0]
+    assert step["run"].endswith('"$OPSCI_SITE_BANNER" --allow-leak slurm-job-id --allow-leak slurm-out-file')
+
+
 def test_workflow_installs_opsci_at_the_recorded_commit(tmp_path, monkeypatch):
     monkeypatch.setattr(site, "running_commit", lambda: None)
     (tmp_path / "config").mkdir()

@@ -597,3 +597,134 @@ def test_consulted_list_is_never_exported(proj):
     commit(proj)
     probs, ex = problems(proj)
     assert "citations/consulted.md" not in ex.files and "citations/used.bib" in ex.files
+
+
+# ------------------------------------------------------------------ overrides
+
+SLURM_NOTES = "Ran as SLURM 20742356; task 20375335_1 failed (see slurm-20742356.out).\n"
+
+
+def add_overrides(root, text):
+    m = root / "publish/manifest.yaml"
+    m.write_text(m.read_text() + "overrides:\n" + text)
+
+
+def test_overrides_move_findings_out_of_the_failures(proj):
+    with open(proj / "tasks/t01-fit/context.md", "a") as f:
+        f.write(SLURM_NOTES)
+    commit(proj)
+    probs, ex = problems(proj)
+    kinds = sorted({p.kind for p in probs})
+    assert kinds == ["slurm-array-id", "slurm-job-id", "slurm-out-file"] and all(p.overridable for p in probs)
+    n, report, _ = publish.check(proj, build_site=False)
+    text = report.read_text()
+    assert n == len(probs) and "### Findings the user may override" in text
+    assert f"leak `slurm-job-id`: 2 finding(s), in 1 file(s). Why it is flagged: " \
+           f"{publish.OVERRIDABLE['leak']['slurm-job-id']}" in text
+    add_overrides(proj, "  - check: leak\n    kind: slurm-job-id\n    paths: [tasks/**]\n"
+                        "    reason: Job numbers name no person or machine.\n    date: 2026-10-02\n"
+                        "  - {check: leak, kind: slurm-array-id, reason: Same., date: 2026-10-02}\n"
+                        "  - {check: leak, kind: slurm-out-file, reason: Same., date: '2026-10-02'}\n")
+    commit(proj)
+    probs2, ex2 = problems(proj)
+    assert probs2 == [], [str(p) for p in probs2]
+    assert ex2.export_id != ex.export_id  # a new override needs a new review
+    n, report, _ = publish.check(proj, build_site=False)
+    text = report.read_text()
+    assert n == 0 and "PASSED: no problems. 4 finding(s) overridden by the user" in text
+    over = text.split("## Overridden by the user", 1)[1]
+    assert "leak `slurm-job-id`, paths tasks/**: \"Job numbers name no person or machine.\" (2026-10-02)" in over
+    assert "[leak] tasks/t01-fit/context.md: slurm-array-id" in over
+    # an override covers its kind only: an absolute path still fails
+    with open(proj / "tasks/t01-fit/context.md", "a") as f:
+        f.write("Output in /scratch/grp/run1.\n")
+    commit(proj)
+    assert [p.kind for p in problems(proj)[0]] == ["absolute-path"]
+    assert not problems(proj)[0][0].overridable
+
+
+def test_override_paths_limit_what_it_covers(proj):
+    (proj / "docs/run.md").write_text("Ran as SLURM 20742356.\n")
+    with open(proj / "tasks/t01-fit/context.md", "a") as f:
+        f.write("Ran as SLURM 20742357.\n")
+    add_overrides(proj, "  - {check: leak, kind: slurm-job-id, paths: [docs/**], reason: Run notes., "
+                        "date: 2026-10-02}\n")
+    commit(proj)
+    assert [p.path for p in problems(proj)[0]] == ["tasks/t01-fit/context.md"]
+
+
+def test_unused_override_is_noted(proj):
+    add_overrides(proj, "  - {check: leak, kind: slurm-out-file, reason: Logs., date: 2026-10-02}\n")
+    commit(proj)
+    n, report, _ = publish.check(proj, build_site=False)
+    assert n == 0 and "covers no finding of this export" in report.read_text()
+
+
+@pytest.mark.parametrize("entry,match", [
+    ("{check: leak, kind: email, reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: leak, kind: absolute-path, reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: leak, kind: ipv4, reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: leak, kind: 'private-policy:3', reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: secret, kind: github-token, reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: private-content, kind: '', reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: human-verified, kind: '', reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: copyright, kind: publisher-format, reason: x, date: 2026-10-02}", "cannot be overridden"),
+    ("{check: leak, kind: slurm-job-id, date: 2026-10-02}", "reason"),
+    ("{check: leak, kind: slurm-job-id, reason: x}", "date"),
+    ("{check: leak, kind: slurm-job-id, reason: x, date: yesterday}", "date"),
+    ("{check: leak, kind: slurm-job-id, reason: x, date: 2026-10-02, by: me}", "unknown key"),
+    ("{check: leak, kind: slurm-job-id, reason: x, date: 2026-10-02, paths: [1]}", "paths"),
+])
+def test_only_overridable_kinds_may_be_overridden(proj, entry, match):
+    add_overrides(proj, f"  - {entry}\n")
+    with pytest.raises(publish.PublishError, match=match):
+        publish.load_manifest(proj)
+
+
+def test_copyright_findings_may_be_overridden(proj):
+    quote = "> " + " ".join(["word"] * 160) + "\n>\n> -- [@smith2020]\n"
+    source = " ".join(f"w{i}" for i in range(60))
+    (proj / "lit_cache/src.txt").write_text(source + "\n")
+    with open(proj / "tasks/t01-fit/context.md", "a") as f:
+        f.write("\n" + quote + "\nAs [@smith2020] writes: \"" + " ".join(f"w{i}" for i in range(5, 50)) + "\"\n")
+    commit(proj)
+    assert sorted(p.kind for p in problems(proj)[0]) == ["lit-cache-text", "long-quote"]
+    add_overrides(proj, "  - {check: copyright, kind: long-quote, reason: Marked and cited., date: 2026-10-02}\n"
+                        "  - {check: copyright, kind: lit-cache-text, reason: Marked and cited., date: 2026-10-02}\n")
+    commit(proj)
+    assert problems(proj)[0] == []
+    # a PDF of someone else's paper is never overridable
+    m = proj / "publish/manifest.yaml"
+    m.write_text(m.read_text().replace("  - path: tasks\n", "  - path: tasks\n  - path: paper\n"))
+    (proj / "paper").mkdir()
+    (proj / "paper/other.pdf").write_bytes(b"%PDF-1.4 someone else's paper")
+    commit(proj)
+    assert [(p.check, p.overridable) for p in problems(proj)[0]] == [("copyright", False)]
+
+
+def test_site_leaks_follow_the_export_overrides(proj):
+    with open(proj / "tasks/t01-fit/context.md", "a") as f:
+        f.write("Ran as SLURM 20742356.\n")
+    commit(proj)
+    n, report, _ = publish.check(proj)
+    text = report.read_text()
+    assert "[site] site: leak in built site:" in text and "in the built site" in text
+    # a path-limited override covers the same text in the built site
+    add_overrides(proj, "  - {check: leak, kind: slurm-job-id, paths: [tasks/t01-fit/**], reason: Run notes., "
+                        "date: 2026-10-02}\n")
+    commit(proj)
+    n, report, _ = publish.check(proj)
+    text = report.read_text()
+    assert n == 0, text
+    assert "[site] site: leak in built site:" in text.split("## Overridden by the user", 1)[1]
+
+
+def test_push_writes_the_overridden_patterns_into_the_site_workflow(proj, public):
+    with open(proj / "tasks/t01-fit/context.md", "a") as f:
+        f.write("Ran as SLURM 20742356.\n")
+    add_overrides(proj, "  - {check: leak, kind: slurm-job-id, reason: Run notes., date: 2026-10-02}\n")
+    commit(proj)
+    publish_now(proj, public)
+    wf = git(public, "show", f"main:{publish.SITE_WORKFLOW}").stdout
+    assert "--allow-leak slurm-job-id" in wf
+    assert "SLURM 20742356" in git(public, "show", "main:tasks/t01-fit/context.md").stdout

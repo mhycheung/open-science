@@ -46,6 +46,14 @@ never:
 # site_banner: "<text>"       # the banner at the top of every page of the project site. The
 #                             # default warns that the work is ongoing, unpublished and
 #                             # preliminary; "" removes the banner (e.g. once it is published)
+# overrides:                  # findings of `opsci publish check` you accept instead of fixing;
+#                             # only these kinds: leak slurm-job-id, slurm-array-id,
+#                             # slurm-out-file; copyright long-quote, lit-cache-text
+#   - check: leak
+#     kind: slurm-job-id
+#     paths: [tasks/**]       # optional: only these paths or globs
+#     reason: Job numbers in run notes name no person or machine.
+#     date: 2026-10-02        # the date of your decision
 # status_exempt:              # Markdown files that need no `status` header, in addition
 #   - <path or glob>          # to the defaults: README.md, **/README.md, **/*.caption.md,
 #                             # AGENTS.md, CLAUDE.md, PROJECT.md, ABSTRACT.md, WRITEUP.md,

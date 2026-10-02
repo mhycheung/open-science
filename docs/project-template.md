@@ -266,6 +266,7 @@ The publish allowlist. Keys (any other key is refused):
 | `hard_private` | optional list of paths or globs of hard-private material that is not inside a hard-private task; never exported, and the export may not name it or copy its text |
 | `public_repo` | URL or path of the public repository, used by `opsci publish push` |
 | `site_url` | optional: the project site's URL when it is not the GitHub Pages URL of `public_repo` (a custom domain), or `""` for no site. The public `README.md` links to it: the export adds `The project site: <URL>` under the title when the README lacks the link |
+| `overrides` | optional list of finding kinds of the publish check that you accept instead of fixing: SLURM job numbers (`leak` kinds `slurm-job-id`, `slurm-array-id`, `slurm-out-file`) and quotations (`copyright` kinds `long-quote`, `lit-cache-text`). Each entry has `check`, `kind`, `reason`, `date`, and optional `paths`. See [Overriding a finding](publishing.md#overriding-a-finding) |
 | `status_exempt` | markdown files that need no `status:` header, added to the default list (READMEs, plot captions `*.caption.md`, `AGENTS.md`, `CLAUDE.md`, `PROJECT.md`, `ABSTRACT.md`, `WRITEUP.md`, `context.md`, `log/`, `map/`, `citations/`, `rules/`, task logs, task maps and `subcontext/`, `docs/`, and the same skeleton files under `brainstorm/`) |
 
 Whatever the manifest says, `publish/`, `lit_cache/`, `data/`, `messages/`, `.opsci/`,

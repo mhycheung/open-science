@@ -148,14 +148,16 @@ opsci publish pull-public [--public-repo PUBLIC_REPO] [ROOT]
 ## `opsci site`
 
 ```
-opsci site build [--out OUT] [SRC]
+opsci site build [--out OUT] [--banner TEXT] [--allow-leak PATTERN ...] [SRC]
 opsci site preview [--commit COMMIT] [--out OUT] [ROOT]
 ```
 
 - `build`: build the website of a public repository checkout `SRC` (default `.`) with MkDocs
-  into `OUT` (default `_site`), in strict mode, and leak-scan the result.
+  into `OUT` (default `_site`), in strict mode, and leak-scan the result. `--allow-leak`
+  (repeatable) accepts the hits of a leak pattern you overrode in `publish/manifest.yaml`
+  (`slurm-job-id`, `slurm-array-id`, `slurm-out-file` only); the site workflow passes them.
 - `preview`: the same for the export of this project's `COMMIT` (default `HEAD`), before
-  publishing.
+  publishing, with the manifest's banner and overridden leak patterns.
 
 ## `opsci zenodo`
 

@@ -2,10 +2,13 @@
 
 Generalised from a working project's site leak gate. It scans every file of a tree: the
 file's path, its bytes, the text chunks of PNG images (not their compressed pixels), and
-the dictionaries and strings of PDFs. Any hit refuses the publish, names the file and prints
-the matching line.
+the dictionaries and strings of PDFs. Any hit the user has not overridden refuses the
+publish, names the file and prints the matching line.
 
-There is no override flag. If a legitimate string matches, change the string, not the scan.
+There is no override flag here. A few patterns flag information that is often harmless
+(SLURM job numbers, in ``OVERRIDABLE``); the user may accept their hits in the publish
+manifest (``overrides:``, see publish.py), and the site build may be told to accept them
+(``opsci site build --allow-leak``). Every other hit is fixed by changing the string, not the scan.
 
 Pattern sources:
 - fixed patterns (absolute paths, emails, IPv4 addresses, SLURM job identifiers);
@@ -113,6 +116,23 @@ FIXED_PATTERNS: tuple[Pattern, ...] = (
        binary=False),
     _p("slurm-out-file", r"\bslurm-\d+\.out\b", "a SLURM output file name", re.IGNORECASE),
 )
+
+
+# Patterns whose hits the user may override (publish/manifest.yaml `overrides:`), and why each
+# is flagged, in plain words for the user who decides. A SLURM job number names no person,
+# machine or path by itself. Every other pattern names a person, a machine, a path, an
+# address or a private term, and is never overridden.
+OVERRIDABLE: dict[str, str] = {
+    "slurm-job-id": "A SLURM job number (`SLURM` or `jobid=` followed by a number) records that work "
+                    "ran on a batch cluster. With other details it could tie the text to an account "
+                    "there; by itself it names no person, machine or path.",
+    "slurm-array-id": "A number such as `<job>_<task>` (six to nine digits, an underscore, a short "
+                      "number) looks like a SLURM array job and task number, with the same small risk "
+                      "as a job number. It may also be an ordinary number with an underscore.",
+    "slurm-out-file": "A file name such as `slurm-<job>.out` is a SLURM log name; it carries a job "
+                      "number, with the same small risk.",
+}
+assert set(OVERRIDABLE) <= {p.name for p in FIXED_PATTERNS}
 
 
 def _literal(name: str, value: str, why: str) -> Pattern:
