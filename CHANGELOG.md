@@ -11,6 +11,17 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Project files record the science and the code, not the conversation. The template
+  `AGENTS.md` (§2, "Record content, not conversation") and the `context-files` and
+  `context-management` skills tell agents never to paste a user's message verbatim: a user's
+  decision becomes a dated ruling in the agent's own words, and deadlines, the user's
+  availability, reporting reminders, allocation remarks, impatience, personal remarks and
+  agent mechanics are left out. The `publish` skill's step 6 now covers every exported
+  Markdown file, not only the context files: such passages are wrapped in omission markers
+  before the review, and the review rubric has a fourth category, "not science or code".
+  No layout change; `open-science-project:update-from-template` brings the new `AGENTS.md`
+  bullet into existing projects.
+
 - On Claude Code, session jumps are done by a Claude Code mod (`hooks/context_mod.js` in
   `open-science-context`): code Claude Code runs inside itself (Claude Code 2.1.287 or
   later, with mods switched on for the account). It clears the session with Claude Code's own

@@ -81,11 +81,25 @@ and may be run whenever they help.
    group and rewrite beside the original titles; the user approves or changes them. Commit
    and go back to step 2.
 
-6. **Housekeeping in the context files.** In the exported project and task `context.md`
-   files, wrap each "Waiting on the user", "Next step" or "Open questions" item that is
-   housekeeping, not part of the task's or project's goal ("commit the plots?", "redo the
-   plot?"), in an omission marker in the private file: `<!-- omit -->...<!-- /omit -->`.
-   Add them yourself, list them for the user in step 9, commit, and go back to step 2.
+6. **Leave out what is not science or code.** The public record holds the science and the
+   code. In every exported Markdown file, wrap in an omission marker in the private file
+   (`<!-- omit -->...<!-- /omit -->`) each passage that is about neither:
+   - housekeeping items in "Waiting on the user", "Next step" or "Open questions" of the
+     context files ("commit the plots?", "redo the plot?");
+   - deadlines and urgency ("before 00:00 tonight", "full court press"), the user's
+     availability ("I will be away for a few hours"), reminders about reporting (Slack,
+     Notion, "you sometimes don't report"), allocation or quota remarks ("the allocation is
+     running out, so ..."), impatience ("this is taking too long, change method"), personal
+     remarks, and verbatim user messages that instruct agents;
+   - agent mechanics with no technical content: session jumps, context size, `PAUSED`
+     lines, permissions, ssh-agent instructions.
+
+   Keep the technical content such a passage carries when it stands alone ("switched to
+   method $Y$"); when a sentence mixes the two and cannot be split, leave it and list it in
+   step 9. Find candidates with a search of the export (`Slack`, `tonight`, `ASAP`,
+   `away`, `allocation`, `quota`, `too long`, `User:`, `user said`, `remind`) and by reading
+   the context files, plans and `subcontext/` documents. Add the markers yourself, list
+   them for the user in step 9, commit, and go back to step 2.
    What to keep and how the export drops them: `reference/public-pages.md`.
 
 7. **Citations.** For each `citations/used.bib` entry without a `usage` field, or without the
@@ -93,13 +107,13 @@ and may be run whenever they help.
    them once the user agrees, commit, and go back to step 2.
 
 8. **Review the diff.** Read the `.diff` with `reference/review-rubric.md` and write the
-   findings (tone, claims not `verified`, private material) under `## Review (tone,
-   claims)` in the report. The report's notes list soft-private mentions; check that each
+   findings (tone, claims not `verified`, private material, passages that are not science
+   or code) under `## Review (tone, claims)` in the report. The report's notes list soft-private mentions; check that each
    one is in passing. Quote each flagged passage with its file and line. Do not edit the
    flagged files yourself; the user decides.
 
 9. **Stop for approval.** Show the user the report path, the check result, the files
-   exported, your review findings, the items you omitted from the context files, and how
+   exported, your review findings, the passages you omitted (step 6), and how
    the unpublished nodes appear in the map, and the public commit message you propose: a
    subject line that says what this publish adds ("Publish the ringdown fits of t03 and the
    dead end of t02"), then a short paragraph if the subject is not enough. Write it for

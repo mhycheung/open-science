@@ -27,6 +27,18 @@ A PostToolUse hook checks the cap after every edit to one of these files and ref
 over-cap file. `opsci context check` checks the whole project. Pruning means whole finished
 items leave the file (to `subcontext/` or the log), not rewording.
 
+**Record content, not conversation.** Write what was decided, why, and what was found, in
+your own words. Never paste a user's message verbatim: a user's decision becomes a dated
+ruling that states the decision and its reason ("ruling 4 (2026-10-02): the window starts at
+$10\,M$, because ..."). Leave out what is not about the science or the code: deadlines and
+urgency ("before midnight", "full court press"), the user's availability ("away for a few
+hours"), reminders about reporting, allocation or quota remarks ("the allocation is running
+out, so ..."), impatience ("this is taking too long, change method"), personal remarks, and
+agent mechanics with no technical content (jumps, context size, permissions). When such a
+message changes the work, record the technical change alone ("switched to method $Y$: $X$
+needs ~40 h per unit, MEASURED"). This holds for every file the agents write: context files,
+plans, logs, subcontext and subagent documents, result files.
+
 **Housekeeping stays out of the published context.** The context files are published with
 the project, while everything stays in the private files. In "Waiting on the user", "Next
 step" and "Open questions", wrap each item that is housekeeping for the user and not part of

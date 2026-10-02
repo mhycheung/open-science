@@ -74,7 +74,11 @@ and stop. Jump after the user answers, if the answer leaves work for you to do.
 
 **Before either command, in the same turn, write the jump's record:**
 1. The task `context.md`: state, in flight (agent/job ids, output paths, how to check), and
-   the exact next step. Summarize what this conversation established that is not yet on disk.
+   the exact next step. Summarize what this conversation established that is not yet on disk,
+   in your own words: decisions and findings, never the user's messages verbatim, and
+   nothing that is not about the science or the code (deadlines, availability, reminders,
+   allocation remarks, mood; `open-science-project:context-files`, "Record content, not
+   conversation").
 2. The project `context.md`, if the task table, in-flight list or open questions changed.
 3. One line in `tasks/<id>/log.md`.
 4. `opsci notify "<text>" [file]` for anything the user would otherwise miss (with no
