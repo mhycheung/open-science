@@ -3,7 +3,7 @@
 The way we do science is changing rapidly, but it is more important than ever to keep
 science open.
 
-open-science is a framework for doing research in the open:
+open-science is a framework for doing research in the open (see [this blog post](https://mhycheung.github.io/open-science.html) for the philosophy behind this):
 
 - **A complete research record.** How the methods were developed, the results, the
   approaches that failed, and the source code, in a public repository and on a project
@@ -22,7 +22,7 @@ open-science is a framework for doing research in the open:
 
 ![How a project is organised and published](docs/figures/project_flow.svg)
 
-**Start with the [tutorial](docs/tutorial.md).** The full documentation is at
+**Start with the [tutorial](https://mhycheung.github.io/open-science/tutorial/).** The full documentation is at
 <https://mhycheung.github.io/open-science/> (source in `docs/`).
 
 ## Install
@@ -35,7 +35,7 @@ claude plugin install open-science@open-science
 claude
 ```
 
-Then type `/open-science:onboard`. The [tutorial](docs/tutorial.md) says what onboarding
+Then type `/open-science:onboard`. The [tutorial](https://mhycheung.github.io/open-science/tutorial/) says what onboarding
 does and gives the prompts for the next steps: starting a project, brainstorming, starting a
 task and using Notion.
 
@@ -48,12 +48,12 @@ codex
 ```
 
 Ask Codex to use `open-science:onboard`. Restart after installing components and review
-their hooks with `/hooks`. See [Claude Code and Codex](docs/agents.md) for setup,
+their hooks with `/hooks`. See [Claude Code and Codex](https://mhycheung.github.io/open-science/agents/) for setup,
 shared workflows, and the differences in session controls.
 
 If you are not using agents, install the `opsci` command
 (`pip install "git+https://github.com/mhycheung/open-science#subdirectory=tools"`, see
-[The opsci command](docs/cli.md)) and follow the pages of the components you want (below).
+[The opsci command](https://mhycheung.github.io/open-science/cli/)) and follow the pages of the components you want (below).
 
 The framework has three components. Use any combination; each works without the others,
 except context management, which needs project management.
@@ -61,14 +61,14 @@ except context management, which needs project management.
 | # | component | plugin | what | needs |
 |---|---|---|---|---|
 | 1 | project management | `open-science-project` | the project template: description, tasks, map, sources, rules, context files and their caps (`new-project`, `new-task`, `context-files`, `migrate-project`, `update-from-template`, `private-investigation`) | git, `opsci` |
-| 2 | context management (for agents) | `open-science-context` | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`). Codex: see [Claude Code and Codex](docs/agents.md) | project management (installed with it), Claude Code running inside tmux (Codex: tmux only for jumps), `opsci` |
+| 2 | context management (for agents) | `open-science-context` | agents keep the context files current and take over a task from them; optionally, they clear their own conversation and resume from those files (`context-management`, `continue-context`, `advise-with-context`). Codex: see [Claude Code and Codex](https://mhycheung.github.io/open-science/agents/) | project management (installed with it), Claude Code running inside tmux (Codex: tmux only for jumps), `opsci` |
 | 3 | publishing | `open-science-publish` | a private and a public copy of each project; a checked, approved export; a project site; Zenodo releases (`publish`, `zenodo-release`) | git, `opsci`, a GitHub account; any git repository |
 
 There are also two [optional extras](#optional-extras).
 
 Context management needs Claude Code to run inside tmux; the
-[tmux guide](docs/tmux.md) shows how to set it up, including on a cluster's compute node.
-Codex needs tmux only for session jumps; see [Claude Code and Codex](docs/agents.md).
+[tmux guide](https://mhycheung.github.io/open-science/tmux/) shows how to set it up, including on a cluster's compute node.
+Codex needs tmux only for session jumps; see [Claude Code and Codex](https://mhycheung.github.io/open-science/agents/).
 
 ## Optional extras
 
@@ -77,7 +77,7 @@ Both are in `extras/`, and nothing in the three components depends on them.
 | extra | where | what | needs |
 |---|---|---|---|
 | projects list | `extras/projects-page/` (no plugin) | one page on your personal GitHub site listing your projects | a GitHub Pages site; `opsci` only to check the file |
-| SLURM resurrection | plugin `slurm-resurrect`, in `extras/slurm-resurrect/` | for development on a compute node of a computing cluster that uses the SLURM scheduler: when the batch job reaches its time limit, rebuild the tmux session in a new job and resume its Claude Code and Codex sessions; see `extras/slurm-resurrect/README.md` | a SLURM cluster, with tmux and Claude Code or Codex running inside a batch job; `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel` |
+| SLURM resurrection | plugin `slurm-resurrect`, in `extras/slurm-resurrect/` | for development on a compute node of a computing cluster that uses the SLURM scheduler: when the batch job reaches its time limit, rebuild the tmux session in a new job and resume its Claude Code and Codex sessions; see [SLURM resurrection](https://mhycheung.github.io/open-science/slurm-resurrect/) | a SLURM cluster, with tmux and Claude Code or Codex running inside a batch job; `jq`, `flock`, `setsid`, `sbatch`, `squeue`, `scancel` |
 
 ## What is in this repository
 
@@ -108,9 +108,9 @@ Both are in `extras/`, and nothing in the three components depends on them.
 | `opsci context check` | check the context files against their line caps |
 | `opsci publish` | export, check and push the public part of a project |
 | `opsci site` | build the project site |
-| `opsci zenodo` | release data to Zenodo (sandbox by default); see `docs/zenodo.md` |
-| `opsci notify` | send a message, and optionally a file, to the user; see `docs/notify.md` |
-| `opsci notion` | mirror a project into Notion and post to its Feed; see `docs/notion.md` |
+| `opsci zenodo` | release data to Zenodo (sandbox by default); see [Zenodo releases](https://mhycheung.github.io/open-science/zenodo/) |
+| `opsci notify` | send a message, and optionally a file, to the user; see [Notifications](https://mhycheung.github.io/open-science/notify/) |
+| `opsci notion` | mirror a project into Notion and post to its Feed; see [Notion mirror and Feed](https://mhycheung.github.io/open-science/notion/) |
 | `opsci projects-page` | check the personal projects page |
 | `opsci migrate` | check that a migration lost no file |
 | `opsci guide check` | check that the user guide is short and names only things that exist |
