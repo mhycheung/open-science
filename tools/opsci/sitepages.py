@@ -406,7 +406,7 @@ def project_log(docs: Path, site: Site) -> str | None:
 # ------------------------------------------------------------------ map
 
 def map_page(docs: Path, site: Site) -> str | None:
-    """The logic of the project, the claims graph and the project graph, on one page."""
+    """The logic of the project, the project graph and the claims graph, on one page."""
     parts = []
     readme = docs / "map/README.md"
     if readme.is_file():
@@ -424,8 +424,8 @@ def map_page(docs: Path, site: Site) -> str | None:
         parts += [f"# {title or 'Map'}", "", fix_links(body, "map/README.md", "map/README.md", site).strip(), ""]
     else:
         parts += ["# Map", ""]
-    for name, heading, anchor in (("claims.md", "Claims graph", "claims-graph"),
-                                  ("graph.md", "Project graph", "project-graph")):
+    for name, heading, anchor in (("graph.md", "Project graph", "project-graph"),
+                                  ("claims.md", "Claims graph", "claims-graph")):
         p = docs / "map" / name
         if not p.is_file():
             continue

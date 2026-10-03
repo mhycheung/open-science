@@ -11,6 +11,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Project site: the map page shows the project graph before the claims graph, and each graph
+  drawing appears as its interactive view (pan, zoom, search, cards that open the node's page
+  on the site), embedded the way the Notion mirror shows it, with links to the full-screen view
+  and the static picture (`site.embed_graphs`; `graphview.with_links` takes a link `target`).
 - Some publish-check findings can be overridden by the user. SLURM job numbers (`leak`
   kinds `slurm-job-id`, `slurm-array-id`, `slurm-out-file`) and quotations (`copyright`
   kinds `long-quote`, `lit-cache-text`) are often legitimate; a new manifest key

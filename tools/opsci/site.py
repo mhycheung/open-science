@@ -12,7 +12,9 @@ strict mode, so a broken link fails it, and the built site must pass the leak sc
 
 from __future__ import annotations
 
+import html as _html
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -23,7 +25,7 @@ from pathlib import Path, PurePosixPath
 
 import yaml
 
-from . import leakscan, nodes, sitepages
+from . import graphview, leakscan, nodes, sitepages
 
 SKIP = (".git", ".github", ".opsci", "site", "_site")
 # Files never copied into the site: the list of works consulted but not used is private.
@@ -268,6 +270,15 @@ def stage(src: Path, docs: Path) -> Staged:
         text = home_page(_title(src), user_docs[ABSTRACT], user_docs.get(WRITEUP))
         generated[home] = sitepages.fix_links(text, home, home, site)
     site.pages = {p for p in site.pages if p in generated or (docs / p).is_file()}
+    # the page each node's card in a graph view opens: its own page, or the page it moved into
+    node_pages = dict(site.task_ids)
+    for n in scan.nodes:
+        if n.id in node_pages:
+            continue
+        if n.path in site.pages:
+            node_pages[n.id] = n.path
+        elif n.path in site.moved and site.moved[n.path][0] in site.pages:
+            node_pages[n.id] = site.moved[n.path][0]
     for p in sorted(site.pages):
         if p in generated:
             text = generated[p]
@@ -277,12 +288,46 @@ def stage(src: Path, docs: Path) -> Staged:
             if p == "results/README.md":  # the milestone results
                 text = re.sub(r"(?m)^# Results\s*$", "# Main results", text, count=1)
         text = sitepages.mark_unverified(sitepages.cite_links(text, p, keys))
+        text = embed_graphs(text, p, docs, node_pages)
         (docs / p).write_text(text, encoding="utf-8")
     for p in md:
         if p not in site.pages:
             (docs / p).unlink()
     pages = sorted(site.pages)
     return Staged(pages, navigation(docs, pages, home, tdirs, is_result_page, about))
+
+
+GRAPH_IMAGE = re.compile(r"(?m)^!\[([^\]]*)\]\(([^)\s]+)\.svg\)[ \t]*$")
+
+
+def embed_graphs(text: str, page: str, docs: Path, node_pages: dict[str, str]) -> str:
+    """Show each graph drawing (`opsci map build`: an SVG with its interactive view, an HTML
+    file of the same name beside it) as that view, embedded the way the Notion mirror shows it:
+    pan, zoom, search, and cards that open the node's page on the site. The view is written as
+    ``<name>.view.html`` beside the SVG, with its links turned into site links; the page keeps
+    a link to the full-screen view and to the static picture."""
+    base = PurePosixPath(page).parent
+
+    def one(m: re.Match) -> str:
+        alt, stem = m.group(1), m.group(2)
+        rel = (base / stem).as_posix()
+        src = docs / f"{rel}.html"
+        if not src.is_file():
+            return m.group(0)
+        raw = src.read_text(encoding="utf-8")
+        if not graphview.DATA_RE.search(raw):
+            return m.group(0)
+        here = PurePosixPath(rel).parent
+        urls = {i: os.path.relpath(html_path(pg), here.as_posix() or ".")
+                for i, pg in node_pages.items()}
+        view = docs / f"{rel}.view.html"
+        view.write_text(graphview.with_links(raw, urls, label="Open page", target="_top"), encoding="utf-8")
+        title = _html.escape(alt or "Graph", quote=True)
+        return (f'<iframe class="opsci-graph" src="{stem}.view.html" title="{title}" loading="lazy" '
+                f'style="width:100%;height:75vh;min-height:420px;border:1px solid #d0d7de;'
+                f'border-radius:6px"></iframe>\n\n'
+                f"[Open full screen]({stem}.view.html) · [Static picture]({stem}.svg)")
+    return GRAPH_IMAGE.sub(one, text)
 
 
 def html_path(page: str) -> str:
