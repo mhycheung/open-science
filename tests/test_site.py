@@ -1,3 +1,19 @@
+# opsci: planted-leaks (a control case plants a path in a page)
+"""Project site (the "project site" test row)."""
+import json
+import re
+
+import pytest
+import yaml
+
+from opsci import site
+
+
+def page(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text)
+
+
 def test_graph_image_becomes_its_interactive_view(tmp_path):
     from opsci import graphview
     docs = tmp_path
@@ -16,22 +32,6 @@ def test_graph_image_becomes_its_interactive_view(tmp_path):
     cards = {c["id"]: c for c in D["cards"]}
     assert cards["t01-fit"]["url"] == "../tasks/t01-fit/context.html" and "href" not in cards["t01-fit"]
     assert "url" not in cards["r09-private"] and D["onlyUrls"] and D["linkTarget"] == "_top"
-
-
-# opsci: planted-leaks (a control case plants a path in a page)
-"""Project site (the "project site" test row)."""
-import json
-import re
-
-import pytest
-import yaml
-
-from opsci import site
-
-
-def page(path, text):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
 
 
 PNG = bytes.fromhex("89504e470d0a1a0a0000000d4948445200000001000000010806000000"

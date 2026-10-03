@@ -323,7 +323,8 @@ def embed_graphs(text: str, page: str, docs: Path, node_pages: dict[str, str]) -
         view = docs / f"{rel}.view.html"
         view.write_text(graphview.with_links(raw, urls, label="Open page", target="_top"), encoding="utf-8")
         title = _html.escape(alt or "Graph", quote=True)
-        return (f'<iframe class="opsci-graph" src="{stem}.view.html" title="{title}" loading="lazy" '
+        src_attr = _html.escape(f"{stem}.view.html", quote=True)
+        return (f'<iframe class="opsci-graph" src="{src_attr}" title="{title}" loading="lazy" '
                 f'style="width:100%;height:75vh;min-height:420px;border:1px solid #d0d7de;'
                 f'border-radius:6px"></iframe>\n\n'
                 f"[Open full screen]({stem}.view.html) · [Static picture]({stem}.svg)")
