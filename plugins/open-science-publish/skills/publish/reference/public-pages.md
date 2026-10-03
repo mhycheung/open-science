@@ -3,26 +3,15 @@
 ## What is not science or code
 
 Every exported Markdown file is published, while the private files keep everything. The
-public record holds the science and the code; these are left out:
-
-- housekeeping items in "Waiting on the user", "Next step" and "Open questions" of the
-  context files: "redo the plot?", "commit the plots?", "which file name?", "whether to
-  commit `lit_cache/2609.07873/` (28 MB, untracked)", "the owner has not answered on Slack
-  yet";
-- deadlines and urgency: "do this before 00:00 tonight, full court press";
-- the user's availability: "I will be away for a few hours";
-- reminders about reporting and communication: "remember the Slack reporting requirement";
-- allocation and quota remarks: "the cluster allocation is running out, so ...";
-- impatience or mood: "this is taking too long, change method";
-- personal remarks, and verbatim user messages that instruct agents;
-- agent mechanics with no technical content: session jumps, context size, `PAUSED` lines,
-  permissions.
+public record holds the science and the code; what that covers, for whole tasks and for
+passages, is in `science-or-code.md`. In the context files, housekeeping items in "Waiting
+on the user", "Next step" and "Open questions" are left out too: "redo the plot?", "commit
+the plots?", "which file name?", "whether to commit `lit_cache/2609.07873/` (28 MB,
+untracked)".
 
 Keep what a reader of the project needs: a scientific decision the user owes ("report
 $\iota$ at a single $t_*$, or the range over the three peaks?"), the choice of the next
-task, "next: compute $X$ and add it to the task goal", and the technical content of a
-decision ("switched to method $Y$: $X$ needs ~40 h per unit"). A measured compute cost
-("515 SU") describes the method and stays.
+task, "next: compute $X$ and add it to the task goal".
 
 Wrap each such passage in the private source file:
 

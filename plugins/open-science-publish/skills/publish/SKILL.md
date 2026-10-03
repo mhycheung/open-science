@@ -82,25 +82,11 @@ and may be run whenever they help.
    and go back to step 2.
 
 6. **Leave out what is not science or code.** The public record holds the science and the
-   code. In every exported Markdown file, wrap in an omission marker in the private file
-   (`<!-- omit -->...<!-- /omit -->`) each passage that is about neither:
-   - housekeeping items in "Waiting on the user", "Next step" or "Open questions" of the
-     context files ("commit the plots?", "redo the plot?");
-   - deadlines and urgency ("before 00:00 tonight", "full court press"), the user's
-     availability ("I will be away for a few hours"), reminders about reporting (Slack,
-     Notion, "you sometimes don't report"), allocation or quota remarks ("the allocation is
-     running out, so ..."), impatience ("this is taking too long, change method"), personal
-     remarks, and verbatim user messages that instruct agents;
-   - agent mechanics with no technical content: session jumps, context size, `PAUSED`
-     lines, permissions, ssh-agent instructions.
-
-   Keep the technical content such a passage carries when it stands alone ("switched to
-   method $Y$"); when a sentence mixes the two and cannot be split, leave it and list it in
-   step 9. Find candidates with a search of the export (`Slack`, `tonight`, `ASAP`,
-   `away`, `allocation`, `quota`, `too long`, `User:`, `user said`, `remind`) and by reading
-   the context files, plans and `subcontext/` documents. Add the markers yourself, list
-   them for the user in step 9, commit, and go back to step 2.
-   What to keep and how the export drops them: `reference/public-pages.md`.
+   code; `reference/science-or-code.md` says what that covers, task by task and passage by
+   passage. Check each task's `privacy:` against it, list each named person, and wrap each
+   passage about neither in `<!-- omit -->...<!-- /omit -->` in the private file (how the
+   export drops it: `reference/public-pages.md`). List the markers, the tasks whose tier
+   looks wrong and the people for the user in step 9, commit, and go back to step 2.
 
 7. **Citations.** For each `citations/used.bib` entry without a `usage` field, or without the
    `doi` or `eprint` it has, propose the missing fields (`reference/public-pages.md`); add
