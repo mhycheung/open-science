@@ -16,6 +16,27 @@ means the private remote. You may ask whether to publish; a no, or no answer, me
 `opsci publish status`, `opsci publish check` and `opsci site preview` write nothing public
 and may be run whenever they help.
 
+## Ask before a large sweep
+
+Steps 6, 7 and 9 can mean reading every exported file. Before you start subagents for this,
+or read more than the diff since the last publish yourself, stop and ask the user. Say how
+many files and how much text (in kB) the sweep covers, how many subagents you plan, and that
+it costs tokens: a sweep of a whole project with several subagents can use millions. Offer
+these choices, and recommend one:
+
+1. **Full sweep.** Every exported file, with subagents.
+2. **Diff only.** Only the files changed since the last publish (the `.diff`), read by you,
+   without subagents. On a first publish there is no earlier publish, so say that this
+   option leaves unread files.
+3. **Flagged findings only.** Fix what the checks report (steps 4 and 5), skip the sweeps
+   of steps 6, 7 and 9, and go to step 10.
+
+Tell the user what each smaller choice leaves unchecked: passages that are not science or
+code, and wording that the deterministic checks do not catch. The checks of step 2 still run
+in full under every choice. Note the choice in the report under `## Review (tone, claims)`.
+Ask once per publish; if a second sweep would start later in the same publish, follow the
+answer already given.
+
 ## Procedure
 
 1. **Consistency check first.** The public repo must hold nothing the private repo lacks.
@@ -82,7 +103,7 @@ and may be run whenever they help.
 
 7. **Leave out what is not science or code.** The public record holds the science and the
    code; `reference/science-or-code.md` says what that covers, task by task and passage by
-   passage. Check each task's `privacy:` against it, list each named person, and wrap each
+   passage. Cover the files the user chose ("Ask before a large sweep"). Check each task's `privacy:` against it, list each named person, and wrap each
    passage about neither in `<!-- omit -->...<!-- /omit -->` in the private file (how the
    export drops it: `reference/public-pages.md`). List the markers, the tasks whose tier
    looks wrong and the people for the user in step 10, commit, and go back to step 2.
@@ -91,7 +112,8 @@ and may be run whenever they help.
    `doi` or `eprint` it has, propose the missing fields (`reference/public-pages.md`); add
    them once the user agrees, commit, and go back to step 2.
 
-9. **Review the diff.** Read the `.diff` with `reference/review-rubric.md` and write the
+9. **Review the diff.** Read the `.diff` with `reference/review-rubric.md`, within the
+   user's choice ("Ask before a large sweep"), and write the
    findings (tone, claims not `verified`, private material, passages that are not science
    or code) under `## Review (tone, claims)` in the report. The report's notes list soft-private mentions; check that each
    one is in passing. Quote each flagged passage with its file and line. Do not edit the
