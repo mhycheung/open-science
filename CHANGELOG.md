@@ -9,7 +9,7 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
-## Unreleased
+## 0.3.1 - 2026-10-02
 
 - Every session jump reports to the user: `jump.sh active|wait` requires `--report "<text>"`
   and, once its checks pass, posts it with `opsci notify --kind status --no-mention` (the

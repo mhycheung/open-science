@@ -1,6 +1,6 @@
 {
   "name": "open-science-project",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Project management: the project template, tasks with a node header, the task map, context files with line caps, citations and logs.",
   "skills": "./skills/",
   "hooks": "./hooks/codex.json"
