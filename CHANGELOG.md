@@ -9,19 +9,7 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
-## 0.3.1 - 2026-10-02
-
-- Every session jump reports to the user: `jump.sh active|wait` requires `--report "<text>"`
-  and, once its checks pass, posts it with `opsci notify --kind status --no-mention` (the
-  Feed in Notion, or the configured back end), with the kind of jump and the context file.
-  A jump clears the conversation, so without it the user saw only `/clear`. A failed send
-  is logged and does not stop the jump. `opsci notify` gains `--kind` and `--no-mention`
-  (notion back end only). Claude Code and Codex alike. No layout change.
-- A SLURM job wakes a session once. `wait_slurm.sh --notify` no longer queues jobs that a
-  pending waker of the session (or Codex pane) already covers, such as one queued before a
-  jump, and an array task is covered by a waker for its array; the mod sends the reports of
-  all wakers done in one poll as one message, each distinct report once. Before, a session
-  that queued the same job again after a jump was sent one identical message per waker.
+## Unreleased
 
 - The publish skill has a guide to what is science or code
   (`reference/science-or-code.md`, user rulings of 2026-10-02), linked from step 6. A task
@@ -43,6 +31,20 @@ layout 1) and the framework's, in order, before it applies the other template ch
   before the review, and the review rubric has a fourth category, "not science or code".
   No layout change; `open-science-project:update-from-template` brings the new `AGENTS.md`
   bullet into existing projects.
+
+## 0.3.1 - 2026-10-02
+
+- Every session jump reports to the user: `jump.sh active|wait` requires `--report "<text>"`
+  and, once its checks pass, posts it with `opsci notify --kind status --no-mention` (the
+  Feed in Notion, or the configured back end), with the kind of jump and the context file.
+  A jump clears the conversation, so without it the user saw only `/clear`. A failed send
+  is logged and does not stop the jump. `opsci notify` gains `--kind` and `--no-mention`
+  (notion back end only). Claude Code and Codex alike. No layout change.
+- A SLURM job wakes a session once. `wait_slurm.sh --notify` no longer queues jobs that a
+  pending waker of the session (or Codex pane) already covers, such as one queued before a
+  jump, and an array task is covered by a waker for its array; the mod sends the reports of
+  all wakers done in one poll as one message, each distinct report once. Before, a session
+  that queued the same job again after a jump was sent one identical message per waker.
 
 - On Claude Code, session jumps are done by a Claude Code mod (`hooks/context_mod.js` in
   `open-science-context`): code Claude Code runs inside itself (Claude Code 2.1.287 or
