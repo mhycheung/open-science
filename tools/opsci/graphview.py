@@ -77,9 +77,10 @@ def linked_ids(html: str, urls: dict[str, str]) -> list[str]:
     return sorted({x["id"] for x in D["cards"] + D["boxes"] if x["id"] in urls})
 
 
-def with_links(html: str, urls: dict[str, str], label: str = "Open in Notion") -> str:
+def with_links(html: str, urls: dict[str, str], label: str = "Open in Notion", target: str = "_blank") -> str:
     """``html`` with each card and box whose id is in ``urls`` linked to that URL, and no
-    link to a file (which does not resolve where the page is shown)."""
+    link to a file (which does not resolve where the page is shown). ``target``: where a
+    link opens (``_top`` for a view embedded in a site page)."""
     m = DATA_RE.search(html)
     if not m:
         return html
@@ -88,7 +89,7 @@ def with_links(html: str, urls: dict[str, str], label: str = "Open in Notion") -
         x.pop("href", None)
         if x["id"] in urls:
             x["url"] = urls[x["id"]]
-    D["linkLabel"], D["onlyUrls"] = label, True
+    D["linkLabel"], D["onlyUrls"], D["linkTarget"] = label, True, target
     return html[:m.start(2)] + _dump(D) + html[m.end(2):]
 
 
@@ -179,7 +180,7 @@ var UA=navigator.userAgent,MOBILE=['iPad','iPhone','iPod'].some(function(w){retu
 function rel(map,a,b){(map[a]=map[a]||[]).push(b)}
 // boxes, under the arrows
 D.boxes.forEach(function(b){boxById[b.id]=b;var e=el('div','box'+(b.style==='brainstorm'?' brain':''));world.insertBefore(e,svg);place(e,b);
-  var h=el('div','hd',e),u=link(b),k=u?el('a',null,h):h;if(u){k.href=u;k.target='_blank';k.rel='noopener';k.title=D.linkLabel}
+  var h=el('div','hd',e),u=link(b),k=u?el('a',null,h):h;if(u){k.href=u;k.target=D.linkTarget||'_blank';k.rel='noopener';k.title=D.linkLabel}
   el('b',null,k,b.kicker);if(b.badge){h.appendChild(document.createTextNode(' '));badge(h,b.badge)}
   if(b.title){el('br',null,h);el('i',null,h,b.title)}b.el=e;
   if(u)k.addEventListener('pointerdown',function(ev){ev.stopPropagation()})});
@@ -228,7 +229,7 @@ function select(c){sel=c;var up=walk(c.id,UP),dn=walk(c.id,DOWN);lineage={};line
 function clear(){sel=null;lineage=null;P.style.display='none';refresh()}
 function showPanel(c){P.innerHTML='';var x=el('button','x',P,'×');x.title='Close';x.onclick=clear;
   el('div','pid',P,c.id);el('h3',null,P,c.title||c.id);if(c.meta)el('div','meta',P,c.meta);
-  var u=link(c);if(u){var a=el('a','open',P,D.linkLabel+' \u2197');a.href=u;a.target='_blank';a.rel='noopener'}
+  var u=link(c);if(u){var a=el('a','open',P,D.linkLabel+' \u2197');a.href=u;a.target=D.linkTarget||'_blank';a.rel='noopener'}
   if(u&&D.onlyUrls&&MOBILE)el('p','hint',P,'In the Notion app, this button opens the browser. To stay in the app, open \u201cPages in this graph\u201d under the graph.');
   if(c.summary)el('p',null,P,c.summary);if(c.tags&&c.tags.length)el('p',null,P,'Uses: '+c.tags.join(', '));
   list('Rests on',(UP[c.id]||[]));list(D.legend?D.legend.charAt(0).toUpperCase()+D.legend.slice(1):'Used by',(DOWN[c.id]||[]));

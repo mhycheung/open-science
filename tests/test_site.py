@@ -1,3 +1,23 @@
+def test_graph_image_becomes_its_interactive_view(tmp_path):
+    from opsci import graphview
+    docs = tmp_path
+    data = {"cards": [{"id": "t01-fit", "title": "Fit", "href": "../tasks/t01-fit/context.md"},
+                      {"id": "r09-private", "title": "Private"}], "boxes": []}
+    page(docs / "map/graph.html", '<html><script id="opsci-graph-data" type="application/json">'
+         + json.dumps(data) + "</script></html>")
+    page(docs / "map/plain.html", "<html>not a graph view</html>")
+    text = "Intro.\n\n![Project graph](graph.svg)\n\n![Other](plain.svg)\n\n![Missing](none.svg)\n"
+    out = site.embed_graphs(text, "map/README.md", docs, {"t01-fit": "tasks/t01-fit/context.md"})
+    assert '<iframe class="opsci-graph" src="graph.view.html" title="Project graph"' in out
+    assert "[Open full screen](graph.view.html)" in out and "[Static picture](graph.svg)" in out
+    assert "![Other](plain.svg)" in out and "![Missing](none.svg)" in out  # controls: not graph views
+    view = (docs / "map/graph.view.html").read_text()
+    D = json.loads(graphview.DATA_RE.search(view).group(2))
+    cards = {c["id"]: c for c in D["cards"]}
+    assert cards["t01-fit"]["url"] == "../tasks/t01-fit/context.html" and "href" not in cards["t01-fit"]
+    assert "url" not in cards["r09-private"] and D["onlyUrls"] and D["linkTarget"] == "_top"
+
+
 # opsci: planted-leaks (a control case plants a path in a page)
 """Project site (the "project site" test row)."""
 import json
@@ -193,6 +213,7 @@ def test_map_is_one_page_with_both_graphs(built):
     problems, out = built
     html = (out / "map/index.html").read_text()
     assert 'id="claims-graph"' in html and 'id="project-graph"' in html
+    assert html.index('id="project-graph"') < html.index('id="claims-graph"')  # the project graph first
     assert html.count('class="mermaid"') == 1  # the project graph (the sample claims graph has none)
     assert 'href="#project-graph"' in html and 'href="#results"' in html  # links between the old files
     assert 'href="../map/index.html#claims-graph"' not in html
