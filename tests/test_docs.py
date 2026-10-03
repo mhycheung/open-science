@@ -1,5 +1,6 @@
 """Checks on the documentation site (mkdocs.yml, docs/). Each check has a control case that
 must fail, so a check that passes for the wrong reason is caught."""
+import difflib
 import importlib.util
 import re
 import shutil
@@ -82,6 +83,41 @@ def get_started_problems(text: str) -> list[str]:
     if "open-science:onboard" not in text:
         probs.append("does not name open-science:onboard")
     return probs
+
+
+SITE_URL = "https://mhycheung.github.io/open-science/"
+README_ONLY = "## What is in this repository"  # README sections from here on are about the repository
+DOC_LINK_RE = re.compile(r"\]\((?!https?://|#)([^)#]+?)(?:\.md)?(#[^)]*)?\)")
+
+
+def site_link(m: re.Match) -> str:
+    """A link of a docs page, as the README writes it: pages as site URLs, files as paths
+    from the repository root."""
+    path, anchor = m.group(1), m.group(2) or ""
+    if path.startswith("figures/"):
+        return f"](docs/{path}{anchor})"
+    page = "" if path == "index" else f"{path}/"
+    return f"]({SITE_URL}{page}{anchor})"
+
+
+def body(text: str) -> str:
+    """The page without its title line."""
+    return text.split("\n", 1)[1].strip("\n")
+
+
+def readme_from_get_started(index_text: str) -> str:
+    """The README's part before `README_ONLY`: the Get started page with site links."""
+    return DOC_LINK_RE.sub(site_link, body(index_text))
+
+
+def readme_mismatch(readme_text: str, index_text: str) -> list[str]:
+    """Lines where the README's shared part differs from the Get started page."""
+    if README_ONLY not in readme_text:
+        return [f"README has no {README_ONLY!r}"]
+    shared = body(readme_text.split(README_ONLY)[0])
+    want = readme_from_get_started(index_text)
+    return [line for line in difflib.unified_diff(want.splitlines(), shared.splitlines(), lineterm="", n=0)
+            if line[:1] in "+-" and not line.startswith(("+++", "---"))]
 
 
 def publish_check_names() -> set[str]:
@@ -174,6 +210,19 @@ def test_get_started_check_refuses_page_without_them():
     assert get_started_problems(text.replace(FIGURE, "figures/other.svg")) == [f"does not show {FIGURE}"]
     no_onboard = text.replace("open-science:onboard", "the onboarding skill")
     assert get_started_problems(no_onboard) == ["does not name open-science:onboard"]
+
+
+def test_readme_matches_get_started():
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    assert readme_mismatch(readme, (DOCS / "index.md").read_text(encoding="utf-8")) == []
+
+
+def test_readme_check_finds_difference():
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    index = (DOCS / "index.md").read_text(encoding="utf-8")
+    assert readme_mismatch(readme, index.replace("rapidly", "quickly")) != []
+    assert readme_mismatch(readme.replace(f"]({SITE_URL}tutorial/)", "](docs/tutorial.md)"), index) != []
+    assert readme_mismatch(readme.replace(README_ONLY, "## Repository"), index) == [f"README has no {README_ONLY!r}"]
 
 
 def test_publishing_page_names_every_publish_check():
