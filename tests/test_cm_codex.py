@@ -21,6 +21,7 @@ from conftest import REPO
 
 SCRIPTS = REPO / "plugins" / "open-science-context" / "scripts"
 FAKE = REPO / "tests" / "fixtures" / "fake_codex"
+OPSCI_FAKE = REPO / "tests" / "fixtures" / "fake_opsci"
 
 pytestmark = [
     pytest.mark.skipif(shutil.which("jq") is None, reason="jq not installed"),
@@ -44,7 +45,8 @@ def env(tmp_path):
     e = {k: v for k, v in os.environ.items()
          if not k.startswith(("TMUX", "CLAUDE", "OPSCI", "SLURM", "CODEX"))}
     e.update(OPSCI_STATE_DIR=str(tmp_path / "state"), CLAUDE_CONFIG_DIR=str(tmp_path / "cfg"),
-             PATH=f"{FAKE}:{e['PATH']}", FAKE_CX_HOOK=str(SCRIPTS / "cx_hook.sh"),
+             PATH=f"{FAKE}:{OPSCI_FAKE}:{e['PATH']}", FAKE_OPSCI_LOG=str(tmp_path / "opsci.log"),
+             FAKE_CX_HOOK=str(SCRIPTS / "cx_hook.sh"),
              FAKE_CX_ARGV_LOG=str(tmp_path / "argv.log"),
              FAKE_CX_QUEUE_LOG=str(tmp_path / "queue.log"),
              FAKE_CX_HOOK_OUT=str(tmp_path / "hook.out"),
@@ -56,6 +58,8 @@ def env(tmp_path):
 
 
 def run(env, script, *args, stdin=None):
+    if script == "jump.sh" and args and args[0] in ("active", "wait") and "--report" not in args:
+        args = (*args, "--report", "r")
     return subprocess.run(["bash", str(SCRIPTS / script), *map(str, args)], input=stdin,
                           capture_output=True, text=True, env=env, timeout=60)
 
@@ -277,8 +281,10 @@ def test_active_jump_ends_the_tui_and_starts_a_fresh_one(env, pane, tmp_path):
     rec = pane["start"]("codex -s workspace-write -a on-request 'hello'")
     old = rec["thread_id"]
     sh = as_tool_shell(pane, rec)
-    r = run(sh, "jump.sh", "active", pane["ctx"], "--force")
+    r = run(sh, "jump.sh", "active", pane["ctx"], "--force", "--report", "Fit 3 done")
     assert r.returncode == 0, r.stderr
+    [call] = [json.loads(x) for x in lines(env["FAKE_OPSCI_LOG"])]     # the user is told
+    assert call[0] == "notify" and "--kind" in call and call[-1].startswith("Fit 3 done\n\n")
     os.kill(int(rec["tui_pid"]), 10)          # the turn ends: the fake fires Stop
     assert wait_for(lambda: json.loads(pane["prec"].read_text())["thread_id"] != old, 60), \
         (state(env) / "cm.log").read_text()

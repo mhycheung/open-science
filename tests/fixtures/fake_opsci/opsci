@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Stand-in for `opsci` in the context-management tests: appends its arguments, one JSON
+# array per call, to $FAKE_OPSCI_LOG and exits $FAKE_OPSCI_RC (default 0).
+[ -n "${FAKE_OPSCI_LOG:-}" ] && python3 -c 'import json, sys; print(json.dumps(sys.argv[1:]))' "$@" >> "$FAKE_OPSCI_LOG"
+echo "fake opsci: $1"
+exit "${FAKE_OPSCI_RC:-0}"

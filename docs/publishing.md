@@ -228,11 +228,24 @@ rebuilt map run on the redacted text. The standard reasons are "proprietary data
 "unpublished work by collaborators" and "private information". The `redaction` check
 refuses a marker that is not closed and one with an empty reason.
 
+## What is science or code
+
+The public release holds the science and the code. The publish skill's guide
+(`plugins/open-science-publish/skills/publish/reference/science-or-code.md`) says what that
+covers. In short: a task whose goal is not science or code (the results website,
+infrastructure, tooling, release preparation) is `soft-private`, set when the task is
+created and checked at publish; the website's source code is still exported. In a public
+task, a bug that touched a result and every failed route stay; environment trouble, agent
+mechanics, clock times, budget ceilings, deadlines, mood, reporting and details of anyone's
+network or machine are omitted. A user's message is never published verbatim: it becomes a
+dated ruling in plain words. Dates and measured costs stay. Each named person is listed for
+you to decide.
+
 ## Omission
 
 Housekeeping that the context files carry for you, such as "commit the plots?" in "Waiting
-on the user", is not published. The agent that writes the context file, or the publish
-skill before the approval, wraps each such item in an omission marker:
+on the user", and passages that are not science or code are not published. The agent that
+writes the file, or the publish skill before the approval, wraps each in an omission marker:
 
 ```
 <!-- omit -->- Whether to commit the new figures?<!-- /omit -->

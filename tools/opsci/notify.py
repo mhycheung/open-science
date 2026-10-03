@@ -394,8 +394,12 @@ class SlackBackend(Backend):
 # ---------------------------------------------------------------- command line
 
 def notify(text: str, attachment: str | None = None, backend: str | None = None,
-           project_root: str | None = None, out=sys.stdout, err=sys.stderr) -> int:
-    """Send one message. Returns the exit status. Never raises for expected failures."""
+           project_root: str | None = None, kind: str | None = None, mention: bool | None = None,
+           out=sys.stdout, err=sys.stderr) -> int:
+    """Send one message. Returns the exit status. Never raises for expected failures.
+
+    `kind` and `mention` override the back end's config for this message; only the notion
+    back end uses them (the Feed kind, and whether the user is @mentioned)."""
     root, main = find_roots(project_root)
     att = None
     if attachment:
@@ -413,6 +417,8 @@ def notify(text: str, attachment: str | None = None, backend: str | None = None,
         section = cfg.get(name) or {}
         if not isinstance(section, dict):
             raise NotifyError(f"config: notify.{name} must be a mapping")
+        section = {**section, **({"kind": kind} if kind else {}),
+                   **({"mention": mention} if mention is not None else {})}
         where = BACKENDS[name](section, root, main).send(text, att)
         print(f"opsci notify: {where}", file=out)
         return 0
@@ -433,7 +439,8 @@ def notify(text: str, attachment: str | None = None, backend: str | None = None,
 
 def cmd_notify(args) -> int:
     try:
-        return notify(args.text, args.file, backend=args.backend, project_root=args.project_root)
+        return notify(args.text, args.file, backend=args.backend, project_root=args.project_root,
+                      kind=args.kind, mention=False if args.no_mention else None)
     except Exception as exc:  # noqa: BLE001 - never print a traceback (it could hold a secret)
         print(f"opsci notify: internal error ({type(exc).__name__}); nothing printed from it "
               f"in case it holds a secret", file=sys.stderr)
@@ -446,6 +453,10 @@ def add_parser(sub) -> None:
     p.add_argument("--backend", help=f"back end to use ({', '.join(sorted(BACKENDS))}); "
                                      f"default: config notify.backend, else 'file'")
     p.add_argument("--project-root", help="project root (default: git top level of the current directory)")
+    p.add_argument("--kind", help="Feed kind of the message (notion back end only; default: "
+                                  "config notify.notion.kind, else note)")
+    p.add_argument("--no-mention", action="store_true",
+                   help="do not @mention the user (notion back end only)")
     p.add_argument("text", help="message text")
     p.add_argument("file", nargs="?", help="file to attach")
     p.set_defaults(func=cmd_notify)

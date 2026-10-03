@@ -80,25 +80,25 @@ and may be run whenever they help.
    group and rewrite beside the original titles; the user approves or changes them. Commit
    and go back to step 2.
 
-7. **Housekeeping in the context files.** In the exported project and task `context.md`
-   files, wrap each "Waiting on the user", "Next step" or "Open questions" item that is
-   housekeeping, not part of the task's or project's goal ("commit the plots?", "redo the
-   plot?"), in an omission marker in the private file: `<!-- omit -->...<!-- /omit -->`.
-   Add them yourself, list them for the user in step 10, commit, and go back to step 2.
-   What to keep and how the export drops them: `reference/public-pages.md`.
+7. **Leave out what is not science or code.** The public record holds the science and the
+   code; `reference/science-or-code.md` says what that covers, task by task and passage by
+   passage. Check each task's `privacy:` against it, list each named person, and wrap each
+   passage about neither in `<!-- omit -->...<!-- /omit -->` in the private file (how the
+   export drops it: `reference/public-pages.md`). List the markers, the tasks whose tier
+   looks wrong and the people for the user in step 10, commit, and go back to step 2.
 
 8. **Citations.** For each `citations/used.bib` entry without a `usage` field, or without the
    `doi` or `eprint` it has, propose the missing fields (`reference/public-pages.md`); add
    them once the user agrees, commit, and go back to step 2.
 
 9. **Review the diff.** Read the `.diff` with `reference/review-rubric.md` and write the
-   findings (tone, claims not `verified`, private material) under `## Review (tone,
-   claims)` in the report. The report's notes list soft-private mentions; check that each
+   findings (tone, claims not `verified`, private material, passages that are not science
+   or code) under `## Review (tone, claims)` in the report. The report's notes list soft-private mentions; check that each
    one is in passing. Quote each flagged passage with its file and line. Do not edit the
    flagged files yourself; the user decides.
 
 10. **Stop for approval.** Show the user the report path, the check result, the files
-   exported, your review findings, the items you omitted from the context files, and how
+   exported, your review findings, the passages you omitted (step 7), and how
    the unpublished nodes appear in the map, and the public commit message you propose: a
    subject line that says what this publish adds ("Publish the ringdown fits of t03 and the
    dead end of t02"), then a short paragraph if the subject is not enough. Write it for

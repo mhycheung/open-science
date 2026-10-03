@@ -121,7 +121,7 @@ if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ" 2>/dev/null)" = requested ]; then
   elif [ "$(jq -r .kind "$REQ")" = wait ] && [ "$(live_wakers)" -eq 0 ]; then
     rm -f "$REQ"
     cm_log "cx stop $TMUX_PANE: wait jump REFUSED, no waker"
-    block "open-science: wait jump refused and cancelled. Nothing will wake the new Codex session: no waker is queued or running for this pane. Start one first (for SLURM jobs: bash <plugin>/scripts/wait_slurm.sh --notify <jobid>...) and request the wait jump again, or do an active jump (jump.sh active <context file>)."
+    block "open-science: wait jump refused and cancelled. Nothing will wake the new Codex session: no waker is queued or running for this pane. Start one first (for SLURM jobs: bash <plugin>/scripts/wait_slurm.sh --notify <jobid>...) and request the wait jump again, or do an active jump (jump.sh active <context file> --report \"<report>\")."
   else
     tmp="$REQ.tmp.$$"; jq '.phase="launched"' "$REQ" > "$tmp" && mv "$tmp" "$REQ"
     setsid nohup bash "$HERE/jump.sh" --worker "$REQ" </dev/null >>"$OS_LOG" 2>&1 &
@@ -149,4 +149,4 @@ NF="$OS_STATE/size/$KEY"
 read -r nsid ntok < "$NF" 2>/dev/null || { nsid=""; ntok=0; }
 if [ "$nsid" = "$SID" ] && [ "$tokens" -lt "$(( ${ntok:-0} + REPEAT ))" ] 2>/dev/null; then exit 0; fi
 mkdir -p "$OS_STATE/size" && printf '%s %s\n' "$SID" "$tokens" > "$NF"
-block "open-science: context is ${tokens} tokens, above ${TH}. Do an active jump now (skill open-science-context:context-management): save the state to the context file, then run jump.sh active <context file>; this Codex session then ends and a fresh one starts in this pane from the context file. If you are about to wait on running work, do a wait jump instead. If this turn ends waiting for the user (a question, a decision, something only the user can do), do not jump: say so in one line and stop."
+block "open-science: context is ${tokens} tokens, above ${TH}. Do an active jump now (skill open-science-context:context-management): save the state to the context file, then run jump.sh active <context file> --report \"<report for the user>\"; this Codex session then ends and a fresh one starts in this pane from the context file. If you are about to wait on running work, do a wait jump instead. If this turn ends waiting for the user (a question, a decision, something only the user can do), do not jump: say so in one line and stop."

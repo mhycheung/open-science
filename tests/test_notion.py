@@ -579,6 +579,16 @@ def test_notify_backend_posts_to_feed(mirrored):
         all(p.name == "README.md" for p in (S.proj / "messages").glob("*.md"))
 
 
+def test_notify_kind_and_no_mention_apply_to_one_message(mirrored):
+    S, m = mirrored, mirrored.mock
+    r = run(S, "notify", "--kind", "status", "--no-mention", "jumped", cwd=S.proj)
+    assert "posted to the project's Notion Feed" in r.stdout
+    post = m.node(live_ids(m, state(S.proj)["feed_page"])[1])
+    rt = post["body"]["rich_text"]
+    assert all(x["type"] != "mention" for x in rt) and "jumped" in MockNotion.plain(rt)
+    assert post["body"]["icon"]["emoji"] == "🔵"               # the status icon
+
+
 def _message_files(proj):
     return [p for p in (proj / "messages").glob("*.md") if p.name != "README.md"]
 

@@ -37,11 +37,14 @@ No tmux or no trusted hook: keep context files current and use a new session wit
 explicit context path; do not attempt terminal automation.
 
 Before a jump, save the task and project state, in-flight job ids, next step and log.
-Run the request as the last tool call, then end the turn:
+Every jump carries the report for the user that `SKILL.md` describes (`--report`, required):
+the new session starts without the conversation, so the report is all the user learns of
+it. Run the request as the last tool call, then end the turn:
 
-- Active: `bash "$SCRIPTS/jump.sh" active <context file>`.
+- Active: `bash "$SCRIPTS/jump.sh" active <context file> --report "<report>"`.
 - Waiting on SLURM: first `bash "$SCRIPTS/wait_slurm.sh" --notify <jobid>...`, then
-  `bash "$SCRIPTS/jump.sh" wait <context file>`. The Stop hook starts the detached waker.
+  `bash "$SCRIPTS/jump.sh" wait <context file> --report "<report>"`. The Stop hook starts
+  the detached waker.
 
 The trusted Stop hook ends the old TUI and starts a fresh Codex session in the same
 pane shell with its saved launch options and a prompt to read the context. It never sends

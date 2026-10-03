@@ -68,6 +68,14 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
   state down honestly and re-plan.
 - **Language.** Write plain, direct English: one idea per sentence, active voice, the
   outcome first. Say what you mean; avoid metaphor where a literal phrase exists.
+- **Record content, not conversation.** Files in the project (context files, plans, logs,
+  subcontext, results, captions) record the science and the code: what was decided, why,
+  and what was found, in your own words. Never paste a user's message verbatim; record the
+  decision it carries ("ruling 4 (2026-10-02): the window starts at $10\,M$"). Leave out
+  what is not about the science or the code: deadlines and urgency, the user's
+  availability, reminders about reporting, allocation or quota remarks, impatience,
+  personal remarks, and agent mechanics (session handling, context size, permissions). If
+  such a message changes the work, record only the technical change.
 - **Mathematics in LaTeX.** Write every symbol, equation and formula in LaTeX, in every
   file and message: inline `$\iota_Q(t)$`, displayed `$$ ... $$` on lines of their own. This
   holds for context files, plans, logs, node summaries, captions, reports and messages.

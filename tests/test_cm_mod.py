@@ -24,6 +24,7 @@ from conftest import REPO
 PLUGIN = REPO / "plugins" / "open-science-context"
 SCRIPTS = PLUGIN / "scripts"
 FAKE = REPO / "tests" / "fixtures" / "fake_claude"
+OPSCI_FAKE = REPO / "tests" / "fixtures" / "fake_opsci"
 
 pytestmark = pytest.mark.skipif(shutil.which("jq") is None, reason="jq not installed")
 
@@ -40,7 +41,8 @@ def skey(sid):
 def env(tmp_path):
     e = {k: v for k, v in os.environ.items()
          if not k.startswith(("TMUX", "CLAUDE", "OPSCI", "SLURM", "CODEX"))}
-    e.update(OPSCI_STATE_DIR=str(tmp_path / "state"), CLAUDE_CONFIG_DIR=str(tmp_path / "cfg"))
+    e.update(OPSCI_STATE_DIR=str(tmp_path / "state"), CLAUDE_CONFIG_DIR=str(tmp_path / "cfg"),
+             PATH=f"{OPSCI_FAKE}:{e['PATH']}", FAKE_OPSCI_LOG=str(tmp_path / "opsci.log"))
     (tmp_path / "state").mkdir()
     return e
 
@@ -67,6 +69,8 @@ def session(env, tmp_path):
 
 
 def run(env, script, *args, stdin="", fake_claude=False, **extra):
+    if script == "jump.sh" and args and args[0] in ("active", "wait") and "--report" not in args:
+        args = (*args, "--report", "r")
     cmd = ["bash", str(SCRIPTS / script), *map(str, args)]
     if fake_claude:
         cmd = [str(FAKE / "claude"), *cmd]
@@ -309,6 +313,20 @@ def test_notify_with_the_mod_queues_a_waker_for_the_session(env, session, fake_s
     assert r.returncode == 0, r.stderr
     [f] = (Path(env["OPSCI_STATE_DIR"]) / "wakers" / skey(session["sid"])).glob("*.json")
     assert json.loads(f.read_text())["jobs"] == ["42"]
+
+
+def test_notify_does_not_queue_jobs_a_pending_waker_covers(env, session, fake_slurm):
+    d = Path(env["OPSCI_STATE_DIR"]) / "wakers" / skey(session["sid"])
+    d.mkdir(parents=True)
+    (d / "0-0.json").write_text(json.dumps({"jobs": ["42", "77"]}))   # queued before a jump
+    for jobs in (["42"], ["77_3"], ["42", "42"]):
+        r = run(mod_env(env), "wait_slurm.sh", "--notify", *jobs, fake_claude=True)
+        assert r.returncode == 0 and "already queued" in r.stdout, (jobs, r.stdout, r.stderr)
+    assert [f.name for f in d.glob("*.json")] == ["0-0.json"]
+    r = run(mod_env(env), "wait_slurm.sh", "--notify", "42", "43", "43", fake_claude=True)
+    assert r.returncode == 0, r.stderr
+    [new] = [f for f in d.glob("*.json") if f.name != "0-0.json"]
+    assert json.loads(new.read_text())["jobs"] == ["43"]
 
 
 def test_check_reports_only_when_the_jobs_have_left_the_queue(env, fake_slurm):

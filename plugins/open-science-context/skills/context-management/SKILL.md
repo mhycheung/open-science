@@ -61,8 +61,8 @@ reload; not jumping costs the whole conversation re-read on every turn. Three ki
 
 | jump | when | command |
 |---|---|---|
-| **active** | context above ~250k tokens (the Stop hook tells you), a subtask finished, or before a fan-out of subagents | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" active <context file>` |
-| **wait** | only background work is left (subagents, a background shell, a SLURM job) and it will outlast ~45 min | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" wait <context file>` |
+| **active** | context above ~250k tokens (the Stop hook tells you), a subtask finished, or before a fan-out of subagents | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" active <context file> --report "<report>"` |
+| **wait** | only background work is left (subagents, a background shell, a SLURM job) and it will outlast ~45 min | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" wait <context file> --report "<report>"` |
 | **cache-cold** | the plugin sends `[open-science] cache-cold: ...` after 45 min idle with work still running | a wait jump, now |
 
 **An active jump needs a next step you will run yourself.** The fresh session starts by
@@ -74,11 +74,25 @@ and stop. Jump after the user answers, if the answer leaves work for you to do.
 
 **Before either command, in the same turn, write the jump's record:**
 1. The task `context.md`: state, in flight (agent/job ids, output paths, how to check), and
-   the exact next step. Summarize what this conversation established that is not yet on disk.
+   the exact next step. Summarize what this conversation established that is not yet on disk,
+   in your own words: decisions and findings, never the user's messages verbatim, and
+   nothing that is not about the science or the code (deadlines, availability, reminders,
+   allocation remarks, mood; `open-science-project:context-files`, "Record content, not
+   conversation").
 2. The project `context.md`, if the task table, in-flight list or open questions changed.
 3. One line in `tasks/<id>/log.md`.
 4. `opsci notify "<text>" [file]` for anything the user would otherwise miss (with no
    notification setup, it writes a file in `messages/`).
+
+**Every jump reports to the user.** A jump clears the conversation: all the user sees of it
+is `/clear`, and the chat they were reading is gone. `--report` is required: a headline (the
+main point, under about ten words), a blank line, then what this session did and found, the
+state, what is running (job or agent ids), and what comes next. Write it for a user who did
+not read the chat; use real newlines (a quoted multi-line argument), not `\n`. `jump.sh`
+posts it with `opsci notify --kind status --no-mention` (the project's Feed in Notion, or
+its configured back end) once its checks pass, and adds which jump it is and the context
+file. It does not wait for the user. A failed send does not stop the jump; `jump.sh` prints
+a warning, and the message is kept in `messages/`.
 
 Then run `jump.sh` as the last tool call of the turn and end the turn with one line saying
 so. When the turn ends, the plugin clears the session and, for an active jump, runs

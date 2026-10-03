@@ -40,6 +40,19 @@ check_ids() {
   command -v squeue >/dev/null 2>&1 || { echo "squeue not found: this is not a SLURM host" >&2; exit 2; }
 }
 
+# The job ids among "$@" that no request pending in waker directory $1 covers yet, in NEW.
+# A session that has jumped does not know that its predecessor queued a waker (the request
+# was handed over to it), so it often queues the same jobs again; each request would send
+# its own report. An array task <id>_<n> is covered by a request for the whole array <id>.
+NEW=()
+unqueued() {
+  local dir="$1" j have; shift
+  have=$(cat "$dir"/*.json 2>/dev/null | jq -r '.jobs[]?' 2>/dev/null)
+  for j in "$@"; do
+    grep -qxF -e "$j" -e "${j%%_*}" <<<"$have" || { NEW+=("$j"); have+=$'\n'"$j"; }
+  done
+}
+
 queued() { [ "$(squeue -h -j "$(IFS=,; echo "$*")" -o %i 2>/dev/null | wc -l)" -gt 0 ]; }
 
 # Poll until the jobs leave the queue; print the report; return 0 if all COMPLETED.
@@ -67,7 +80,11 @@ case "${1:-}" in
     . "$HERE/cm_lib.sh"
     if cm_mod_active; then
       SID=$(cm_live_sid); [ -n "$SID" ] || { echo "no Claude session id found" >&2; exit 2; }
-      F="$OS_STATE/wakers/$(cm_sess_key "$SID")/$(date +%s)-$$.json"
+      D="$OS_STATE/wakers/$(cm_sess_key "$SID")"
+      unqueued "$D" "$@"
+      [ ${#NEW[@]} -gt 0 ] || { echo "A waker is already queued for jobs $*: nothing to add (it was queued before a jump, if not in this session)."; exit 0; }
+      set -- "${NEW[@]}"
+      F="$D/$(date +%s)-$$.json"
       cm_write_json "$F" --args --arg sid "$SID" --arg at "$(date -Iseconds)" \
           '{version:1, runtime:"claude-mod", jobs:$ARGS.positional, session_id:$sid, requested_at:$at, state:"requested"}' "$@" \
         || { echo "cannot write $F" >&2; exit 1; }
@@ -80,6 +97,9 @@ case "${1:-}" in
     cm_state_writable || { cm_state_hint >&2; exit 3; }
     KEY=$(cm_pane_key) || KEY=""
     TARGET="${KEY:-thread__$(cm_key "$TID")}"
+    unqueued "$OS_STATE/wakers/$TARGET" "$@"
+    [ ${#NEW[@]} -gt 0 ] || { echo "A waker is already queued for jobs $*: nothing to add."; exit 0; }
+    set -- "${NEW[@]}"
     F="$OS_STATE/wakers/$TARGET/$(date +%s)-$$.json"
     T="${TMUX:-}"
     cm_write_json "$F" --args --arg tid "$TID" --arg key "$KEY" --arg sock "${T%%,*}" --arg pane "${TMUX_PANE:-}" \

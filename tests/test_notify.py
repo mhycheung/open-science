@@ -482,6 +482,28 @@ def test_backend_registry_accepts_new_backends(tmp_path, monkeypatch):
     assert sent == [("hi", "P")]
 
 
+def test_kind_and_mention_override_the_config_for_one_message(tmp_path, monkeypatch):
+    seen = []
+
+    class Echo(N.Backend):
+        name = "echo"
+
+        def send(self, text, attachment):
+            seen.append((self.section.get("kind"), self.section.get("mention")))
+            return "echoed"
+
+    monkeypatch.setitem(N.BACKENDS, "echo", Echo)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "site.local.yaml").write_text(
+        "notify:\n  backend: echo\n  echo:\n    kind: result\n    mention: true\n")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.delenv("OPSCI_CONFIG", raising=False)
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    assert N.notify("a", project_root=str(tmp_path)) == 0
+    assert N.notify("b", project_root=str(tmp_path), kind="status", mention=False) == 0
+    assert seen == [("result", True), ("status", False)]
+
+
 def test_user_level_config_and_project_override(tmp_path, mock):
     home = tmp_path / "home"
     home.mkdir()
@@ -502,7 +524,7 @@ def test_internal_error_prints_no_traceback(monkeypatch, capsys):
     monkeypatch.setattr(N, "notify", boom)
 
     class A:
-        text, file, backend, project_root = "x", None, None, None
+        text, file, backend, project_root, kind, no_mention = "x", None, None, None, None, False
     assert N.cmd_notify(A) == 1
     err = capsys.readouterr().err
     assert "internal error (RuntimeError)" in err and TOKEN not in err

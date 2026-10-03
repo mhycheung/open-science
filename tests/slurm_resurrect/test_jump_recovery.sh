@@ -267,7 +267,7 @@ PPROBE=$(tmux -S "$SOCK" new-window -d -P -F '#{pane_id}' -t t:40)
 # first, and without one it refuses on the age instead, so it never gets as far
 # as looking for a Claude process (the test itself may run under one).
 STALE="$TMP/proj/stale.md"; echo old > "$STALE"; touch -d "2 hours ago" "$STALE"
-jr() { TMUX="$SOCK,1,0" TMUX_PANE="$1" bash "$CORE/jump.sh" wait "$STALE" 2>&1; echo "rc=$?"; }
+jr() { TMUX="$SOCK,1,0" TMUX_PANE="$1" bash "$CORE/jump.sh" wait "$STALE" --report r 2>&1; echo "rc=$?"; }
 out=$(jr "$PANE")
 grep -q "inhibited" <<<"$out" && grep -q "rc=1" <<<"$out" && grep -q "wind-down" <<<"$out" \
   && ok "jump.sh refuses a jump in an inhibited pane, with our message" || bad "inhibit refusal" "$out"

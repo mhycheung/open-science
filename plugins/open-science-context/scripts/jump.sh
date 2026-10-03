@@ -2,14 +2,23 @@
 # Request a session jump: clear this Claude session and (for an active jump) resume
 # it from a context file.
 #
-#   jump.sh active <context file> [--force]   clear, then type
+#   jump.sh active <context file> --report "<text>" [--force]
+#                                            clear, then type
 #                                            "/open-science-context:continue-context <context file>"
-#   jump.sh wait   <context file>            clear only; a running subagent, background
+#   jump.sh wait   <context file> --report "<text>"
+#                                            clear only; a running subagent, background
 #                                            shell or SLURM watcher wakes the new session
 #   jump.sh cancel                           drop this pane's pending request
 #   jump.sh status                           show it
 #
-# This script only VALIDATES and WRITES a request file.
+# This script only VALIDATES, REPORTS and WRITES a request file.
+#
+# The report: a jump clears the conversation, so all the user sees of it is "/clear". Every
+# jump therefore carries a report for the user (what was done, the state, what runs and
+# what comes next), sent with `opsci notify --kind status --no-mention` (the project's
+# Feed in Notion, or its configured back end) once every check has passed, before the
+# request is written. A failed send does not stop the jump; it is logged and printed
+# (`opsci notify` keeps the message in messages/).
 #
 # With the Claude Code mod loaded (OPSCI_MOD=1, cm_mod_active) the request is keyed by
 # session id and tmux is not needed: at the stop the mod runs `cm_stop.sh --mod`, which
@@ -35,7 +44,7 @@
 # pane's current thread with `codex queue`. Codex needs, in addition: the hook installed
 # (a record of this thread in this pane), and Codex started from a shell in the pane.
 #
-# Refusals (exit 1): jumps switched off by $OPSCI_JUMPS (`off`: every jump; `wait`:
+# Refusals (exit 1): no --report text; jumps switched off by $OPSCI_JUMPS (`off`: every jump; `wait`:
 # active jumps); not in tmux (without the mod); context file missing; context file not modified
 # in the last $OPSCI_JUMP_FRESH_MIN minutes (default 15: the state was not saved);
 # the session's state file cannot be found (a clear could not be confirmed; without the mod);
@@ -219,7 +228,7 @@ if [ "${1:-}" = "--worker" ]; then
 fi
 
 # ---------------------------------------------------------------- launcher ----
-usage() { sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+usage() { sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
 CMD="${1:-}"; shift || true
 MOD=0
 if cm_mod_active; then
@@ -251,7 +260,16 @@ case "$(cm_jump_mode)" in
 esac
 
 CTX="${1:-}"; [ -n "$CTX" ] || usage; shift
-FORCE=0; [ "${1:-}" = --force ] && FORCE=1
+FORCE=0; REPORT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --force) FORCE=1 ;;
+    --report) [ $# -ge 2 ] || usage; REPORT="$2"; shift ;;
+    *) usage ;;
+  esac
+  shift
+done
+[ -n "${REPORT//[[:space:]]/}" ] || die "no report: pass --report with a headline, a blank line, then what was done, the state, what runs and what comes next. A jump clears the conversation, so the user sees only /clear; the report is what tells them what happened."
 [ -f "$CTX" ] || die "context file not found: $CTX"
 CTX=$(cd "$(dirname "$CTX")" && printf '%s/%s' "$PWD" "$(basename "$CTX")")
 case "$CTX" in *[[:space:]]*) die "context file path contains whitespace: $CTX" ;; esac
@@ -265,6 +283,26 @@ done
 for f in "$OS_STATE/inhibit_jump" "$OS_STATE/inhibit_jump_$KEY" ${PKEY:+"$OS_STATE/inhibit_jump_$PKEY"}; do
   [ -e "$f" ] && die "jumps are inhibited by $f: $(head -c 300 "$f" 2>/dev/null)"
 done
+ROOT="$d"
+
+# Send the report to the user (see the header). Called once every check has passed.
+send_report() {
+  local msg out rc
+  msg=$(printf '%s\n\n%s jump: the session is cleared and %s from %s.' "$REPORT" "${CMD^}" \
+    "$([ "$CMD" = active ] && echo resumes || echo "waits for its background work, then resumes")" "${CTX#"$ROOT"/}")
+  if ! command -v opsci >/dev/null 2>&1; then
+    cm_log "jump report not sent (opsci not on PATH): ${REPORT%%$'\n'*}"
+    echo "WARNING: opsci is not on PATH, so the jump report was not sent to the user."
+    return 0
+  fi
+  out=$(opsci notify --project-root "$ROOT" --kind status --no-mention "$msg" 2>&1); rc=$?
+  if [ "$rc" = 0 ]; then echo "Report sent: $out"
+  else
+    cm_log "jump report FAILED (opsci notify exit $rc): ${REPORT%%$'\n'*}"
+    echo "WARNING: the jump report was not delivered (opsci notify exit $rc): $out"
+  fi
+}
+
 age_min=$(( ( $(date +%s) - $(stat -c %Y "$CTX") ) / 60 ))
 [ "$age_min" -lt "$FRESH_MIN" ] || die "$CTX was last modified ${age_min} min ago. Save the state first (summary, next step, log line), then jump."
 if [ "$(cm_runtime)" = codex ]; then
@@ -282,6 +320,7 @@ if [ "$(cm_runtime)" = codex ]; then
   fi
   PROMPT=$(cm_codex_prompt "$CTX")
   [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" != requested ] && die "a jump is already $(jq -r .phase "$REQ") for this pane"
+  send_report
   mkdir -p "$(dirname "$REQ")" 2>/dev/null || die "cannot write to $OS_STATE; in the Codex sandbox, add it as a writable root"
   jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${TMUX%%,*}" \
         --arg pane "$TMUX_PANE" --arg key "$KEY" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
@@ -315,6 +354,7 @@ else
 fi
 
 [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" != requested ] && die "a jump is already $(jq -r .phase "$REQ") for this pane"
+send_report
 mkdir -p "$(dirname "$REQ")"
 T="${TMUX:-}"
 jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${T%%,*}" \
