@@ -257,11 +257,12 @@ asking, listing each omission for your approval. Only markdown files are affecte
 about the task's or the project's goal ("next: compute $X$ for the task goal", a scientific
 decision you owe) stays unmarked. The private file keeps every item.
 
-Finding these passages can mean reading every exported file, which an agent may split
-across many subagents at a cost of up to millions of tokens. Before such a sweep, the publish
-skill asks you to choose: a full sweep with subagents, only the files changed since the last
-publish, or only the findings the checks report. It tells you what each smaller choice
-leaves unchecked. The deterministic checks run in full whatever you choose.
+Reading every exported file for these passages, often split across many subagents, can use
+millions of tokens. So after the first publish, the publish skill reads only what changed
+since the last publish. You can ask it to fix only the findings of the checks instead, or to
+read every exported file. On a first publish, it tells you how large the export is and asks
+whether to read it all or fix only the findings of the checks. It asks before it starts
+subagents. The deterministic checks run in full whatever the scope.
 
 `opsci publish pull-public` cannot apply cleanly a public edit next to a redacted span,
 because the public text differs from the private text there; bring such an edit in by hand.

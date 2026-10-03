@@ -11,9 +11,11 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
-- `open-science-publish:publish` asks the user before a sweep of every exported file (steps
-  6, 7 and 9), stating the file count, the size and the subagents planned, and offers a
-  full sweep, the diff since the last publish only, or the checks' findings only.
+- `open-science-publish:publish` limits how much it reads in steps 6, 7 and 9: after a first
+  publish, only the diff since the last publish; the user may ask for the checks' findings
+  only, or for every exported file. On a first publish it states the size of the export and
+  asks whether to read it all or fix the checks' findings only. It asks before starting
+  subagents.
 - Project site: the map page shows the project graph before the claims graph, and each graph
   drawing appears as its interactive view (pan, zoom, search, cards that open the node's page
   on the site), embedded the way the Notion mirror shows it, with links to the full-screen view
