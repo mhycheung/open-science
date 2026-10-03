@@ -1,7 +1,7 @@
 # Publish review rubric (tone and claims)
 
 The deterministic checks have already passed. This review reads the diff since the last
-publish (`publish/reports/<stem>.diff`) as a stranger would, and reports three kinds of
+publish (`publish/reports/<stem>.diff`) as a stranger would, and reports four kinds of
 passages. It **writes a report; it never edits files and never blocks the publish by
 itself**. The user decides.
 
@@ -60,12 +60,23 @@ list, open the excluded files whose topic touches the added lines (private tasks
 A hard-private finding goes to the user with the choice to change the wording, remove it,
 or redact it (skill step 3).
 
+## 4. Not science or code: flag what step 6 should have left out
+
+Flag an added passage that `science-or-code.md` says to omit and that is not inside an
+omission marker: environment and tooling trouble that did not touch a result, agent
+mechanics, a user's message verbatim, clock times, budget ceilings and allocation remarks,
+deadlines, availability, mood, reporting and communication, details of anyone's network or
+machine. Flag every named person not yet decided by the user. Flag an added file of a task
+whose goal is not science or code (a site, infrastructure, tooling or release task) that is
+still `public`. Suggest an omission marker, or a plain rewrite that keeps the technical
+content.
+
 ## Output
 
 Append to the publish report, under "## Review (tone, claims)":
 
 ```
-- [tone|claim|private] <file>:<line> "<exact quote>"
+- [tone|claim|private|non-technical] <file>:<line> "<exact quote>"
   why: <one sentence>
   suggestion: <a rewrite that keeps the technical content>
 ```

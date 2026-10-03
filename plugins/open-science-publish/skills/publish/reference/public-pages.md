@@ -1,20 +1,19 @@
 # What the public pages show
 
-## Housekeeping in the context files
+## What is not science or code
 
-The project `context.md` and every public task `context.md` are published, while the
-private files keep everything. Items in "Waiting on the user", "Next step" and "Open
-questions" that are housekeeping for the user are not published:
-
-- "redo the plot?", "commit the plots?", "which file name?";
-- "whether to commit `lit_cache/2609.07873/` (28 MB, untracked)";
-- "the owner has not answered on Slack yet".
+Every exported Markdown file is published, while the private files keep everything. The
+public record holds the science and the code; what that covers, for whole tasks and for
+passages, is in `science-or-code.md`. In the context files, housekeeping items in "Waiting
+on the user", "Next step" and "Open questions" are left out too: "redo the plot?", "commit
+the plots?", "which file name?", "whether to commit `lit_cache/2609.07873/` (28 MB,
+untracked)".
 
 Keep what a reader of the project needs: a scientific decision the user owes ("report
 $\iota$ at a single $t_*$, or the range over the three peaks?"), the choice of the next
 task, "next: compute $X$ and add it to the task goal".
 
-Wrap each housekeeping item in the private source file:
+Wrap each such passage in the private source file:
 
 ```
 <!-- omit -->- Whether to commit the new figures?<!-- /omit -->

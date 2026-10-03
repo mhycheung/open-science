@@ -81,10 +81,10 @@ case, and starts with a sequence number (`t07-mode-fit-v2`).
 
 ## Privacy tier
 
-A task is `public` by default (`--privacy` omitted); a brainstorm task is `soft-private`. Do
-not ask about the tier when nothing points the other way. If what the user described
-obviously looks soft- or hard-private (examples below), ask before creating the task, with
-both definitions in the question:
+A task is `public` by default (`--privacy` omitted); a brainstorm task is `soft-private`, and
+so is a task whose goal is not science or code (the results website, infrastructure, tooling,
+release preparation): set it and tell the user (`open-science-publish:publish`,
+`reference/science-or-code.md`). Otherwise, if the task obviously looks private, ask first:
 
 > This task looks like it may be private. Which tier should it have?
 > - `public` (default): may be released; the task directory is exported.
