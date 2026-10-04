@@ -323,7 +323,12 @@ export function register(on) {
       // by hand) lost the background tasks that were to wake it: wake it now.
       const r = await sh($, 'cm_mod.sh', ['resumed', sid])
       if (r.stdout.trim()) await runPrompt($, r.stdout.trim())
-      await rename($, true)
+      // A resumed session shows its name only once renamed, so the first start of a process
+      // renames it even when the name is right. A reload of a mod fires session.start too;
+      // $.state survives a reload, so it renames only when the name should change.
+      const named = await $.state.get({ plugin: 'open-science-context', key: 'named' })
+      await rename($, named.value !== sid)
+      await $.state.set({ plugin: 'open-science-context', key: 'named' }, sid)
     })
     $.clock.after(0, () => { void refreshBar($) })
     return next(e)

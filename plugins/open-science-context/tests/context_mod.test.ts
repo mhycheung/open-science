@@ -193,6 +193,17 @@ test('the session is renamed when its name should change', async ($, on) => {
   expect(calls.commands).toContain('rename proj · task-a')
 })
 
+// A reload of a mod fires session.start again; only the first start of the process forces
+// the rename (a resumed session shows its name only once renamed).
+test('only the first start of a process forces the rename, not a reload', async ($, on) => {
+  const { calls, clock } = setup(on)
+  await start($, clock)
+  await start($, clock)
+  const wants = calls.scripts.filter(x => x[0] === 'session_name.sh' && x[1] === 'want')
+  expect(wants[0]).toEqual(['session_name.sh', 'want', '--always', 'sid-old', '/work'])
+  expect(wants.slice(1).some(x => x.includes('--always'))).toBe(false)
+})
+
 const step = (tokens) => async function* ($, e) {
   return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn',
     usage: { input_tokens: tokens, output_tokens: 1, cache_read_input_tokens: 0, cache_creation_input_tokens: 0 } }

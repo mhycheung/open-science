@@ -21,6 +21,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
 - Remote Control shows nothing a mod draws (Claude Code's mods documentation; checked with a
   probe), so the mod writes two transcript notices per idle spell: five minutes before the
   cache goes cold, and when it does. The pane for the mobile app is removed.
+- Fix: the mod renamed the session (a `/rename` row in the transcript) at every
+  `session.start`, which fires on each reload of any mod as well as on a restart. It now forces
+  the rename only at the first start of a Claude Code process (a resumed session shows its name
+  only once renamed), kept in `$.state`, which survives a reload.
 - The cache-cold notice to a waiting agent comes after 58 minutes, not 45
   (`OPSCI_CACHE_COLD_MIN`), on the mod and the tmux path. Claude Code's own transcripts show
   the 1-hour cache still read at every gap under 60 minutes and never past it.

@@ -2,6 +2,7 @@
   "name": "open-science-context",
   "version": "0.3.2",
   "description": "Context management: clear the session and resume from the context files (session jumps), registration of each session's task, session names and subagent checkpoints. On Claude Code a mod does the jumps from inside Claude Code; without it, they need tmux. Needs a project made with open-science-project.",
+  "types": "./types/index.d.ts",
   "dependencies": [
     "open-science-project"
   ],
