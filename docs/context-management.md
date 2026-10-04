@@ -108,8 +108,9 @@ file. The agent does not wait for your approval. If the send fails, the jump sti
 and the message is kept in `messages/`.
 
 With the mod, the report is also written at the top of the cleared session, so scrolling up
-in the terminal or in Remote Control shows what the previous session said instead of only
-`/clear`. After a wait jump it begins by saying that the session was cleared and is waiting,
+in the terminal shows what the previous session said instead of only `/clear`. Remote Control
+leaves this notice out; there the report reaches you through `opsci notify` (your Notion Feed
+or other back end). After a wait jump it begins by saying that the session was cleared and is waiting,
 and for how many running tasks. It is a notice for you: it starts no turn, so a session left
 waiting stays asleep. The agent of the new session reads the same text with its next prompt.
 
@@ -203,22 +204,28 @@ subagent's requests do not count), so it calls the cache cold at 59 minutes:
 | under 59 minutes | `context 180.2k tokens · cache warm, 32 min left`, in green |
 | 59 minutes or more | `⚠ context 180.2k tokens · cache cold (75 min idle)`, in yellow |
 
-Remote Control (from claude.ai, the desktop app or the mobile app) shows the transcript but
-nothing a mod draws, so the line does not appear there. Two notices are written into the
-transcript instead, once per idle spell: `[open-science] cache cold in 5 min; context 180.2k
-tokens.` five minutes before the boundary, and `[open-science] ⚠ cache cold: 59 min since the
-last request; ...` when it is reached. A notice starts no turn and the agent never reads it.
+Remote Control (from claude.ai, the desktop app or the mobile app) shows neither: Claude Code
+draws a mod's interface only in the terminal and the Desktop app's Code tab, and Remote Control
+also leaves out the notices a mod writes into the transcript.
 
 The 59 minutes come from Claude Code's own transcripts: in 958 transcript files, every request sent
 less than 60 minutes after the previous response still read the cache, and none sent later did.
 
-When the cache is cold, a prompt you send to the idle session, typed or from Remote Control, is
-held back and you are asked: `The cache is cold (75 min since the last request). The whole
-context (180.2k tokens) will be read again at the full price. Are you sure you want to submit
-this prompt?` With **Submit** the prompt goes in as you sent it; with **Do not submit**, or if
-you dismiss the question, nothing reaches the agent and a typed prompt goes back into the prompt
-box. Until you answer, the agent is not woken. Slash commands (`/clear` is the usual answer to a
-cold cache), task notifications and the plugin's own prompts are not asked about.
+When the cache is cold, a prompt you send to the idle session is held back, and the agent is
+not woken until you answer:
+
+- **Typed in the terminal:** the prompt is not sent, and a dialog opens with the question (`⚠
+  The cache is cold (75 min since the last request). The whole context (180.2k tokens) will be
+  read again at the full price. Are you sure you want to submit this prompt?`) and two buttons.
+  **Submit** (or `1`) sends it as you typed it; **Do not submit** (or `2`, or Esc) puts it back
+  in the prompt box.
+- **From Remote Control:** the app shows Claude Code's question with the same text and the
+  answers **Submit** and **Do not submit**. The app adds its own free-text answers; anything but
+  **Submit** leaves the prompt unsent. A typed prompt with an image attached gets the same
+  question in the terminal.
+
+Slash commands (`/clear` is the usual answer to a cold cache), task notifications and the
+plugin's own prompts are not asked about.
 
 This is separate from the cache-cold notice above. That notice is for a session that ended its
 turn with work still running that will wake it; after 58 minutes, a minute before the line

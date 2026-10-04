@@ -5,16 +5,19 @@
 // and prompts it starts. The scripts themselves are tested by tests/test_cm_mod.py.
 import { expect, mock, test } from 'claude-code/testing'
 
-type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent: string[]; appended: { type: string; text: string }[]; order: string[]; status: string[]; logged: string[] }
+type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent: string[]; appended: { type: string; text: string }[]; order: string[]; status: string[]; logged: string[]; filled: string[] }
 
 // Stubs shared by every test. `stop` is what cm_stop.sh --mod answers; `scripts` maps a
 // script name to its answer. A /clear makes the session id change, as in Claude Code.
-function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown> } = {}) {
-  const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [] }
+function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean } = {}) {
+  const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [], filled: [] }
   let sid = 'sid-old'
   const clock = mock.clock(on)
   mock.env(on, { OPSCI_STATE_DIR: '/state', HOME: '/home/u' })
   mock.store(on, opts.store ?? {})
+  on('ui.open', ($, e) => { calls.order.push('open ' + e.id); return { value: { isPlaced: opts.placed ?? true } } })
+  on('ui.close', ($, e) => { calls.order.push('close ' + e.id); return { value: undefined } })
+  on('prompt.fill', ($, e) => { calls.filled.push(e.text); return { isFilled: true } })
   on('ui.log', ($, e) => { calls.logged.push(e.text); calls.order.push('log'); return { value: undefined } })
   on('env.set', () => ({ value: undefined }))
   on('session.id', () => ({ value: sid }))
@@ -193,15 +196,16 @@ test('the session is renamed when its name should change', async ($, on) => {
   expect(calls.commands).toContain('rename proj · task-a')
 })
 
-// A reload of a mod fires session.start again; only the first start of the process forces
-// the rename (a resumed session shows its name only once renamed).
-test('only the first start of a process forces the rename, not a reload', async ($, on) => {
+// session.start fires at every reload of a mod: the session is renamed only when the naming
+// script says the name should change, never forced.
+test('a start or a reload never forces a rename', async ($, on) => {
   const { calls, clock } = setup(on)
   await start($, clock)
   await start($, clock)
   const wants = calls.scripts.filter(x => x[0] === 'session_name.sh' && x[1] === 'want')
-  expect(wants[0]).toEqual(['session_name.sh', 'want', '--always', 'sid-old', '/work'])
-  expect(wants.slice(1).some(x => x.includes('--always'))).toBe(false)
+  expect(wants.length).toBeGreaterThan(0)
+  expect(wants.some(x => x.includes('--always'))).toBe(false)
+  expect(calls.commands.filter(c => c.startsWith('rename'))).toEqual([])
 })
 
 const step = (tokens) => async function* ($, e) {
@@ -282,34 +286,6 @@ test('the bar is the same in the Desktop app', async ($, on) => {
   expect(await barOn($, 'desktop')).toEqual({ text: '⚠ context 123.5k tokens · cache cold (60 min idle)', color: 'yellow' })
 })
 
-// Remote Control shows only the transcript: the notices (the stored row, or the transcript
-// line the mod falls back to; see shownNotes).
-test('the transcript gets one notice 5 min before the cache goes cold and one when it does', async ($, on) => {
-  const { calls, clock } = setup(on)
-  on('turn.step', step(123456))
-  await start($, clock)
-  await mainRequest($)
-  await clock.advance(53 * MIN)
-  expect(shownNotes(calls)).toEqual([])
-  await clock.advance(MIN)
-  expect(shownNotes(calls)).toEqual(['[open-science] cache cold in 5 min; context 123.5k tokens.'])
-  await clock.advance(5 * MIN)
-  expect(shownNotes(calls).length).toBe(2)
-  expect(shownNotes(calls)[1]).toBe('[open-science] ⚠ cache cold: 59 min since the last request; context 123.5k tokens. A prompt now reads the whole context again at the full price; /clear starts a fresh session.')
-  await clock.advance(60 * MIN)
-  expect(shownNotes(calls).length).toBe(2)
-  await mainRequest($)
-  await clock.advance(60 * MIN)
-  expect(shownNotes(calls).length).toBe(4)
-})
-
-test('no notice before the first request of a session', async ($, on) => {
-  const { calls, clock } = setup(on)
-  await start($, clock)
-  await clock.advance(120 * MIN)
-  expect(shownNotes(calls)).toEqual([])
-})
-
 test('below 1000 tokens the bar counts every token', async ($, on) => {
   const { clock } = setup(on)
   on('turn.step', step(900))
@@ -343,39 +319,64 @@ function askAnswers(on, answer: string | null, asked: string[]) {
   })
 }
 
-test('a typed prompt to a cold cache waits for the user to confirm it', async ($, on) => {
-  const { calls, clock } = setup(on)
+const ASK_PROPS = { title: 'Cache cold', isFocused: true, bodyColumns: 100, placement: 'inline', scroll: { offset: 0, bodyRows: 5 }, view: {} }
+const askPane = $ => $.ui.mount({ plugin: 'open-science-context', surface: 'terminal', component: 'Pane', requestId: 'opsci-cold-ask', props: ASK_PROPS, viewport: { columns: 100, rows: 40 } })
+
+async function coldSession($, on, opts = {}) {
+  const ctx = setup(on, opts)
   on('turn.step', step(1000))
+  await start($, ctx.clock)
+  await mainRequest($)
+  await ctx.clock.advance(60 * MIN)
+  return ctx
+}
+
+test('a typed prompt to a cold cache is held, and the two-button dialog sends it on Submit', async ($, on) => {
   const asked: string[] = []
   askAnswers(on, 'Submit', asked)
+  const { calls } = await coldSession($, on)
+  const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  expect(r.drop).toContain('Not sent yet')
+  expect(calls.prompts).toEqual([])
+  expect(calls.order).toContain('open opsci-cold-ask')
+  const ui = await askPane($)
+  expect((await ui.find({ type: 'Text' })).text).toContain('The cache is cold (60 min since the last request)')
+  const buttons = ['submit', 'cancel'].map(async k => (await ui.find({ key: k }))?.props?.label)
+  expect(await Promise.all(buttons)).toEqual(['Submit', 'Do not submit'])
+  await ui.press({ key: 'submit' })
+  expect(calls.prompts).toEqual(['go on'])
+  expect(asked).toEqual([])              // Claude Code's question (with its Other answers) is not used
+})
+
+test('Do not submit in the dialog sends nothing and puts the prompt back in the box', async ($, on) => {
+  const { calls } = await coldSession($, on)
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  const ui = await askPane($)
+  await ui.press({ key: 'cancel' })
+  expect(calls.prompts).toEqual([])
+  expect(calls.filled).toEqual(['go on'])
+})
+
+test('a typed prompt waits for no question while the cache is warm', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(1000))
   await start($, clock)
   await mainRequest($)
   await clock.advance(58 * MIN)
-  await $.prompt.submit({ text: 'warm', wait: false, origin: { kind: 'composer' } })
-  expect(asked).toEqual([])
-  await clock.advance(2 * MIN)
-  const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
-  expect(asked.length).toBe(1)
-  expect(asked[0]).toContain('The cache is cold (60 min since the last request)')
+  const r = await $.prompt.submit({ text: 'warm', wait: false, origin: { kind: 'composer' } })
   expect(r.drop).toBeUndefined()
-  expect(calls.prompts).toEqual(['warm', 'go on'])
+  expect(calls.prompts).toEqual(['warm'])
+  expect(calls.order).not.toContain('open opsci-cold-ask')
 })
 
-test('a declined prompt never reaches the model and goes back to the prompt box', async ($, on) => {
-  const { calls, clock } = setup(on)
-  on('turn.step', step(1000))
+test('where the dialog cannot be placed, Claude Code asks instead', async ($, on) => {
   const asked: string[] = []
-  const filled: string[] = []
-  on('prompt.fill', ($, e) => { filled.push(e.text); return { isFilled: true } })
   askAnswers(on, 'Do not submit', asked)
-  await start($, clock)
-  await mainRequest($)
-  await clock.advance(70 * MIN)
+  const { calls } = await coldSession($, on, { placed: false })
   const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
-  expect(asked[0]).toContain('The cache is cold')
+  expect(asked.length).toBe(1)
   expect(r.drop).toContain('Not submitted')
-  expect(calls.prompts).toEqual([])
-  expect(filled).toEqual(['go on'])
+  expect(calls.filled).toEqual(['go on'])
 })
 
 test('a Remote Control prompt is asked about too', async ($, on) => {

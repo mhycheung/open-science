@@ -5,8 +5,8 @@
 // SLURM wakers, the cache-cold notice), rename the session after its task, and read the
 // context size, also each subagent's. It also shows the context size and how long the
 // prompt cache stays warm (a line above the prompt, on the terminal and in the Desktop app;
-// notices in the transcript for Remote Control, which draws nothing a mod draws), and asks
-// the user before a prompt they send to a cold cache. The policy and the records stay in the plugin's
+// Remote Control shows neither a mod's drawing nor its transcript notices), and asks the user
+// before a prompt they send to a cold cache. The policy and the records stay in the plugin's
 // shell scripts, shared with the tmux path and Codex: `cm_stop.sh --mod` decides at each
 // stop, `cm_mod.sh` keeps the records, `wait_slurm.sh --check` polls a waker,
 // `session_name.sh want` names the session.
@@ -25,7 +25,6 @@ const POLL_DEFAULT_S = 60
 // cm_lib.sh.)
 const TTL_MIN_DEFAULT = 59
 const BAR_TICK_MS = 30000
-const WARN_MIN = 5              // the transcript notice that the cache goes cold this many minutes from now
 const STORE_KEY = 'lastRequest' // { <session id>: ms of the main agent's last model request }
 
 let sid = null              // the session id this process runs now
@@ -43,7 +42,6 @@ let lastReq = null          // ms of the main agent's last model request in barS
 let barText = ''            // what the bar shows now
 let barPhase = 'none'       // none | warm | cold: the bar's color
 let lastTokens = null       // the context after the main agent's last response, in barSid
-let noticed = { req: null, warn: false, cold: false }   // the notices written for the request at lastReq
 let barTimer = null
 const warned = new Set()    // subagents already told to checkpoint
 
@@ -259,7 +257,6 @@ function bar($, e) {
 
 async function refreshBar($) {
   const st = await cacheState($)
-  await cacheNotices($, st)
   const text = describe(st)
   if (text === barText && st.phase === barPhase) return
   barText = text
@@ -267,38 +264,58 @@ async function refreshBar($) {
   $.ui.invalidate('ui.render')
 }
 
-// Remote Control shows the transcript but nothing a mod draws, so the line's two moments are
-// also written there as notices: WARN_MIN minutes before the cache goes cold, and when it
-// does. Once each per idle spell; a notice starts no turn and the model never reads it.
-async function cacheNotices($, st) {
-  if (noticed.req !== lastReq) noticed = { req: lastReq, warn: false, cold: false }
-  if (st.phase === 'none' || busy) return
-  const ctx = typeof st.tokens === 'number' ? '; context ' + fmtTokens(st.tokens) + ' tokens' : ''
-  let text = null
-  if (st.phase === 'cold' && !noticed.cold) {
-    noticed.cold = noticed.warn = true
-    text = '⚠ cache cold: ' + Math.floor(st.idleMin) + ' min since the last request' + ctx +
-      '. A prompt now reads the whole context again at the full price; /clear starts a fresh session.'
-  } else if (st.phase === 'warm' && !noticed.warn && st.leftMin <= WARN_MIN && (await ttlMin($)) > WARN_MIN) {
-    noticed.warn = true
-    text = 'cache cold in ' + st.leftMin + ' min' + ctx + '.'
-  }
-  if (!text) return
-  try {
-    const r = await $.session.append({ message: { type: 'system', content: [{ type: 'text', text: '[open-science] ' + text }] } })
-    if (r.deny) $.ui.log('[open-science] ' + text)
-  } catch { $.ui.log('[open-science] ' + text) }
-}
-
 // A prompt the user sent (typed, or from Remote Control) to an idle session whose cache
 // is cold is held, the model not woken, until they confirm it. A slash command passes:
 // /clear is the usual answer to a cold cache.
+//
+// A typed prompt gets the mod's own dialog in the terminal, with exactly two answers. A hook
+// may not wait on its own code for more than 10 s, so the prompt is dropped at once and the
+// dialog sends it again on Submit, as the user's (resubmit, below). Claude Code's question
+// dialog is used where the mod's cannot be: a prompt from Remote Control (the app draws only
+// that dialog, and adds its own Other answers), or one with attachments, which a resubmit
+// would lose.
+const ASK_PANE = 'opsci-cold-ask'
+let asking = null           // { question, text }: the typed prompt the dialog holds
+let resubmit = null         // the text Submit sent again, to enter as the user's
+
+function coldQuestion(st) {
+  const ctx = typeof st.tokens === 'number' ? ' The whole context (' + fmtTokens(st.tokens) + ' tokens) will be read again at the full price.' : ''
+  return 'The cache is cold (' + Math.floor(st.idleMin) + ' min since the last request).' + ctx + ' Are you sure you want to submit this prompt?'
+}
+
+async function answerAsk($, submit) {
+  const held = asking
+  asking = null
+  await $.ui.close({ id: ASK_PANE })
+  if (!held) return
+  if (submit) {
+    resubmit = held.text
+    await $.prompt.submit({ text: held.text })
+  } else {
+    await $.prompt.fill({ text: held.text })
+    await log($, 'cold-cache prompt held back')
+  }
+}
+
 async function coldGate($, e, next) {
+  // Submit in the mod's dialog: the user's prompt, entered as theirs (an answer without the
+  // plugin origin is read as the user's own).
+  if (e.origin.kind === 'plugin' && resubmit !== null && e.text === resubmit) {
+    resubmit = null
+    const r = await next(e)
+    if (r && !r.drop) { const { origin, ...rest } = r; return rest }
+    return r
+  }
   if (e.turnId || (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') || /^\s*\//.test(e.text)) return next(e)
   const st = await cacheState($)
   if (st.phase !== 'cold') return next(e)
-  const ctx = typeof st.tokens === 'number' ? ' The whole context (' + fmtTokens(st.tokens) + ' tokens) will be read again at the full price.' : ''
-  const q = 'The cache is cold (' + Math.floor(st.idleMin) + ' min since the last request).' + ctx + ' Are you sure you want to submit this prompt?'
+  const q = coldQuestion(st)
+  if (e.origin.kind === 'composer' && !(e.attachments && e.attachments.length)) {
+    asking = { question: q, text: e.text }
+    const opened = await $.ui.open({ id: ASK_PANE, title: 'Cache cold', focus: true, closeOnEscape: true, holdToasts: true, rows: 6 })
+    if (opened.isPlaced) return { drop: 'Not sent yet: the cache is cold. Answer below.' }
+    asking = null
+  }
   let answer = ''
   try { answer = await $.ui.ask(q, { header: 'Cache cold', options: ['Submit', 'Do not submit'] }) } catch { answer = '' }
   if (answer === 'Submit') return next(e)
@@ -323,12 +340,10 @@ export function register(on) {
       // by hand) lost the background tasks that were to wake it: wake it now.
       const r = await sh($, 'cm_mod.sh', ['resumed', sid])
       if (r.stdout.trim()) await runPrompt($, r.stdout.trim())
-      // A resumed session shows its name only once renamed, so the first start of a process
-      // renames it even when the name is right. A reload of a mod fires session.start too;
-      // $.state survives a reload, so it renames only when the name should change.
-      const named = await $.state.get({ plugin: 'open-science-context', key: 'named' })
-      await rename($, named.value !== sid)
-      await $.state.set({ plugin: 'open-science-context', key: 'named' }, sid)
+      // Only when the name should change: session.start also fires at every reload of a mod,
+      // and a resumed session keeps its name (the session record has it; a session without
+      // one gets it here).
+      await rename($)
     })
     $.clock.after(0, () => { void refreshBar($) })
     return next(e)
@@ -384,6 +399,25 @@ export function register(on) {
   })
 
   on('prompt.submit', coldGate)
+  on('ui.render', { component: 'Pane', requestId: ASK_PANE }, async ($, e) => {
+    const { Box, Text, Button } = $.ui.resolve(e)
+    return h(Box, { flexDirection: 'column' },
+      h(Text, { color: 'yellow' }, '⚠ ' + (asking ? asking.question : 'The cache is cold.')),
+      h(Box, { flexDirection: 'row', gap: 2 },
+        h(Button, { key: 'submit', label: 'Submit', hotkey: '1', variant: 'primary', autoFocus: true, onPress: () => answerAsk($, true) }),
+        h(Button, { key: 'cancel', label: 'Do not submit', hotkey: '2', role: 'dismiss', onPress: () => answerAsk($, false) })))
+  })
+  // Esc, or the pane's close mark: not submitted.
+  on('ui.close', async ($, e, next) => {
+    const r = await next(e)
+    if (e.id === ASK_PANE && asking && e.origin.kind !== 'plugin') {
+      const held = asking
+      asking = null
+      await $.prompt.fill({ text: held.text })
+      await log($, 'cold-cache prompt held back')
+    }
+    return r
+  })
 
   // The bar: a line above the prompt on the terminal and in the Desktop app. Green while the
   // cache is warm, yellow with a warning sign once it is cold.

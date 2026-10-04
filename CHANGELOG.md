@@ -19,15 +19,19 @@ layout 1) and the framework's, in order, before it applies the other template ch
   own usage (read plus written) and is shown with one decimal in thousands (`123.4k`), or as a
   plain count below 1000.
 - Remote Control shows nothing a mod draws (Claude Code's mods documentation; checked with a
-  probe), so the mod writes two transcript notices per idle spell: five minutes before the
-  cache goes cold, and when it does. The pane for the mobile app is removed.
+  probe) and none of the notices a mod writes into the transcript (checked with a probe of
+  every row kind), so the line stays on the terminal and the Desktop app; the pane for the
+  mobile app is removed. The same holds for the jump report at the top of a cleared session
+  (0.3.2 said it also showed in Remote Control): it shows in the terminal, and reaches Remote
+  Control users through `opsci notify` as before.
+- The cold-cache question for a typed prompt is the mod's own dialog in the terminal, with
+  exactly two answers (Submit, Do not submit; Esc does not submit). Claude Code's question
+  dialog, which adds free-text answers and was left open in the Remote Control app after an
+  answer in the terminal, is kept only for prompts from Remote Control and prompts with
+  attachments.
 - Fix: the mod renamed the session (a `/rename` row in the transcript) at every
-  `session.start`, which fires on each reload of any mod as well as on a restart. It now forces
-  the rename only at the first start of a Claude Code process (a resumed session shows its name
-  only once renamed), kept in `$.state`, which survives a reload.
-- The cache-cold notice to a waiting agent comes after 58 minutes, not 45
-  (`OPSCI_CACHE_COLD_MIN`), on the mod and the tmux path. Claude Code's own transcripts show
-  the 1-hour cache still read at every gap under 60 minutes and never past it.
+  `session.start`, which fires at each reload of any mod as well as at a restart, even when the
+  name was already right. It now renames only when the name should change.
 
 ## 0.3.2 - 2026-10-04
 
