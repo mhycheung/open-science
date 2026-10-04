@@ -19,7 +19,7 @@ PLUGINS = {
 }
 PLUGIN_OF = {s: p for p, ss in PLUGINS.items() for s in ss}
 SKILLS = tuple(PLUGIN_OF)
-MAX_LINES = 150  # "keep each SKILL.md short"
+MAX_LINES = 200  # "keep each SKILL.md short" (raised from 150, user ruling 2026-10-04)
 # Skills read once per setup, not at every session start, may be longer (user ruling 2026-10-02).
 MAX_LINES_ONCE = {"onboard": 250}
 
