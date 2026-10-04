@@ -23,6 +23,8 @@ runs inside itself (see Claude Code's [mods documentation](https://code.claude.c
 The plugin's mod clears the session with Claude Code's own `/clear`, runs the resume
 command, wakes a waiting session when its SLURM jobs end, sends the cache-cold notice, names
 the session after its task, and reads the context size of the session and of each subagent.
+It also shows the context size and how long the prompt cache stays warm, and asks you before
+a prompt you send to a cold cache ([The context bar](#the-context-bar-and-the-cold-cache-question)).
 Nothing is typed into the terminal, and tmux is not needed. The mod needs Claude Code 2.1.287
 or later, and mods must be switched on for your account (Anthropic is switching them on step
 by step; `/open-science:onboard` checks). Where the mod is not loaded, the plugin falls back
@@ -105,6 +107,12 @@ state, what is running and what comes next, followed by the kind of jump and the
 file. The agent does not wait for your approval. If the send fails, the jump still happens,
 and the message is kept in `messages/`.
 
+With the mod, the report is also written at the top of the cleared session, so scrolling up
+in the terminal or in Remote Control shows what the previous session said instead of only
+`/clear`. After a wait jump it begins by saying that the session was cleared and is waiting,
+and for how many running tasks. It is a notice for you: it starts no turn, so a session left
+waiting stays asleep. The agent of the new session reads the same text with its next prompt.
+
 When the turn ends, the mod runs Claude Code's `/clear`, checks that a new session started,
 hands the registration to it, and, for an active jump, runs
 `/open-science-context:continue-context <context file>`. In our tests the resumed turn
@@ -180,6 +188,36 @@ of the work. Newer models cost less and work well with a long conversation, so k
 conversation (`wait` or `off`) is a reasonable choice. With every setting, registration,
 the context files, `continue-context` and subagent checkpoints work as described on this page.
 
+## The context bar and the cold-cache question
+
+With the mod, every session shows a line with its context size and the state of the prompt
+cache: on the terminal it is the plugin's status line under the prompt, on Claude Code Desktop
+a line above the prompt, and in the Claude mobile app a small pane. The cache lives one hour
+after the last request that read it, so the clock runs from the main agent's last model
+request (a subagent's requests do not count):
+
+| idle since the last request | the line says |
+|---|---|
+| no request yet in this session (a new or cleared session) | `context 12k tokens · no cache yet` |
+| under 45 minutes | `context 180k tokens · cache warm, 32 min left` (minutes until 45) |
+| 45 to 60 minutes | `context 180k tokens · cache might be cold (52 min idle)` |
+| 60 minutes or more | `context 180k tokens · cache cold (75 min idle)` |
+
+When the cache might be cold, a prompt you send to the idle session, typed or from Remote
+Control, is held back and you are asked: `The cache might be cold (52 min since the last
+request). The whole context (180k tokens) will be read again at the full price. Are you sure
+you want to submit this prompt?` With **Submit** the prompt goes in as you sent it; with **Do
+not submit**, or if you dismiss the question, nothing reaches the agent and a typed prompt goes
+back into the prompt box. Until you answer, the agent is not woken. Slash commands (`/clear`
+is the usual answer to a cold cache), task notifications and the plugin's own prompts are not
+asked about.
+
+This is separate from the cache-cold notice above. That notice is for a session that ended its
+turn with work still running that will wake it; after 45 minutes it tells the agent to do a
+wait jump. A session that ended its turn waiting only for you gets no notice and is never woken
+by the plugin: whether to clear or to continue is up to you, and the question above is asked
+when you do.
+
 ## Settings
 
 Environment variables read by the scripts:
@@ -190,7 +228,8 @@ Environment variables read by the scripts:
 | `OPSCI_JUMP_THRESHOLD` | 250000 | context size (tokens) at which the Stop hook asks for an active jump |
 | `OPSCI_JUMP_REPEAT` | 50000 | growth (tokens) before the hook asks the same session again |
 | `OPSCI_ACTIVE_JUMP_FLOOR` | 100000 | below this, an active jump needs `--force` |
-| `OPSCI_CACHE_COLD_MIN` | 45 | minutes idle, with work running, before the cache-cold notice |
+| `OPSCI_CACHE_COLD_MIN` | 45 | minutes idle, with work running, before the cache-cold notice; with the mod, also when the context bar says the cache might be cold and prompts are asked about |
+| `OPSCI_CACHE_TTL_MIN` | 60 | with the mod: minutes idle after which the context bar says the cache is cold |
 | `OPSCI_JUMP_FRESH_MIN` | 15 | the context file must have been saved within this many minutes |
 | `OPSCI_SUBAGENT_LIMIT` | 200000 | with the mod: a subagent's context size (tokens) at which it is told to checkpoint |
 | `OPSCI_WAIT_POLL` | 60 | seconds between two checks of a SLURM waker's jobs |
@@ -293,7 +332,8 @@ the queue, it uses `codex queue` to wake the new thread in that pane. Ordinary b
 shells and subagents are not supported as wait-jump wakers. Recheck the scheduler's final
 state and outputs; leaving the queue is not proof of success.
 
-`OPSCI_JUMPS=all|wait|off` retains its meaning. Codex has no cache-cold timer and no
+`OPSCI_JUMPS=all|wait|off` retains its meaning. Codex has no cache-cold timer, no context
+bar, no cold-cache question, no jump report at the top of the new session, and no
 Claude-style automatic session naming. Token usage is best effort from Codex's changing
 rollout format; if unreadable, no size notice is issued. By default a notice occurs at
 60% of the reported model window; `OPSCI_CODEX_JUMP_THRESHOLD` sets an explicit threshold.

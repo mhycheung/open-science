@@ -286,10 +286,12 @@ done
 ROOT="$d"
 
 # Send the report to the user (see the header). Called once every check has passed.
+# The same text goes into the request: with the mod, it is written at the top of the cleared
+# session (seen by the user, read by the agent at its next turn; it starts no turn).
+MSG=$(printf '%s\n\n%s jump: the session is cleared and %s from %s.' "$REPORT" "${CMD^}" \
+  "$([ "$CMD" = active ] && echo resumes || echo "waits for its background work, then resumes")" "${CTX#"$ROOT"/}")
 send_report() {
-  local msg out rc
-  msg=$(printf '%s\n\n%s jump: the session is cleared and %s from %s.' "$REPORT" "${CMD^}" \
-    "$([ "$CMD" = active ] && echo resumes || echo "waits for its background work, then resumes")" "${CTX#"$ROOT"/}")
+  local msg="$MSG" out rc
   if ! command -v opsci >/dev/null 2>&1; then
     cm_log "jump report not sent (opsci not on PATH): ${REPORT%%$'\n'*}"
     echo "WARNING: opsci is not on PATH, so the jump report was not sent to the user."
@@ -359,9 +361,9 @@ mkdir -p "$(dirname "$REQ")"
 T="${TMUX:-}"
 jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${T%%,*}" \
       --arg pane "${TMUX_PANE:-}" --arg key "$KEY" --arg sf "${SF:-}" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
-      --arg rt "$([ "$MOD" = 1 ] && echo claude-mod || echo claude)" \
-  '{version:1, runtime:$rt, kind:$kind, context:$ctx, prompt:$prompt, sock:$sock, pane:$pane, key:$key,
-    state_file:$sf, old_sid:$sid, requested_at:$at, phase:"requested"}' > "$REQ.tmp" && mv "$REQ.tmp" "$REQ" \
+      --arg rt "$([ "$MOD" = 1 ] && echo claude-mod || echo claude)" --arg report "$MSG" \
+  '{version:1, runtime:$rt, kind:$kind, context:$ctx, prompt:$prompt, report:$report, sock:$sock, pane:$pane,
+    key:$key, state_file:$sf, old_sid:$sid, requested_at:$at, phase:"requested"}' > "$REQ.tmp" && mv "$REQ.tmp" "$REQ" \
   || die "could not write $REQ"
 cm_log "launcher ${TMUX_PANE:-session ${OLD:0:8}}: $CMD jump requested (context $CTX)"
 # Register the pane, so a session woken after a wait jump finds its file with

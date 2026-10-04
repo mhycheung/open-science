@@ -5,15 +5,21 @@
 // and prompts it starts. The scripts themselves are tested by tests/test_cm_mod.py.
 import { expect, mock, test } from 'claude-code/testing'
 
-type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent: string[] }
+type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent: string[]; appended: { type: string; text: string }[]; order: string[]; status: string[]; logged: string[] }
 
 // Stubs shared by every test. `stop` is what cm_stop.sh --mod answers; `scripts` maps a
 // script name to its answer. A /clear makes the session id change, as in Claude Code.
-function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean } = {}) {
-  const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [] }
+function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; surfaces?: string[] } = {}) {
+  const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [] }
   let sid = 'sid-old'
   const clock = mock.clock(on)
   mock.env(on, { OPSCI_STATE_DIR: '/state', HOME: '/home/u' })
+  mock.store(on, opts.store ?? {})
+  on('session.surfaces', () => ({ value: opts.surfaces ?? ['terminal'] }))
+  on('ui.panes', () => ({ value: [] }))
+  on('ui.open', ($, e) => { calls.order.push('open ' + e.id); return { isPlaced: true } })
+  on('ui.log', ($, e) => { calls.logged.push(e.text); calls.order.push('log'); return { value: undefined } })
+  on('ui.status', ($, e) => { calls.status.push(e.text); return { value: undefined } })
   on('env.set', () => ({ value: undefined }))
   on('session.id', () => ({ value: sid }))
   on('session.cwd', () => ({ value: '/work' }))
@@ -26,8 +32,14 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
     const a = opts.scripts?.[[script, e.argv[2]].join(' ')]
     return { value: a ?? { exitCode: 0, stdout: '', stderr: '' } }
   })
+  on('session.append', ($, e) => {
+    calls.appended.push({ type: e.message.type, text: e.message.content[0].text })
+    calls.order.push('append ' + e.message.type)
+    return { value: { message: e.message, uuid: 'u' + calls.appended.length } }
+  })
   on('command.run', ($, e) => {
     calls.commands.push((e.command + ' ' + (e.args || '')).trim())
+    calls.order.push('command ' + e.command)
     if (e.command === 'clear') sid = 'sid-new'
     return { text: '' }
   })
@@ -58,6 +70,39 @@ test('an active jump clears, hands over, and runs the resume command', async ($,
   await endTurn($, clock)
   expect(calls.commands.filter(c => !c.startsWith('rename'))).toEqual(['clear', 'open-science-context:continue-context /p/tasks/a/context.md'])
   expect(calls.scripts).toContainEqual(['cm_mod.sh', 'handover', 'sid-old', 'sid-new'])
+})
+
+// What the user sees of a jump note: the stored notice, or the transcript line the mod
+// falls back to. (This build's test kit does not route a plugin's $.session.append to the
+// test's hooks, so here it is the fallback; the stored rows were checked in a live session.)
+const shownNotes = (c: Calls) => [...c.appended.filter(a => a.type === 'system').map(a => a.text), ...c.logged]
+
+test('an active jump writes its report at the top of the new session before resuming', async ($, on) => {
+  const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', prompt: '/open-science-context:continue-context /p/c.md', report: 'Fit done.\n\nActive jump: the session is cleared and resumes from c.md.', wakers: 0 } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  expect(shownNotes(calls)).toEqual(['[open-science] Fit done.\n\nActive jump: the session is cleared and resumes from c.md.'])
+  const o = calls.order.filter(x => !x.startsWith('command rename') && x !== 'append user')
+  expect(o.indexOf('command clear')).toBe(0)
+  expect(o.slice(1)).toEqual([o[1], 'command open-science-context:continue-context'])
+  expect(['append system', 'log']).toContain(o[1])
+})
+
+test('a wait jump says the session is waiting, and starts no turn', async ($, on) => {
+  const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'wait', context: '/p/c.md', prompt: '', report: 'Runs queued.', wakers: 2 } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  const [note] = shownNotes(calls)
+  expect(note).toContain('Wait jump: this session was cleared and is waiting for 2 running background tasks')
+  expect(note).toContain('Runs queued.')
+  expect(calls.prompts).toEqual([])
+})
+
+test('a jump with no report writes nothing for an active jump', async ($, on) => {
+  const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', prompt: '/x' } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  expect(shownNotes(calls)).toEqual([])
 })
 
 test('the stop policy gets the context size from Claude Code', async ($, on) => {
@@ -187,4 +232,126 @@ test('the main session\'s own requests never get the subagent message', async ($
   await start($, clock)
   await drain($.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1 }))
   expect(calls.sent).toEqual([])
+})
+
+// ---- the context bar and the cold-cache question ----
+const MIN = 60000
+const lastStatus = (c: Calls) => c.status.filter(Boolean).at(-1)
+
+async function mainRequest($) {
+  await drain($.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1 }))
+}
+
+test('the bar counts down from the last request, then says the cache might be cold, then cold', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(1000))
+  await start($, clock)
+  expect(lastStatus(calls)).toBe('context 1k tokens · no cache yet')
+  await mainRequest($)
+  expect(lastStatus(calls)).toBe('context 1k tokens · cache warm, 45 min left')
+  await clock.advance(20 * MIN)
+  expect(lastStatus(calls)).toBe('context 1k tokens · cache warm, 25 min left')
+  await clock.advance(26 * MIN)
+  expect(lastStatus(calls)).toBe('context 1k tokens · cache might be cold (46 min idle)')
+  await clock.advance(15 * MIN)
+  expect(lastStatus(calls)).toBe('context 1k tokens · cache cold (61 min idle)')
+})
+
+test('a subagent request does not restart the cache clock', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(1000))
+  await start($, clock)
+  await mainRequest($)
+  await clock.advance(50 * MIN)
+  await drain($.turn.step({ turnId: 't', index: 1, model: 'm', messageCount: 2, agentId: 'a1' }))
+  await clock.advance(MIN)
+  expect(lastStatus(calls)).toContain('cache might be cold')
+})
+
+test('a resumed session keeps the time of its last request; a cleared one has no cache yet', async ($, on) => {
+  const { calls, clock } = setup(on, { store: { lastRequest: { 'sid-old': -50 * MIN } } })
+  await start($, clock)
+  expect(lastStatus(calls)).toBe('context 1k tokens · cache might be cold (50 min idle)')
+})
+
+test('the pane opens for the mobile app only', async ($, on) => {
+  const { calls, clock } = setup(on, { surfaces: ['terminal', 'mobile'] })
+  await start($, clock)
+  expect(calls.order).toContain('open opsci-context')
+})
+
+test('no pane on the terminal alone', async ($, on) => {
+  const { calls, clock } = setup(on)
+  await start($, clock)
+  expect(calls.order).not.toContain('open opsci-context')
+})
+
+function askAnswers(on, answer: string | null, asked: string[]) {
+  on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
+    asked.push(e.questions[0].question)
+    if (answer === null) throw new Error('dismissed')
+    return { text: answer, isError: false, value: { answers: { [e.questions[0].question]: answer } } }
+  })
+}
+
+test('a typed prompt to a cold cache waits for the user to confirm it', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(1000))
+  const asked: string[] = []
+  askAnswers(on, 'Submit', asked)
+  await start($, clock)
+  await mainRequest($)
+  await clock.advance(50 * MIN)
+  const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  expect(asked.length).toBe(1)
+  expect(asked[0]).toContain('The cache might be cold (50 min since the last request)')
+  expect(r.drop).toBeUndefined()
+  expect(calls.prompts).toEqual(['go on'])
+})
+
+test('a declined prompt never reaches the model and goes back to the prompt box', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(1000))
+  const asked: string[] = []
+  const filled: string[] = []
+  on('prompt.fill', ($, e) => { filled.push(e.text); return { isFilled: true } })
+  askAnswers(on, 'Do not submit', asked)
+  await start($, clock)
+  await mainRequest($)
+  await clock.advance(70 * MIN)
+  const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  expect(asked[0]).toContain('The cache is cold')
+  expect(r.drop).toContain('Not submitted')
+  expect(calls.prompts).toEqual([])
+  expect(filled).toEqual(['go on'])
+})
+
+test('a Remote Control prompt is asked about too', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(1000))
+  const asked: string[] = []
+  askAnswers(on, null, asked)
+  await start($, clock)
+  await mainRequest($)
+  await clock.advance(50 * MIN)
+  const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'bridge' } })
+  expect(asked.length).toBe(1)
+  expect(r.drop).toContain('Not submitted')
+  expect(calls.prompts).toEqual([])
+})
+
+test('a warm cache, a slash command and a task notification pass without a question', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(1000))
+  const asked: string[] = []
+  askAnswers(on, 'Do not submit', asked)
+  await start($, clock)
+  await mainRequest($)
+  await clock.advance(10 * MIN)
+  await $.prompt.submit({ text: 'warm', wait: false, origin: { kind: 'composer' } })
+  await clock.advance(50 * MIN)
+  await $.prompt.submit({ text: '/clear', wait: false, origin: { kind: 'composer' } })
+  await $.prompt.submit({ text: 'task done', wait: false, origin: { kind: 'task-notification' } })
+  expect(asked).toEqual([])
+  expect(calls.prompts).toEqual(['warm', '/clear', 'task done'])
 })

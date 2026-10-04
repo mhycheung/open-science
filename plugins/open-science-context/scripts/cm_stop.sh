@@ -33,7 +33,9 @@
 # (pane_context.sh set), queued wakers (wait_slurm.sh --notify) count as wakers, and
 # nothing is started: the answer is one JSON object for the mod,
 #   {"decision":"block","reason":...}   (optional) block the stop with this text
-#   "opsci": {"jump": {kind, context, prompt}}   clear now; for an active jump, run prompt
+#   "opsci": {"jump": {kind, context, prompt, report, wakers}}   clear now; write the report
+#                                                at the top of the new session; for an active
+#                                                jump, run prompt
 #   "opsci": {"cold": <seconds>, "notice": <text>}   (re)arm the cache-cold timer; 0 kills it
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -91,7 +93,7 @@ if [ "$MOD" = 1 ]; then
       cm_log "stop mod ${SID:0:8}: wait jump REFUSED, nothing will wake the session"
       out "$wait_refused"
     else
-      JUMP=$(jq -c '{kind, context, prompt}' "$REQ")
+      JUMP=$(jq -c --argjson w "$WAKERS" '{kind, context, prompt, report: (.report // ""), wakers: $w}' "$REQ")
       jq '.phase="handed_to_mod"' "$REQ" > "$REQ.tmp" && mkdir -p "$OS_STATE/jump/done" \
         && mv "$REQ.tmp" "$OS_STATE/jump/done/$KEY-$(date +%s).json" && rm -f "$REQ"
       cm_log "stop mod ${SID:0:8}: $(jq -r .kind <<<"$JUMP") jump handed to the mod (wakers: $WAKERS)"

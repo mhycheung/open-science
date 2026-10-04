@@ -11,6 +11,20 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Context management on Claude Code (the mod): a jump writes its report at the top of the
+  cleared session, where the user sees it in the terminal and in Remote Control instead of only
+  `/clear`. A wait jump's note first says that the session is cleared and waiting, and for how
+  many running tasks. The note starts no turn; the new agent reads it with its next prompt.
+  `jump.sh` keeps the report in the jump request, and `cm_stop.sh --mod` hands it to the mod
+  with the number of wakers.
+- Context management on Claude Code (the mod): every session shows its context size and the
+  prompt cache's state (`cache warm, N min left`, `cache might be cold` after 45 minutes,
+  `cache cold` after 60) in the status line, as a line above the prompt on Desktop, and in a
+  pane on the mobile app. After 45 minutes idle, a prompt the user types or sends from Remote
+  Control is held, with the agent not woken, until the user confirms it. New setting
+  `OPSCI_CACHE_TTL_MIN` (default 60). Not on Codex yet, by the user's decision (an exception
+  to R03 for now).
+
 - `open-science-publish:publish` limits how much it reads in steps 6, 7 and 9: after a first
   publish, only the diff since the last publish; the user may ask for the checks' findings
   only, or for every exported file. On a first publish it states the size of the export and

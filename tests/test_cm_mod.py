@@ -165,7 +165,8 @@ def test_active_request_is_handed_to_the_mod(env):
     req = request(env, "sid-A", "active")
     out = mod_stop(env)
     assert out["opsci"]["jump"] == {"kind": "active", "context": "/x/context.md",
-                                    "prompt": "/open-science-context:continue-context /x/context.md"}
+                                    "prompt": "/open-science-context:continue-context /x/context.md",
+                                    "report": "", "wakers": 0}
     assert not req.exists()
     done = list((Path(env["OPSCI_STATE_DIR"]) / "jump" / "done").glob(f"{skey('sid-A')}-*.json"))
     assert len(done) == 1 and json.loads(done[0].read_text())["phase"] == "handed_to_mod"
@@ -185,6 +186,14 @@ def test_wait_request_with_a_waker_is_handed_to_the_mod(env, how):
         waker(env, "sid-A")
     out = mod_stop(env, tasks=[SHELL] if how == "task" else [])
     assert out["opsci"]["jump"]["kind"] == "wait" and "decision" not in out
+    assert out["opsci"]["jump"]["wakers"] == 1          # the mod's note says what it waits for
+
+
+def test_the_jump_report_reaches_the_mod(env):
+    request(env, "sid-A", "wait", report="Runs queued.\n\nWait jump: the session is cleared.")
+    out = mod_stop(env, tasks=[SHELL, dict(SHELL, id="b2")])
+    assert out["opsci"]["jump"]["report"] == "Runs queued.\n\nWait jump: the session is cleared."
+    assert out["opsci"]["jump"]["wakers"] == 2
 
 
 def test_stale_request_of_another_session_is_dropped(env):
@@ -207,6 +216,8 @@ def test_jump_without_tmux_works_with_the_mod(env, session):
     req = json.loads((Path(env["OPSCI_STATE_DIR"]) / "jump" / f"{skey(session['sid'])}.json").read_text())
     assert req["runtime"] == "claude-mod" and req["old_sid"] == session["sid"]
     assert req["prompt"] == f"/open-science-context:continue-context {session['ctx']}"
+    # the report, with the jump's own line, for the top of the cleared session
+    assert req["report"].startswith("r\n\nActive jump: the session is cleared and resumes from ")
     # ... and registers the session, which is the mod's registration
     reg = Path(env["OPSCI_STATE_DIR"]) / "session_context" / f"claude__{key(session['sid'])}.json"
     assert json.loads(reg.read_text())["doc_path"] == str(session["ctx"])

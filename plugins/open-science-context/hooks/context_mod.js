@@ -3,7 +3,9 @@
 // It does from inside Claude Code what the tmux path does by typing into the pane: clear
 // the session and run the resume prompt (session jumps), wake a waiting session (queued
 // SLURM wakers, the cache-cold notice), rename the session after its task, and read the
-// context size, also each subagent's. The policy and the records stay in the plugin's
+// context size, also each subagent's. It also shows the context size and how long the
+// prompt cache stays warm on every surface (the status line, a band on the desktop, a pane
+// on the mobile app), and asks the user before a prompt they send to a cold cache. The policy and the records stay in the plugin's
 // shell scripts, shared with the tmux path and Codex: `cm_stop.sh --mod` decides at each
 // stop, `cm_mod.sh` keeps the records, `wait_slurm.sh --check` polls a waker,
 // `session_name.sh want` names the session.
@@ -15,6 +17,11 @@
 
 const SUB_LIMIT_DEFAULT = 200000
 const POLL_DEFAULT_S = 60
+const COLD_MIN_DEFAULT = 45     // the cache may be cold from here (OPSCI_CACHE_COLD_MIN, as cm_lib.sh)
+const TTL_MIN_DEFAULT = 60      // the prompt cache's lifetime: cold from here (OPSCI_CACHE_TTL_MIN)
+const BAR_TICK_MS = 30000
+const PANE = 'opsci-context'
+const STORE_KEY = 'lastRequest' // { <session id>: ms of the main agent's last model request }
 
 let sid = null              // the session id this process runs now
 let busy = false            // a main-agent turn is running
@@ -26,6 +33,10 @@ let coldTimer = null
 let pollTimer = null
 let polling = false
 let lastName = null
+let barSid = null           // the session lastReq belongs to
+let lastReq = null          // ms of the main agent's last model request in barSid; null: none yet
+let barText = ''            // what the bar shows now
+let barTimer = null
 const warned = new Set()    // subagents already told to checkpoint
 
 const key = s => String(s).replace(/[^A-Za-z0-9._-]/g, '_')
@@ -71,8 +82,35 @@ async function rename($, always) {
   await $.command.run({ command: 'rename', args: name })
 }
 
+// The jump's report (jump.sh --report), written at the top of the cleared session: a notice
+// for the user, who otherwise sees only the clear (the model never reads a notice), and the
+// same text as a user-role row the user does not see, which the agent reads with its next
+// prompt. Neither starts a turn, so a wait jump's session stays asleep.
+function jumpNote(j) {
+  const report = String(j.report || '').trim()
+  if (j.kind === 'active') return report
+  const n = Number(j.wakers) || 0
+  const what = n ? n + ' running background task' + (n === 1 ? '' : 's') + ', cron' + (n === 1 ? '' : 's') + ' or SLURM waker' + (n === 1 ? '' : 's') : 'its background work'
+  return 'Wait jump: this session was cleared and is waiting for ' + what +
+    '. It resumes by itself when that work reports back; until then it does nothing.' + (report ? '\n\n' + report : '')
+}
+
+async function writeNote($, j) {
+  const text = jumpNote(j)
+  if (!text) return
+  const append = async (type, body) => {
+    try { return await $.session.append({ message: { type, content: [{ type: 'text', text: body }] } }) } catch (err) { return { deny: String(err) } }
+  }
+  const shown = await append('system', '[open-science] ' + text)
+  // A Claude Code that refuses the notice still shows the user a transcript line.
+  if (shown.deny) $.ui.log('[open-science] ' + text)
+  const read = await append('user', '[open-science] The previous session wrote this for the user when it jumped (the user sees it above):\n\n' + text)
+  if (shown.deny || read.deny) await log($, 'jump note not stored: ' + (shown.deny || read.deny))
+}
+
 // Clear the session with Claude Code's own /clear, hand the registration and wakers to
-// the new session, then run the resume prompt (active) or leave it waiting (wait).
+// the new session, write the jump's report at its top, then run the resume prompt
+// (active) or leave it waiting (wait).
 function jump($, j) {
   jumping = true
   coldTimer?.cancel(); coldTimer = null
@@ -89,6 +127,7 @@ function jump($, j) {
       sid = now
       await sh($, 'cm_mod.sh', ['handover', old, now])
       await log($, j.kind + ' jump: cleared ' + old.slice(0, 8) + ' -> ' + now.slice(0, 8))
+      try { await writeNote($, j) } catch (err) { await log($, 'jump note FAILED: ' + err) }
       if (j.kind === 'active' && j.prompt) {
         await runPrompt($, j.prompt)
       } else {
@@ -145,6 +184,99 @@ async function pollWakers($) {
   }
 }
 
+// ---- the context bar and the cold-cache question --------------------------------------
+// The prompt cache lives TTL minutes from the last request that read it, so the clock runs
+// from the main agent's last model request (each turn.step), not from the last prompt.
+
+async function minutes($) {
+  const cold = Number(await $.env.get('OPSCI_CACHE_COLD_MIN')) || COLD_MIN_DEFAULT
+  const ttl = Number(await $.env.get('OPSCI_CACHE_TTL_MIN')) || TTL_MIN_DEFAULT
+  return { cold, ttl: Math.max(ttl, cold) }
+}
+
+// Follows the session through clears and resumes: a new session id reads its own record
+// (a cleared session has none: no cache yet; a resumed one has its last request's time).
+async function syncSid($) {
+  const now = await $.session.id()
+  if (now === barSid) return
+  barSid = now
+  const all = (await $.store.get(STORE_KEY)) || {}
+  lastReq = typeof all[now] === 'number' ? all[now] : null
+}
+
+async function noteRequest($) {
+  await syncSid($)
+  lastReq = await $.clock.now()
+  const all = { ...((await $.store.get(STORE_KEY)) || {}) }
+  delete all[barSid]
+  all[barSid] = lastReq
+  const keys = Object.keys(all)
+  for (const k of keys.slice(0, Math.max(0, keys.length - 50))) delete all[k]
+  await $.store.set(STORE_KEY, all)
+}
+
+// { phase: none | warm | maybe | cold, idleMin, leftMin, tokens }
+async function cacheState($) {
+  await syncSid($)
+  const { cold, ttl } = await minutes($)
+  let tokens
+  try { tokens = (await $.session.usage()).context.tokens } catch { tokens = undefined }
+  if (lastReq === null) return { phase: 'none', tokens }
+  const idleMin = Math.max(0, ((await $.clock.now()) - lastReq) / 60000)
+  if (busy) return { phase: 'warm', idleMin: 0, leftMin: cold, tokens }
+  const phase = idleMin >= ttl ? 'cold' : idleMin >= cold ? 'maybe' : 'warm'
+  return { phase, idleMin, leftMin: Math.max(0, Math.ceil(cold - idleMin)), tokens }
+}
+
+const fmtTokens = n => n >= 1000 ? Math.round(n / 1000) + 'k' : String(n)
+
+function describe(st) {
+  const ctx = typeof st.tokens === 'number' ? 'context ' + fmtTokens(st.tokens) + ' tokens' : 'context size unknown'
+  const idle = st.idleMin !== undefined ? Math.floor(st.idleMin) + ' min idle' : ''
+  const cache = {
+    none: 'no cache yet',
+    warm: 'cache warm, ' + st.leftMin + ' min left',
+    maybe: 'cache might be cold (' + idle + ')',
+    cold: 'cache cold (' + idle + ')',
+  }[st.phase]
+  return ctx + ' · ' + cache
+}
+
+async function refreshBar($) {
+  const text = describe(await cacheState($))
+  if (text === barText) return
+  barText = text
+  $.ui.status(text)
+  $.ui.invalidate('ui.render')
+}
+
+// The pane exists for the mobile app, which has no status line or band; it is open while
+// a mobile client is attached.
+async function syncPane($) {
+  const mobile = (await $.session.surfaces()).includes('mobile')
+  const open = (await $.ui.panes()).some(p => p.id === PANE)
+  if (mobile && !open) await $.ui.open({ id: PANE, title: 'Context' })
+  if (!mobile && open) await $.ui.close({ id: PANE })
+}
+
+// A prompt the user sent (typed, or from Remote Control) to an idle session whose cache
+// may be cold is held, the model not woken, until they confirm it. A slash command passes:
+// /clear is the usual answer to a cold cache.
+async function coldGate($, e, next) {
+  if (e.turnId || (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') || /^\s*\//.test(e.text)) return next(e)
+  const st = await cacheState($)
+  if (st.phase !== 'maybe' && st.phase !== 'cold') return next(e)
+  const ctx = typeof st.tokens === 'number' ? ' The whole context (' + fmtTokens(st.tokens) + ' tokens) will be read again at the full price.' : ''
+  const q = (st.phase === 'cold' ? 'The cache is cold' : 'The cache might be cold') + ' (' + Math.floor(st.idleMin) + ' min since the last request).' + ctx + ' Are you sure you want to submit this prompt?'
+  let answer = ''
+  try { answer = await $.ui.ask(q, { header: 'Cache cold', options: ['Submit', 'Do not submit'] }) } catch { answer = '' }
+  if (answer === 'Submit') return next(e)
+  if (e.origin.kind === 'composer') await $.prompt.fill({ text: e.text })
+  await log($, 'cold-cache prompt held back (' + st.phase + ', ' + Math.floor(st.idleMin) + ' min idle)')
+  return { drop: 'Not submitted: the cache ' + (st.phase === 'cold' ? 'is' : 'might be') + ' cold.' +
+    (e.origin.kind === 'composer' ? ' Your prompt is back in the prompt box.' : '') + ' /clear starts a fresh session.' }
+}
+
 export function register(on) {
   on('session.start', async ($, e, next) => {
     await $.env.set('OPSCI_MOD', '1')
@@ -152,6 +284,9 @@ export function register(on) {
     const poll = Number(await $.env.get('OPSCI_WAIT_POLL')) || POLL_DEFAULT_S
     pollTimer?.cancel()
     pollTimer = $.clock.every(poll * 1000, () => { void pollWakers($) })
+    barTimer?.cancel()
+    barText = ''; barSid = null
+    barTimer = $.clock.every(BAR_TICK_MS, () => { void refreshBar($) })
     $.clock.after(0, async () => {
       // A session left waiting by another process (resumed after a SLURM resurrection or
       // by hand) lost the background tasks that were to wake it: wake it now.
@@ -159,6 +294,7 @@ export function register(on) {
       if (r.stdout.trim()) await runPrompt($, r.stdout.trim())
       await rename($, true)
     })
+    $.clock.after(0, async () => { await refreshBar($); await syncPane($) })
     return next(e)
   })
 
@@ -180,6 +316,7 @@ export function register(on) {
     if (e.agentId) return next(e)
     busy = true
     coldTimer?.cancel(); coldTimer = null
+    $.clock.after(0, () => { void refreshBar($) })
     const now = await $.session.id()
     if (clearedFrom && now !== clearedFrom && !jumping) {
       // A /clear the user typed: the registration stays with this process, as a pane's does.
@@ -194,6 +331,7 @@ export function register(on) {
   on('turn.complete', async ($, e, next) => {
     if (e.agentId) return next(e)
     busy = false
+    $.clock.after(0, () => { void refreshBar($) })
     const o = atStop || {}
     atStop = null
     if (o.jump) jump($, o.jump)
@@ -209,11 +347,28 @@ export function register(on) {
     return next(e)
   })
 
+  on('prompt.submit', coldGate)
+  on('session.attach', async ($, e, next) => { const r = await next(e); await syncPane($); return r })
+  on('session.detach', async ($, e, next) => { const r = await next(e); await syncPane($); return r })
+
+  // The bar on the surfaces without a status line: a band on the desktop (the terminal has
+  // the status line), the pane on the mobile app.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (e.surface === 'terminal' || !barText || e.props.hasSurvey) return next(e)
+    const { Text } = $.ui.resolve(e)
+    return h(Text, { dimColor: true }, barText)
+  })
+  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
+    const { Text } = $.ui.resolve(e)
+    return h(Text, { dimColor: true }, barText || 'context: waiting for the first request')
+  })
+
   // Each subagent's own context size, from each request it sends. Above the limit, it is
   // told once to checkpoint, as the dispatch contract asks (open-science-context:
   // context-management, "Subagents"). Only in a session that drives a task.
   on('turn.step', async function* ($, e, next) {
     const result = yield* next(e)
+    if (!e.agentId) { await noteRequest($); await refreshBar($) }
     const u = result && result.usage
     if (e.agentId && u && !warned.has(e.agentId)) {
       const tokens = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0)
