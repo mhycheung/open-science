@@ -51,7 +51,7 @@ cm_cold_notice() {  # <seconds idle>
   if [ "$1" -ge 60 ]; then idle="$(( $1 / 60 )) min"; else idle="$1 s"; fi
   printf '[open-science] cache-cold: %s idle with work still running. Do a wait jump now (open-science-context:context-management).' "$idle"
 }
-cm_cold_seconds() { local m="${OPSCI_CACHE_COLD_MIN:-45}"; printf '%s' "${OPSCI_CACHE_COLD_SECONDS:-$(( m * 60 ))}"; }
+cm_cold_seconds() { local m="${OPSCI_CACHE_COLD_MIN:-58}"; printf '%s' "${OPSCI_CACHE_COLD_SECONDS:-$(( m * 60 ))}"; }
 
 # Key for this pane: tmux socket + pane id. Pane ids are unique only per server.
 cm_pane_key() {  # [sock] [pane] -> key, or return 1 outside tmux

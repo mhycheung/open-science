@@ -131,8 +131,8 @@ def test_unregistered_session_gets_no_timer_and_no_notice(env):
 def test_registered_session_with_a_waker_arms_the_cache_cold_timer(env):
     register(env, "sid-A")
     out = mod_stop(env, tasks=[SHELL])
-    assert out["opsci"]["cold"] == 45 * 60
-    assert out["opsci"]["notice"].startswith("[open-science] cache-cold: 45 min idle")
+    assert out["opsci"]["cold"] == 58 * 60
+    assert out["opsci"]["notice"].startswith("[open-science] cache-cold: 58 min idle")
     assert mod_stop(env)["opsci"]["cold"] == 0          # nothing running: no timer
 
 

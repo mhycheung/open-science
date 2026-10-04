@@ -9,6 +9,19 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
+## Unreleased
+
+- Context bar (the mod): one boundary, cold at 59 minutes after the main agent's last request
+  (`OPSCI_CACHE_TTL_MIN`, default 59; the "might be cold" stage is gone); the prompt question
+  is asked from then on. The line is green while the cache is warm and yellow with a warning
+  sign once it is cold; it is drawn above the prompt on the terminal too, in place of the
+  status line, which cannot be colored. The context size comes from each main-agent response's
+  own usage (read plus written) and is shown with one decimal in thousands (`123.4k`), or as a
+  plain count below 1000.
+- The cache-cold notice to a waiting agent comes after 58 minutes, not 45
+  (`OPSCI_CACHE_COLD_MIN`), on the mod and the tmux path. Claude Code's own transcripts show
+  the 1-hour cache still read at every gap under 60 minutes and never past it.
+
 ## 0.3.2 - 2026-10-04
 
 - Context management on Claude Code (the mod): a jump writes its report at the top of the

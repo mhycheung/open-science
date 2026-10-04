@@ -63,7 +63,7 @@ reload; not jumping costs the whole conversation re-read on every turn. Three ki
 |---|---|---|
 | **active** | context above ~250k tokens (the Stop hook tells you), a subtask finished, or before a fan-out of subagents | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" active <context file> --report "<report>"` |
 | **wait** | only background work is left (subagents, a background shell, a SLURM job) and it will outlast ~45 min | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" wait <context file> --report "<report>"` |
-| **cache-cold** | the plugin sends `[open-science] cache-cold: ...` after 45 min idle with work still running | a wait jump, now |
+| **cache-cold** | the plugin sends `[open-science] cache-cold: ...` after 58 min idle with work still running | a wait jump, now |
 
 **An active jump needs a next step you will run yourself.** The fresh session starts by
 running `open-science-context:continue-context` and then carries on with the next step in the context file. If
@@ -118,7 +118,7 @@ resurrection, a resume by hand) has lost them; the mod then runs
 subagent never jumps. `jump.sh cancel` drops a pending request; `jump.sh status` shows it.
 
 Settings (environment): `OPSCI_JUMPS` (all), `OPSCI_JUMP_THRESHOLD` (250000),
-`OPSCI_ACTIVE_JUMP_FLOOR` (100000), `OPSCI_CACHE_COLD_MIN` (45), `OPSCI_JUMP_FRESH_MIN` (15),
+`OPSCI_ACTIVE_JUMP_FLOOR` (100000), `OPSCI_CACHE_COLD_MIN` (58), `OPSCI_JUMP_FRESH_MIN` (15),
 `OPSCI_SUBAGENT_LIMIT` (200000), `OPSCI_WAIT_POLL` (60 s), `OPSCI_STATE_DIR`.
 
 ## Subagents

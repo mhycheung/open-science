@@ -17,8 +17,12 @@
 
 const SUB_LIMIT_DEFAULT = 200000
 const POLL_DEFAULT_S = 60
-const COLD_MIN_DEFAULT = 45     // the cache may be cold from here (OPSCI_CACHE_COLD_MIN, as cm_lib.sh)
-const TTL_MIN_DEFAULT = 60      // the prompt cache's lifetime: cold from here (OPSCI_CACHE_TTL_MIN)
+// The bar and the question call the cache cold from here (OPSCI_CACHE_TTL_MIN). The cache
+// lives 60 min from the start of the last request that read it; the bar's clock starts at
+// that request's end, so a minute less covers most responses. (The cache-cold notice to the
+// agent comes a minute earlier still, so its turn starts warm: OPSCI_CACHE_COLD_MIN, 58, in
+// cm_lib.sh.)
+const TTL_MIN_DEFAULT = 59
 const BAR_TICK_MS = 30000
 const PANE = 'opsci-context'
 const STORE_KEY = 'lastRequest' // { <session id>: ms of the main agent's last model request }
@@ -36,6 +40,8 @@ let lastName = null
 let barSid = null           // the session lastReq belongs to
 let lastReq = null          // ms of the main agent's last model request in barSid; null: none yet
 let barText = ''            // what the bar shows now
+let barPhase = 'none'       // none | warm | cold: the bar's color
+let lastTokens = null       // the context after the main agent's last response, in barSid
 let barTimer = null
 const warned = new Set()    // subagents already told to checkpoint
 
@@ -188,10 +194,8 @@ async function pollWakers($) {
 // The prompt cache lives TTL minutes from the last request that read it, so the clock runs
 // from the main agent's last model request (each turn.step), not from the last prompt.
 
-async function minutes($) {
-  const cold = Number(await $.env.get('OPSCI_CACHE_COLD_MIN')) || COLD_MIN_DEFAULT
-  const ttl = Number(await $.env.get('OPSCI_CACHE_TTL_MIN')) || TTL_MIN_DEFAULT
-  return { cold, ttl: Math.max(ttl, cold) }
+async function ttlMin($) {
+  return Number(await $.env.get('OPSCI_CACHE_TTL_MIN')) || TTL_MIN_DEFAULT
 }
 
 // Follows the session through clears and resumes: a new session id reads its own record
@@ -200,13 +204,18 @@ async function syncSid($) {
   const now = await $.session.id()
   if (now === barSid) return
   barSid = now
+  lastTokens = null
   const all = (await $.store.get(STORE_KEY)) || {}
   lastReq = typeof all[now] === 'number' ? all[now] : null
 }
 
-async function noteRequest($) {
+// At the end of each main-agent request: its time, and the context it leaves (what it read
+// plus what it wrote, which the next request reads).
+async function noteRequest($, usage) {
   await syncSid($)
   lastReq = await $.clock.now()
+  if (usage) lastTokens = (usage.input_tokens || 0) + (usage.cache_read_input_tokens || 0) +
+    (usage.cache_creation_input_tokens || 0) + (usage.output_tokens || 0)
   const all = { ...((await $.store.get(STORE_KEY)) || {}) }
   delete all[barSid]
   all[barSid] = lastReq
@@ -215,42 +224,47 @@ async function noteRequest($) {
   await $.store.set(STORE_KEY, all)
 }
 
-// { phase: none | warm | maybe | cold, idleMin, leftMin, tokens }
+// { phase: none | warm | cold, idleMin, leftMin, tokens }
 async function cacheState($) {
   await syncSid($)
-  const { cold, ttl } = await minutes($)
-  let tokens
-  try { tokens = (await $.session.usage()).context.tokens } catch { tokens = undefined }
+  const ttl = await ttlMin($)
+  let tokens = lastTokens
+  if (tokens === null) {
+    try { tokens = (await $.session.usage()).context.tokens } catch { tokens = undefined }
+  }
   if (lastReq === null) return { phase: 'none', tokens }
+  if (busy) return { phase: 'warm', idleMin: 0, leftMin: ttl, tokens }
   const idleMin = Math.max(0, ((await $.clock.now()) - lastReq) / 60000)
-  if (busy) return { phase: 'warm', idleMin: 0, leftMin: cold, tokens }
-  const phase = idleMin >= ttl ? 'cold' : idleMin >= cold ? 'maybe' : 'warm'
-  return { phase, idleMin, leftMin: Math.max(0, Math.ceil(cold - idleMin)), tokens }
+  return { phase: idleMin >= ttl ? 'cold' : 'warm', idleMin, leftMin: Math.max(0, Math.ceil(ttl - idleMin)), tokens }
 }
 
-const fmtTokens = n => n >= 1000 ? Math.round(n / 1000) + 'k' : String(n)
+// 987, then 1.0k, 123.4k
+const fmtTokens = n => n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
 
 function describe(st) {
   const ctx = typeof st.tokens === 'number' ? 'context ' + fmtTokens(st.tokens) + ' tokens' : 'context size unknown'
-  const idle = st.idleMin !== undefined ? Math.floor(st.idleMin) + ' min idle' : ''
-  const cache = {
-    none: 'no cache yet',
-    warm: 'cache warm, ' + st.leftMin + ' min left',
-    maybe: 'cache might be cold (' + idle + ')',
-    cold: 'cache cold (' + idle + ')',
-  }[st.phase]
-  return ctx + ' · ' + cache
+  if (st.phase === 'cold') return '⚠ ' + ctx + ' · cache cold (' + Math.floor(st.idleMin) + ' min idle)'
+  return ctx + ' · ' + (st.phase === 'warm' ? 'cache warm, ' + st.leftMin + ' min left' : 'no cache yet')
+}
+
+const BAR_COLOR = { warm: 'green', cold: 'yellow' }
+
+function bar($, e) {
+  const { Text } = $.ui.resolve(e)
+  const color = BAR_COLOR[barPhase]
+  return h(Text, color ? { color } : { dimColor: true }, barText)
 }
 
 async function refreshBar($) {
-  const text = describe(await cacheState($))
-  if (text === barText) return
+  const st = await cacheState($)
+  const text = describe(st)
+  if (text === barText && st.phase === barPhase) return
   barText = text
-  $.ui.status(text)
+  barPhase = st.phase
   $.ui.invalidate('ui.render')
 }
 
-// The pane exists for the mobile app, which has no status line or band; it is open while
+// The pane exists for the mobile app, which has no band above the prompt; it is open while
 // a mobile client is attached.
 async function syncPane($) {
   const mobile = (await $.session.surfaces()).includes('mobile')
@@ -260,20 +274,20 @@ async function syncPane($) {
 }
 
 // A prompt the user sent (typed, or from Remote Control) to an idle session whose cache
-// may be cold is held, the model not woken, until they confirm it. A slash command passes:
+// is cold is held, the model not woken, until they confirm it. A slash command passes:
 // /clear is the usual answer to a cold cache.
 async function coldGate($, e, next) {
   if (e.turnId || (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') || /^\s*\//.test(e.text)) return next(e)
   const st = await cacheState($)
-  if (st.phase !== 'maybe' && st.phase !== 'cold') return next(e)
+  if (st.phase !== 'cold') return next(e)
   const ctx = typeof st.tokens === 'number' ? ' The whole context (' + fmtTokens(st.tokens) + ' tokens) will be read again at the full price.' : ''
-  const q = (st.phase === 'cold' ? 'The cache is cold' : 'The cache might be cold') + ' (' + Math.floor(st.idleMin) + ' min since the last request).' + ctx + ' Are you sure you want to submit this prompt?'
+  const q = 'The cache is cold (' + Math.floor(st.idleMin) + ' min since the last request).' + ctx + ' Are you sure you want to submit this prompt?'
   let answer = ''
   try { answer = await $.ui.ask(q, { header: 'Cache cold', options: ['Submit', 'Do not submit'] }) } catch { answer = '' }
   if (answer === 'Submit') return next(e)
   if (e.origin.kind === 'composer') await $.prompt.fill({ text: e.text })
-  await log($, 'cold-cache prompt held back (' + st.phase + ', ' + Math.floor(st.idleMin) + ' min idle)')
-  return { drop: 'Not submitted: the cache ' + (st.phase === 'cold' ? 'is' : 'might be') + ' cold.' +
+  await log($, 'cold-cache prompt held back (' + Math.floor(st.idleMin) + ' min idle)')
+  return { drop: 'Not submitted: the cache is cold.' +
     (e.origin.kind === 'composer' ? ' Your prompt is back in the prompt box.' : '') + ' /clear starts a fresh session.' }
 }
 
@@ -285,7 +299,7 @@ export function register(on) {
     pollTimer?.cancel()
     pollTimer = $.clock.every(poll * 1000, () => { void pollWakers($) })
     barTimer?.cancel()
-    barText = ''; barSid = null
+    barText = ''; barPhase = 'none'; barSid = null; lastTokens = null
     barTimer = $.clock.every(BAR_TICK_MS, () => { void refreshBar($) })
     $.clock.after(0, async () => {
       // A session left waiting by another process (resumed after a SLURM resurrection or
@@ -351,16 +365,15 @@ export function register(on) {
   on('session.attach', async ($, e, next) => { const r = await next(e); await syncPane($); return r })
   on('session.detach', async ($, e, next) => { const r = await next(e); await syncPane($); return r })
 
-  // The bar on the surfaces without a status line: a band on the desktop (the terminal has
-  // the status line), the pane on the mobile app.
+  // The bar: a line above the prompt on the terminal and the desktop, the pane on the mobile
+  // app. Green while the cache is warm, yellow with a warning sign once it is cold.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (e.surface === 'terminal' || !barText || e.props.hasSurvey) return next(e)
-    const { Text } = $.ui.resolve(e)
-    return h(Text, { dimColor: true }, barText)
+    if (!barText || e.props.hasSurvey) return next(e)
+    return bar($, e)
   })
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    const { Text } = $.ui.resolve(e)
-    return h(Text, { dimColor: true }, barText || 'context: waiting for the first request')
+    if (!barText) { const { Text } = $.ui.resolve(e); return h(Text, { dimColor: true }, 'context: waiting for the first request') }
+    return bar($, e)
   })
 
   // Each subagent's own context size, from each request it sends. Above the limit, it is
@@ -368,7 +381,7 @@ export function register(on) {
   // context-management, "Subagents"). Only in a session that drives a task.
   on('turn.step', async function* ($, e, next) {
     const result = yield* next(e)
-    if (!e.agentId) { await noteRequest($); await refreshBar($) }
+    if (!e.agentId) { await noteRequest($, result && result.usage); await refreshBar($) }
     const u = result && result.usage
     if (e.agentId && u && !warned.has(e.agentId)) {
       const tokens = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0)

@@ -92,7 +92,7 @@ pane resumes the wrong work**, so check the line that names the file. In Codex, 
 |---|---|---|
 | active | the context is above about 250k tokens, a subtask finished, or before a fan-out of subagents | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" active <context file> --report "<report>"` |
 | wait | only background work is left (subagents, a background shell, a SLURM job) and it will take longer than about 45 minutes | `bash "${CLAUDE_PLUGIN_ROOT}/scripts/jump.sh" wait <context file> --report "<report>"` |
-| cache-cold | the plugin sends `[open-science] cache-cold: ...` to the session after 45 minutes idle with work still running | a wait jump, now |
+| cache-cold | the plugin sends `[open-science] cache-cold: ...` to the session after 58 minutes idle with work still running | a wait jump, now |
 
 Before either command, in the same turn, the agent writes the jump's record: the task
 `context.md` (state, what is in flight and how to check it, the exact next step), the project
@@ -191,32 +191,35 @@ the context files, `continue-context` and subagent checkpoints work as described
 ## The context bar and the cold-cache question
 
 With the mod, every session shows a line with its context size and the state of the prompt
-cache: on the terminal it is the plugin's status line under the prompt, on Claude Code Desktop
-a line above the prompt, and in the Claude mobile app a small pane. The cache lives one hour
-after the last request that read it, so the clock runs from the main agent's last model
-request (a subagent's requests do not count):
+cache: above the prompt on the terminal and on Claude Code Desktop, and in a small pane in the
+Claude mobile app. The context size is the one the main agent's last model response left (what
+it read plus what it wrote), updated at the end of every request, in thousands with one decimal
+(`123.4k`) and as a plain count below 1000. The cache lives one hour from the start of the last
+request that read it; the line's clock starts at the end of the main agent's last request (a
+subagent's requests do not count), so it calls the cache cold at 59 minutes:
 
 | idle since the last request | the line says |
 |---|---|
-| no request yet in this session (a new or cleared session) | `context 12k tokens · no cache yet` |
-| under 45 minutes | `context 180k tokens · cache warm, 32 min left` (minutes until 45) |
-| 45 to 60 minutes | `context 180k tokens · cache might be cold (52 min idle)` |
-| 60 minutes or more | `context 180k tokens · cache cold (75 min idle)` |
+| no request yet in this session (a new or cleared session) | `context 12.3k tokens · no cache yet` |
+| under 59 minutes | `context 180.2k tokens · cache warm, 32 min left`, in green |
+| 59 minutes or more | `⚠ context 180.2k tokens · cache cold (75 min idle)`, in yellow |
 
-When the cache might be cold, a prompt you send to the idle session, typed or from Remote
-Control, is held back and you are asked: `The cache might be cold (52 min since the last
-request). The whole context (180k tokens) will be read again at the full price. Are you sure
-you want to submit this prompt?` With **Submit** the prompt goes in as you sent it; with **Do
-not submit**, or if you dismiss the question, nothing reaches the agent and a typed prompt goes
-back into the prompt box. Until you answer, the agent is not woken. Slash commands (`/clear`
-is the usual answer to a cold cache), task notifications and the plugin's own prompts are not
-asked about.
+The 59 minutes come from Claude Code's own transcripts: in 958 transcript files, every request sent
+less than 60 minutes after the previous response still read the cache, and none sent later did.
+
+When the cache is cold, a prompt you send to the idle session, typed or from Remote Control, is
+held back and you are asked: `The cache is cold (75 min since the last request). The whole
+context (180.2k tokens) will be read again at the full price. Are you sure you want to submit
+this prompt?` With **Submit** the prompt goes in as you sent it; with **Do not submit**, or if
+you dismiss the question, nothing reaches the agent and a typed prompt goes back into the prompt
+box. Until you answer, the agent is not woken. Slash commands (`/clear` is the usual answer to a
+cold cache), task notifications and the plugin's own prompts are not asked about.
 
 This is separate from the cache-cold notice above. That notice is for a session that ended its
-turn with work still running that will wake it; after 45 minutes it tells the agent to do a
-wait jump. A session that ended its turn waiting only for you gets no notice and is never woken
-by the plugin: whether to clear or to continue is up to you, and the question above is asked
-when you do.
+turn with work still running that will wake it; after 58 minutes, a minute before the line
+turns cold, it tells the agent to do a wait jump while the cache is still warm. A session that
+ended its turn waiting only for you gets no notice and is never woken by the plugin: whether to
+clear or to continue is up to you, and the question above is asked when you do.
 
 ## Settings
 
@@ -228,8 +231,8 @@ Environment variables read by the scripts:
 | `OPSCI_JUMP_THRESHOLD` | 250000 | context size (tokens) at which the Stop hook asks for an active jump |
 | `OPSCI_JUMP_REPEAT` | 50000 | growth (tokens) before the hook asks the same session again |
 | `OPSCI_ACTIVE_JUMP_FLOOR` | 100000 | below this, an active jump needs `--force` |
-| `OPSCI_CACHE_COLD_MIN` | 45 | minutes idle, with work running, before the cache-cold notice; with the mod, also when the context bar says the cache might be cold and prompts are asked about |
-| `OPSCI_CACHE_TTL_MIN` | 60 | with the mod: minutes idle after which the context bar says the cache is cold |
+| `OPSCI_CACHE_COLD_MIN` | 58 | minutes idle, with work running, before the cache-cold notice |
+| `OPSCI_CACHE_TTL_MIN` | 59 | with the mod: minutes idle after which the context bar says the cache is cold and prompts are asked about |
 | `OPSCI_JUMP_FRESH_MIN` | 15 | the context file must have been saved within this many minutes |
 | `OPSCI_SUBAGENT_LIMIT` | 200000 | with the mod: a subagent's context size (tokens) at which it is told to checkpoint |
 | `OPSCI_WAIT_POLL` | 60 | seconds between two checks of a SLURM waker's jobs |

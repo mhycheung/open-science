@@ -19,7 +19,6 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
   on('ui.panes', () => ({ value: [] }))
   on('ui.open', ($, e) => { calls.order.push('open ' + e.id); return { isPlaced: true } })
   on('ui.log', ($, e) => { calls.logged.push(e.text); calls.order.push('log'); return { value: undefined } })
-  on('ui.status', ($, e) => { calls.status.push(e.text); return { value: undefined } })
   on('env.set', () => ({ value: undefined }))
   on('session.id', () => ({ value: sid }))
   on('session.cwd', () => ({ value: '/work' }))
@@ -236,42 +235,73 @@ test('the main session\'s own requests never get the subagent message', async ($
 
 // ---- the context bar and the cold-cache question ----
 const MIN = 60000
-const lastStatus = (c: Calls) => c.status.filter(Boolean).at(-1)
 
 async function mainRequest($) {
   await drain($.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1 }))
 }
 
-test('the bar counts down from the last request, then says the cache might be cold, then cold', async ($, on) => {
-  const { calls, clock } = setup(on)
-  on('turn.step', step(1000))
+const BAND_PROPS = { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 9 }, view: {} }
+
+// The bar as a surface draws it: its text and color.
+async function barOn($, surface = 'terminal') {
+  const ui = await $.ui.mount({ plugin: 'open-science-context', surface, component: 'AbovePrompt', props: BAND_PROPS, viewport: { columns: 120, rows: 40 } })
+  const t = await ui.find({ type: 'Text' })
+  await ui.unmount()
+  return t ? { text: t.text, color: t.props?.color } : null
+}
+
+test('the bar counts down from the last request in green, then turns yellow and cold at 59 min', async ($, on) => {
+  const { clock } = setup(on)
+  on('turn.step', step(123456))
   await start($, clock)
-  expect(lastStatus(calls)).toBe('context 1k tokens · no cache yet')
+  expect(await barOn($)).toEqual({ text: 'context 1.2k tokens · no cache yet', color: undefined })
   await mainRequest($)
-  expect(lastStatus(calls)).toBe('context 1k tokens · cache warm, 45 min left')
+  expect(await barOn($)).toEqual({ text: 'context 123.5k tokens · cache warm, 59 min left', color: 'green' })
   await clock.advance(20 * MIN)
-  expect(lastStatus(calls)).toBe('context 1k tokens · cache warm, 25 min left')
-  await clock.advance(26 * MIN)
-  expect(lastStatus(calls)).toBe('context 1k tokens · cache might be cold (46 min idle)')
-  await clock.advance(15 * MIN)
-  expect(lastStatus(calls)).toBe('context 1k tokens · cache cold (61 min idle)')
+  expect(await barOn($)).toEqual({ text: 'context 123.5k tokens · cache warm, 39 min left', color: 'green' })
+  await clock.advance(38 * MIN)
+  expect(await barOn($)).toEqual({ text: 'context 123.5k tokens · cache warm, 1 min left', color: 'green' })
+  await clock.advance(MIN)
+  expect(await barOn($)).toEqual({ text: '⚠ context 123.5k tokens · cache cold (59 min idle)', color: 'yellow' })
+})
+
+test('the bar is the same on the desktop and in the mobile pane', async ($, on) => {
+  const { clock } = setup(on, { surfaces: ['terminal', 'mobile'] })
+  on('turn.step', step(123456))
+  await start($, clock)
+  await mainRequest($)
+  await clock.advance(60 * MIN)
+  const cold = { text: '⚠ context 123.5k tokens · cache cold (60 min idle)', color: 'yellow' }
+  expect(await barOn($, 'desktop')).toEqual(cold)
+  const ui = await $.ui.mount({ plugin: 'open-science-context', surface: 'mobile', component: 'Pane', requestId: 'opsci-context',
+    props: { title: 'Context', isFocused: false, bodyColumns: 40, placement: 'inline', scroll: { offset: 0, bodyRows: 5 }, view: {} }, viewport: { columns: 40, rows: 20 } })
+  const t = await ui.find({ type: 'Text' })
+  expect({ text: t.text, color: t.props?.color }).toEqual(cold)
+})
+
+test('below 1000 tokens the bar counts every token', async ($, on) => {
+  const { clock } = setup(on)
+  on('turn.step', step(900))
+  await start($, clock)
+  await mainRequest($)
+  expect((await barOn($)).text).toBe('context 901 tokens · cache warm, 59 min left')
 })
 
 test('a subagent request does not restart the cache clock', async ($, on) => {
-  const { calls, clock } = setup(on)
+  const { clock } = setup(on)
   on('turn.step', step(1000))
   await start($, clock)
   await mainRequest($)
-  await clock.advance(50 * MIN)
+  await clock.advance(58 * MIN)
   await drain($.turn.step({ turnId: 't', index: 1, model: 'm', messageCount: 2, agentId: 'a1' }))
   await clock.advance(MIN)
-  expect(lastStatus(calls)).toContain('cache might be cold')
+  expect((await barOn($)).text).toContain('cache cold')
 })
 
-test('a resumed session keeps the time of its last request; a cleared one has no cache yet', async ($, on) => {
-  const { calls, clock } = setup(on, { store: { lastRequest: { 'sid-old': -50 * MIN } } })
+test('a resumed session keeps the time of its last request', async ($, on) => {
+  const { clock } = setup(on, { store: { lastRequest: { 'sid-old': -50 * MIN } } })
   await start($, clock)
-  expect(lastStatus(calls)).toBe('context 1k tokens · cache might be cold (50 min idle)')
+  expect(await barOn($)).toEqual({ text: 'context 1.2k tokens · cache warm, 9 min left', color: 'green' })
 })
 
 test('the pane opens for the mobile app only', async ($, on) => {
@@ -301,12 +331,15 @@ test('a typed prompt to a cold cache waits for the user to confirm it', async ($
   askAnswers(on, 'Submit', asked)
   await start($, clock)
   await mainRequest($)
-  await clock.advance(50 * MIN)
+  await clock.advance(58 * MIN)
+  await $.prompt.submit({ text: 'warm', wait: false, origin: { kind: 'composer' } })
+  expect(asked).toEqual([])
+  await clock.advance(2 * MIN)
   const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
   expect(asked.length).toBe(1)
-  expect(asked[0]).toContain('The cache might be cold (50 min since the last request)')
+  expect(asked[0]).toContain('The cache is cold (60 min since the last request)')
   expect(r.drop).toBeUndefined()
-  expect(calls.prompts).toEqual(['go on'])
+  expect(calls.prompts).toEqual(['warm', 'go on'])
 })
 
 test('a declined prompt never reaches the model and goes back to the prompt box', async ($, on) => {
@@ -333,7 +366,7 @@ test('a Remote Control prompt is asked about too', async ($, on) => {
   askAnswers(on, null, asked)
   await start($, clock)
   await mainRequest($)
-  await clock.advance(50 * MIN)
+  await clock.advance(60 * MIN)
   const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'bridge' } })
   expect(asked.length).toBe(1)
   expect(r.drop).toContain('Not submitted')
@@ -349,7 +382,7 @@ test('a warm cache, a slash command and a task notification pass without a quest
   await mainRequest($)
   await clock.advance(10 * MIN)
   await $.prompt.submit({ text: 'warm', wait: false, origin: { kind: 'composer' } })
-  await clock.advance(50 * MIN)
+  await clock.advance(60 * MIN)
   await $.prompt.submit({ text: '/clear', wait: false, origin: { kind: 'composer' } })
   await $.prompt.submit({ text: 'task done', wait: false, origin: { kind: 'task-notification' } })
   expect(asked).toEqual([])

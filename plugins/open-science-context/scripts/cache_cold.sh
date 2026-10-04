@@ -2,7 +2,7 @@
 # Cache-cold timer of the tmux path (the mod keeps its own), started detached by cm_stop.sh when a session stops while
 # something that will wake it is still running. The Stop hook kills and restarts
 # it at every stop, so it fires only after $OPSCI_CACHE_COLD_MIN minutes (default
-# 45; the prompt cache is assumed to last 1 hour) with no stop at all.
+# 58; the prompt cache lasts 1 hour) with no stop at all.
 #
 #   cache_cold.sh <sock> <pane> <pane key> <session id> <state file or "">
 #

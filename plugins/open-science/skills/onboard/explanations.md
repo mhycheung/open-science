@@ -181,7 +181,7 @@ is optional. There are three kinds:
   Without it, the whole conversation is sent again on every turn;
 - a **wait jump**, before a long wait on work that runs in the background, such as a SLURM
   job: the agent saves, clears, and the finished job wakes the fresh session;
-- a **cache-cold jump**: if the agent has been idle for 45 minutes with work still running,
+- a **cache-cold jump**: if the agent has been idle for 58 minutes with work still running,
   the plugin reminds it to do a wait jump. Claude keeps a recent conversation cheap to resend
   for about an hour; waking a long conversation after that sends all of it again at full
   price, which costs far more than a fresh start from the context file.
