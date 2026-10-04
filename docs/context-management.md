@@ -191,8 +191,7 @@ the context files, `continue-context` and subagent checkpoints work as described
 ## The context bar and the cold-cache question
 
 With the mod, every session shows a line with its context size and the state of the prompt
-cache: above the prompt on the terminal and on Claude Code Desktop, and in a small pane in the
-Claude mobile app. The context size is the one the main agent's last model response left (what
+cache, above the prompt on the terminal and in the Code tab of the Claude Desktop app. The context size is the one the main agent's last model response left (what
 it read plus what it wrote), updated at the end of every request, in thousands with one decimal
 (`123.4k`) and as a plain count below 1000. The cache lives one hour from the start of the last
 request that read it; the line's clock starts at the end of the main agent's last request (a
@@ -203,6 +202,12 @@ subagent's requests do not count), so it calls the cache cold at 59 minutes:
 | no request yet in this session (a new or cleared session) | `context 12.3k tokens · no cache yet` |
 | under 59 minutes | `context 180.2k tokens · cache warm, 32 min left`, in green |
 | 59 minutes or more | `⚠ context 180.2k tokens · cache cold (75 min idle)`, in yellow |
+
+Remote Control (from claude.ai, the desktop app or the mobile app) shows the transcript but
+nothing a mod draws, so the line does not appear there. Two notices are written into the
+transcript instead, once per idle spell: `[open-science] cache cold in 5 min; context 180.2k
+tokens.` five minutes before the boundary, and `[open-science] ⚠ cache cold: 59 min since the
+last request; ...` when it is reached. A notice starts no turn and the agent never reads it.
 
 The 59 minutes come from Claude Code's own transcripts: in 958 transcript files, every request sent
 less than 60 minutes after the previous response still read the cache, and none sent later did.

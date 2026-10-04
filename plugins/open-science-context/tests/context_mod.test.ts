@@ -9,15 +9,12 @@ type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent:
 
 // Stubs shared by every test. `stop` is what cm_stop.sh --mod answers; `scripts` maps a
 // script name to its answer. A /clear makes the session id change, as in Claude Code.
-function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; surfaces?: string[] } = {}) {
+function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown> } = {}) {
   const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [] }
   let sid = 'sid-old'
   const clock = mock.clock(on)
   mock.env(on, { OPSCI_STATE_DIR: '/state', HOME: '/home/u' })
   mock.store(on, opts.store ?? {})
-  on('session.surfaces', () => ({ value: opts.surfaces ?? ['terminal'] }))
-  on('ui.panes', () => ({ value: [] }))
-  on('ui.open', ($, e) => { calls.order.push('open ' + e.id); return { isPlaced: true } })
   on('ui.log', ($, e) => { calls.logged.push(e.text); calls.order.push('log'); return { value: undefined } })
   on('env.set', () => ({ value: undefined }))
   on('session.id', () => ({ value: sid }))
@@ -265,18 +262,41 @@ test('the bar counts down from the last request in green, then turns yellow and 
   expect(await barOn($)).toEqual({ text: '⚠ context 123.5k tokens · cache cold (59 min idle)', color: 'yellow' })
 })
 
-test('the bar is the same on the desktop and in the mobile pane', async ($, on) => {
-  const { clock } = setup(on, { surfaces: ['terminal', 'mobile'] })
+test('the bar is the same in the Desktop app', async ($, on) => {
+  const { clock } = setup(on)
   on('turn.step', step(123456))
   await start($, clock)
   await mainRequest($)
   await clock.advance(60 * MIN)
-  const cold = { text: '⚠ context 123.5k tokens · cache cold (60 min idle)', color: 'yellow' }
-  expect(await barOn($, 'desktop')).toEqual(cold)
-  const ui = await $.ui.mount({ plugin: 'open-science-context', surface: 'mobile', component: 'Pane', requestId: 'opsci-context',
-    props: { title: 'Context', isFocused: false, bodyColumns: 40, placement: 'inline', scroll: { offset: 0, bodyRows: 5 }, view: {} }, viewport: { columns: 40, rows: 20 } })
-  const t = await ui.find({ type: 'Text' })
-  expect({ text: t.text, color: t.props?.color }).toEqual(cold)
+  expect(await barOn($, 'desktop')).toEqual({ text: '⚠ context 123.5k tokens · cache cold (60 min idle)', color: 'yellow' })
+})
+
+// Remote Control shows only the transcript: the notices (the stored row, or the transcript
+// line the mod falls back to; see shownNotes).
+test('the transcript gets one notice 5 min before the cache goes cold and one when it does', async ($, on) => {
+  const { calls, clock } = setup(on)
+  on('turn.step', step(123456))
+  await start($, clock)
+  await mainRequest($)
+  await clock.advance(53 * MIN)
+  expect(shownNotes(calls)).toEqual([])
+  await clock.advance(MIN)
+  expect(shownNotes(calls)).toEqual(['[open-science] cache cold in 5 min; context 123.5k tokens.'])
+  await clock.advance(5 * MIN)
+  expect(shownNotes(calls).length).toBe(2)
+  expect(shownNotes(calls)[1]).toBe('[open-science] ⚠ cache cold: 59 min since the last request; context 123.5k tokens. A prompt now reads the whole context again at the full price; /clear starts a fresh session.')
+  await clock.advance(60 * MIN)
+  expect(shownNotes(calls).length).toBe(2)
+  await mainRequest($)
+  await clock.advance(60 * MIN)
+  expect(shownNotes(calls).length).toBe(4)
+})
+
+test('no notice before the first request of a session', async ($, on) => {
+  const { calls, clock } = setup(on)
+  await start($, clock)
+  await clock.advance(120 * MIN)
+  expect(shownNotes(calls)).toEqual([])
 })
 
 test('below 1000 tokens the bar counts every token', async ($, on) => {
@@ -302,18 +322,6 @@ test('a resumed session keeps the time of its last request', async ($, on) => {
   const { clock } = setup(on, { store: { lastRequest: { 'sid-old': -50 * MIN } } })
   await start($, clock)
   expect(await barOn($)).toEqual({ text: 'context 1.2k tokens · cache warm, 9 min left', color: 'green' })
-})
-
-test('the pane opens for the mobile app only', async ($, on) => {
-  const { calls, clock } = setup(on, { surfaces: ['terminal', 'mobile'] })
-  await start($, clock)
-  expect(calls.order).toContain('open opsci-context')
-})
-
-test('no pane on the terminal alone', async ($, on) => {
-  const { calls, clock } = setup(on)
-  await start($, clock)
-  expect(calls.order).not.toContain('open opsci-context')
 })
 
 function askAnswers(on, answer: string | null, asked: string[]) {

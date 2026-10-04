@@ -4,8 +4,9 @@
 // the session and run the resume prompt (session jumps), wake a waiting session (queued
 // SLURM wakers, the cache-cold notice), rename the session after its task, and read the
 // context size, also each subagent's. It also shows the context size and how long the
-// prompt cache stays warm on every surface (the status line, a band on the desktop, a pane
-// on the mobile app), and asks the user before a prompt they send to a cold cache. The policy and the records stay in the plugin's
+// prompt cache stays warm (a line above the prompt, on the terminal and in the Desktop app;
+// notices in the transcript for Remote Control, which draws nothing a mod draws), and asks
+// the user before a prompt they send to a cold cache. The policy and the records stay in the plugin's
 // shell scripts, shared with the tmux path and Codex: `cm_stop.sh --mod` decides at each
 // stop, `cm_mod.sh` keeps the records, `wait_slurm.sh --check` polls a waker,
 // `session_name.sh want` names the session.
@@ -24,7 +25,7 @@ const POLL_DEFAULT_S = 60
 // cm_lib.sh.)
 const TTL_MIN_DEFAULT = 59
 const BAR_TICK_MS = 30000
-const PANE = 'opsci-context'
+const WARN_MIN = 5              // the transcript notice that the cache goes cold this many minutes from now
 const STORE_KEY = 'lastRequest' // { <session id>: ms of the main agent's last model request }
 
 let sid = null              // the session id this process runs now
@@ -42,6 +43,7 @@ let lastReq = null          // ms of the main agent's last model request in barS
 let barText = ''            // what the bar shows now
 let barPhase = 'none'       // none | warm | cold: the bar's color
 let lastTokens = null       // the context after the main agent's last response, in barSid
+let noticed = { req: null, warn: false, cold: false }   // the notices written for the request at lastReq
 let barTimer = null
 const warned = new Set()    // subagents already told to checkpoint
 
@@ -257,6 +259,7 @@ function bar($, e) {
 
 async function refreshBar($) {
   const st = await cacheState($)
+  await cacheNotices($, st)
   const text = describe(st)
   if (text === barText && st.phase === barPhase) return
   barText = text
@@ -264,13 +267,27 @@ async function refreshBar($) {
   $.ui.invalidate('ui.render')
 }
 
-// The pane exists for the mobile app, which has no band above the prompt; it is open while
-// a mobile client is attached.
-async function syncPane($) {
-  const mobile = (await $.session.surfaces()).includes('mobile')
-  const open = (await $.ui.panes()).some(p => p.id === PANE)
-  if (mobile && !open) await $.ui.open({ id: PANE, title: 'Context' })
-  if (!mobile && open) await $.ui.close({ id: PANE })
+// Remote Control shows the transcript but nothing a mod draws, so the line's two moments are
+// also written there as notices: WARN_MIN minutes before the cache goes cold, and when it
+// does. Once each per idle spell; a notice starts no turn and the model never reads it.
+async function cacheNotices($, st) {
+  if (noticed.req !== lastReq) noticed = { req: lastReq, warn: false, cold: false }
+  if (st.phase === 'none' || busy) return
+  const ctx = typeof st.tokens === 'number' ? '; context ' + fmtTokens(st.tokens) + ' tokens' : ''
+  let text = null
+  if (st.phase === 'cold' && !noticed.cold) {
+    noticed.cold = noticed.warn = true
+    text = '⚠ cache cold: ' + Math.floor(st.idleMin) + ' min since the last request' + ctx +
+      '. A prompt now reads the whole context again at the full price; /clear starts a fresh session.'
+  } else if (st.phase === 'warm' && !noticed.warn && st.leftMin <= WARN_MIN && (await ttlMin($)) > WARN_MIN) {
+    noticed.warn = true
+    text = 'cache cold in ' + st.leftMin + ' min' + ctx + '.'
+  }
+  if (!text) return
+  try {
+    const r = await $.session.append({ message: { type: 'system', content: [{ type: 'text', text: '[open-science] ' + text }] } })
+    if (r.deny) $.ui.log('[open-science] ' + text)
+  } catch { $.ui.log('[open-science] ' + text) }
 }
 
 // A prompt the user sent (typed, or from Remote Control) to an idle session whose cache
@@ -308,7 +325,7 @@ export function register(on) {
       if (r.stdout.trim()) await runPrompt($, r.stdout.trim())
       await rename($, true)
     })
-    $.clock.after(0, async () => { await refreshBar($); await syncPane($) })
+    $.clock.after(0, () => { void refreshBar($) })
     return next(e)
   })
 
@@ -362,17 +379,11 @@ export function register(on) {
   })
 
   on('prompt.submit', coldGate)
-  on('session.attach', async ($, e, next) => { const r = await next(e); await syncPane($); return r })
-  on('session.detach', async ($, e, next) => { const r = await next(e); await syncPane($); return r })
 
-  // The bar: a line above the prompt on the terminal and the desktop, the pane on the mobile
-  // app. Green while the cache is warm, yellow with a warning sign once it is cold.
+  // The bar: a line above the prompt on the terminal and in the Desktop app. Green while the
+  // cache is warm, yellow with a warning sign once it is cold.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (!barText || e.props.hasSurvey) return next(e)
-    return bar($, e)
-  })
-  on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
-    if (!barText) { const { Text } = $.ui.resolve(e); return h(Text, { dimColor: true }, 'context: waiting for the first request') }
     return bar($, e)
   })
 
