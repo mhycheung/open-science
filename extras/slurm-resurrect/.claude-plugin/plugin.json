@@ -1,6 +1,6 @@
 {
   "name": "slurm-resurrect",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Optional: resume Claude Code sessions in a fresh SLURM job when the current job reaches its time limit. Nothing in the open-science plugins depends on it.",
   "license": "MIT",
   "author": {

@@ -9,7 +9,7 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
-## Unreleased
+## 0.3.2 - 2026-10-04
 
 - Context management on Claude Code (the mod): a jump writes its report at the top of the
   cleared session, where the user sees it in the terminal and in Remote Control instead of only
