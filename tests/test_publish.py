@@ -728,3 +728,74 @@ def test_push_writes_the_overridden_patterns_into_the_site_workflow(proj, public
     wf = git(public, "show", f"main:{publish.SITE_WORKFLOW}").stdout
     assert "--allow-leak slurm-job-id" in wf
     assert "SLURM 20742356" in git(public, "show", "main:tasks/t01-fit/context.md").stdout
+
+
+# ------------------------------------------------------------------ security regressions
+
+
+def test_env_files_are_never_exported(proj):
+    for f in ("tasks/t01-fit/.env", "tasks/t01-fit/.env.local", "tasks/t01-fit/prod.env", "docs/.env/token"):
+        (proj / f).parent.mkdir(parents=True, exist_ok=True)
+        (proj / f).write_text("TOKEN=abc\n")
+    git(proj, "add", "-f", "tasks", "docs")
+    commit(proj)
+    files = problems(proj)[1].files
+    assert "tasks/t01-fit/context.md" in files
+    assert not [f for f in files if ".env" in f or f.endswith(".env")]
+
+
+def test_export_ignores_git_export_attributes(proj):
+    # `git archive` would expand $Format:...$ into the private branch names and commit subject
+    (proj / ".gitattributes").write_text("tasks/t01-fit/ver.txt export-subst\ntasks/t01-fit/keep.txt export-ignore\n")
+    (proj / "tasks/t01-fit/ver.txt").write_text("version $Format:%D %s$\n")
+    (proj / "tasks/t01-fit/keep.txt").write_text("kept\n")
+    (proj / "tasks/t01-fit/run.sh").write_text("#!/bin/sh\n")
+    (proj / "tasks/t01-fit/run.sh").chmod(0o755)
+    git(proj, "checkout", "-q", "-b", "secret-branch-name")
+    commit(proj, "private subject line")
+    ex = problems(proj)[1]
+    assert (ex.tree / "tasks/t01-fit/ver.txt").read_text() == "version $Format:%D %s$\n"
+    assert (ex.tree / "tasks/t01-fit/keep.txt").read_text() == "kept\n"
+    assert (ex.snapshot / "tasks/t01-fit/run.sh").stat().st_mode & 0o111
+    assert (ex.snapshot / "context.md").read_bytes() == (proj / "context.md").read_bytes()
+
+
+@pytest.mark.parametrize("key", ['"verification"', "'verification'", "verification "])
+def test_human_verified_with_quoted_key_by_agent_commit_is_refused(proj, key):
+    (proj / "tasks/t01-fit/provenance.yaml").write_text("command: fit\n")
+    ctx = proj / "tasks/t01-fit/context.md"
+    set_header(ctx, "evidence", "tasks/t01-fit/provenance.yaml")
+    set_header(ctx, "verification", "human-verified")
+    ctx.write_text(ctx.read_text().replace("\nverification: ", f"\n{key}: ", 1))
+    commit(proj, "agent sets it", agent=True)
+    assert checks_of(proj) == ["human-verified"]
+
+
+def test_verification_lines():
+    text = "---\nid: a\n'verification':\n  human-verified\nsummary: s\n---\n# A\n"
+    assert publish.verification_lines(text, "x/context.md") == [3, 4]
+    assert publish.verification_lines('{"id": "a", "verification": "human-verified"}\n', "x/node.yaml") == [1]
+
+
+def test_review_diff_accepts_bytes_that_are_not_utf8(proj, tmp_path):
+    (proj / "tasks/t01-fit/notes.txt").write_bytes(b"caf\xe9 \xff\xfe data\n")
+    commit(proj)
+    ex = problems(proj)[1]
+    work = tmp_path / "work"
+    work.mkdir()
+    diff = publish.review_diff(proj, ex, work)
+    assert "tasks/t01-fit/notes.txt" in diff
+
+
+@pytest.mark.parametrize("message,finding", [
+    ("Fit results\n\nRun from /scratch/grp/run1.", "absolute-path"),
+    ("Fit results by real.person@univ.edu", "email"),
+    ("Add token " + "gh" + "p_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8", "github-token"),
+])
+def test_push_refuses_a_message_that_leaks(proj, public, message, finding):
+    n, _, ex = publish.check(proj, build_site=False)
+    assert n == 0
+    with pytest.raises(publish.PublishError, match=f"commit message(.|\n)*{finding}") as err:
+        publish.push(proj, ex.export_id, str(public), message=message)
+    assert "A1b2C3d4E5f6G7h8I9j0" not in str(err.value)
+    assert subprocess.run(["git", "-C", str(public), "rev-parse", "--verify", "-q", "main"]).returncode != 0

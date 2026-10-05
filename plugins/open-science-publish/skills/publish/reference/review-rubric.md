@@ -71,12 +71,19 @@ whose goal is not science or code (a site, infrastructure, tooling or release ta
 still `public`. Suggest an omission marker, or a plain rewrite that keeps the technical
 content.
 
+## 5. Raw HTML: flag markup that runs code or loads content
+
+Markdown passes raw HTML to the project site unchanged, and no check removes it. Flag every
+added `<script>`, `<iframe>`, `<object>`, `<embed>`, `<form>` or `<style>` element, every
+`on...=` attribute (`onclick`, `onerror`), and every `javascript:` or `data:` URL. Suggest
+plain Markdown instead.
+
 ## Output
 
 Append to the publish report, under "## Review (tone, claims)":
 
 ```
-- [tone|claim|private|non-technical] <file>:<line> "<exact quote>"
+- [tone|claim|private|non-technical|html] <file>:<line> "<exact quote>"
   why: <one sentence>
   suggestion: <a rewrite that keeps the technical content>
 ```

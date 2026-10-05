@@ -63,8 +63,8 @@ PAGE_TEMPLATE = """{% extends "base.html" %}
 {% block announce %}{% if config.extra.opsci_banner %}<strong class="opsci-banner">\
 {{ config.extra.opsci_banner | e }}</strong>{% endif %}{% endblock %}
 {% block htmltitle %}{% set t = config.extra.opsci_titles.get(page.file.src_uri) if page and page.file %}\
-{% if t and ((page.meta and page.meta.title) or not page.is_homepage) %}<title>{{ t }} - {{ config.site_name }}</title>\
-{% else %}<title>{{ config.site_name }}</title>{% endif %}{% endblock %}
+{% if t and ((page.meta and page.meta.title) or not page.is_homepage) %}<title>{{ t | e }} - {{ config.site_name | e }}</title>\
+{% else %}<title>{{ config.site_name | e }}</title>{% endif %}{% endblock %}
 {% block styles %}{{ super() }}
 <style>
 [data-md-component=announce]{position:sticky;top:0;z-index:5}

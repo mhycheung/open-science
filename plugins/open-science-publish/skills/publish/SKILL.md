@@ -124,8 +124,9 @@ report under `## Review (tone, claims)`.
    dead end of t02"), then a short paragraph if the subject is not enough. Write it for
    readers of the public repo, from the exported diff only: no private material. The push
    appends the list of changed files. The user approves **this export id**, in this
-   conversation. A general "go ahead" given earlier does not cover it. Without approval, do
-   not push. If `ABSTRACT.md` or `WRITEUP.md` is still `TODO`, say in one sentence that the
+   conversation. A general "go ahead" given earlier does not cover it. Never run `opsci
+   publish push` until the user has explicitly approved this export id in this conversation:
+   the code does not check the approval, only you do. If `ABSTRACT.md` or `WRITEUP.md` is still `TODO`, say in one sentence that the
    home page shows them once the user writes them; do not write them yourself.
 
 11. **Commit the report** (`publish/reports/` is tracked; the approved report is the record

@@ -12,11 +12,10 @@ import datetime as dt
 import fnmatch
 import hashlib
 import importlib.util
-import io
+import os
 import re
 import shutil
 import subprocess
-import tarfile
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -30,9 +29,11 @@ LAST_PUBLISHED = "publish/LAST_PUBLISHED"
 REPORT_DIR = "publish/reports"
 CHECKOUT = ".opsci/public"  # the private repo's checkout of the public repo (git-ignored)
 # Never exported, whatever the manifest says. The list of works consulted but not used is
-# soft-private: it may be mentioned, not published.
-ALWAYS_NEVER = ("publish", "lit_cache", "data", "config/site.local.yaml", ".opsci", ".env",
-                "messages", "citations/consulted.md")
+# soft-private: it may be mentioned, not published. Environment files (`.env`, `.env.local`,
+# `prod.env`) hold tokens and passwords, in any directory.
+ALWAYS_NEVER = ("publish", "lit_cache", "data", "config/site.local.yaml", ".opsci",
+                "messages", "citations/consulted.md",
+                "**/.env", "**/.env/*", "**/.env.*", "**/*.env")
 # Public-repo infrastructure (site workflow, issue templates). Not part of the export, kept
 # on the public side, ignored by the consistency check and by pull-public.
 PUBLIC_ONLY = (".github",)
@@ -197,10 +198,43 @@ def resolve(root: Path, rev: str) -> str:
 
 
 def snapshot(root: Path, commit: str, dest: Path) -> None:
-    """Write the tree of ``commit`` into ``dest`` (committed content only)."""
-    data = _git(root, "archive", "--format=tar", commit, text=False).stdout
-    with tarfile.open(fileobj=io.BytesIO(data)) as tar:
-        tar.extractall(dest, filter="tar")
+    """Write the tree of ``commit`` into ``dest``: the committed bytes of every file, as git
+    stores them. Not `git archive`, which applies the `export-subst` attribute (a committed
+    `.gitattributes` would expand `$Format:...$` into branch names and commit messages of the
+    private history) and `export-ignore`; this reads the tree and its blobs directly, so no
+    attribute or filter changes the content."""
+    listing = _git(root, "ls-tree", "-r", "-z", "--full-tree", commit, text=False).stdout
+    entries = []
+    for rec in listing.split(b"\0"):
+        if not rec:
+            continue
+        meta, raw_path = rec.split(b"\t", 1)
+        mode, kind, sha = meta.split()
+        path = PurePosixPath(os.fsdecode(raw_path))
+        if path.is_absolute() or any(part in ("", ".", "..", ".git") for part in path.parts):
+            raise PublishError(f"commit {commit[:12]} holds an unsafe path {str(path)!r}")
+        entries.append((mode, kind, sha, path))
+    blobs = [e for e in entries if e[1] == b"blob"]
+    out = _git(root, "cat-file", "--batch", input=b"".join(e[2] + b"\n" for e in blobs), text=False).stdout
+    pos = 0
+    for mode, _kind, sha, path in blobs:
+        nl = out.index(b"\n", pos)
+        head = out[pos:nl].split()
+        if len(head) != 3 or head[0] != sha:
+            raise PublishError(f"git cat-file: unexpected output for {path}")
+        size = int(head[2])
+        body = out[nl + 1:nl + 1 + size]
+        pos = nl + 2 + size
+        target = dest / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        if mode == b"120000":
+            os.symlink(os.fsdecode(body), target)
+        else:
+            target.write_bytes(body)
+            target.chmod(0o755 if mode == b"100755" else 0o644)
+    for mode, kind, _sha, path in entries:
+        if kind == b"commit":  # a submodule: an empty directory, as `git archive` writes it
+            (dest / path).mkdir(parents=True, exist_ok=True)
 
 
 # --------------------------------------------------------------------------- manifest
@@ -927,14 +961,41 @@ def check_verification(root: Path, ex: Export) -> tuple[list[Problem], list[str]
             probs.append(Problem("evidence", n.path, f"{level}, but its evidence '{n.get('evidence')}' is not exported"))
         if level == "human-verified":
             text = (ex.snapshot / n.path).read_text(encoding="utf-8")
-            line = next((i for i, l in enumerate(text.splitlines(), 1)
-                         if re.match(r"\s*verification\s*:", l)), None)
-            sha = agent_commit(root, ex.commit, n.path, line) if line else None
+            lines = verification_lines(text, n.path)
+            if not lines:
+                probs.append(Problem("human-verified", n.path, "`verification: human-verified`, but the "
+                                     "line that sets it was not found, so who set it is unknown"))
+                continue
+            sha = next((s for s in (agent_commit(root, ex.commit, n.path, i) for i in lines) if s), None)
             if sha:
                 probs.append(Problem("human-verified", n.path,
                                      f"`verification: human-verified` was set in agent commit {sha}; "
                                      "only the user sets it, in a commit of their own"))
     return probs, levels
+
+
+def verification_lines(text: str, path: str) -> list[int]:
+    """The line numbers (1-based) of the `verification` key and its value in a node header: in a
+    markdown file's front matter or in a `node.yaml`. Found from the parsed YAML, so a quoted key
+    (`"verification":`) or a value on the next line is found too."""
+    if PurePosixPath(path).name == "node.yaml":
+        raw, offset = text, 0
+    else:
+        raw, present = nodes.read_front_matter(text)
+        if not present or raw is None:
+            return []
+        offset = 1  # the opening '---'
+    try:
+        doc = yaml.compose(raw)
+    except yaml.YAMLError:
+        return []
+    found = set()
+    if isinstance(doc, yaml.MappingNode):
+        for key, value in doc.value:
+            if isinstance(key, yaml.ScalarNode) and key.value == "verification":
+                end = value.end_mark.line - (1 if value.end_mark.column == 0 else 0)
+                found.update(range(key.start_mark.line, max(end, key.start_mark.line) + 1))
+    return sorted(offset + i + 1 for i in found)
 
 
 def check_map(ex: Export) -> list[Problem]:
@@ -1372,8 +1433,9 @@ def review_diff(root: Path, ex: Export, work: Path) -> str:
     shutil.copytree(old_tree, pair / "a")
     shutil.copytree(ex.tree, pair / "b")
     r = subprocess.run(["git", "diff", "--no-index", "--no-color", "--stat", "--patch", "--", "a", "b"],
-                       capture_output=True, text=True, cwd=pair)
-    return r.stdout
+                       capture_output=True, cwd=pair)
+    # An exported file need not be UTF-8 text; git marks real binaries, the rest is shown as is.
+    return r.stdout.decode("utf-8", errors="replace")
 
 
 def _kind_key(p: Problem) -> tuple[str, str]:
@@ -1619,6 +1681,10 @@ def push(root: Path, export_id_expected: str, public_repo: str | None = None, co
     """Publish ``commit``: refuses unless its export has the reviewed id and passes every check,
     and the public repo holds nothing the private repo lacks. Returns (private, public) commits."""
     root = Path(root).resolve()
+    bad = check_message(root, message)
+    if bad:
+        raise PublishError("the commit message carries internal information or a secret; rewrite it:\n  "
+                           + "\n  ".join(bad))
     sha = resolve(root, commit)
     work = Path(tempfile.mkdtemp(prefix="opsci-push-"))
     ex = export(root, work / "new", sha)
@@ -1663,6 +1729,22 @@ def push(root: Path, export_id_expected: str, public_repo: str | None = None, co
     _git(root, *ident, "commit", "--quiet", "-m", f"Record publish of {sha[:12]} (public {public_sha[:12]})",
          "--", LAST_PUBLISHED)
     return sha, public_sha
+
+
+def check_message(root: Path, message: str | None) -> list[str]:
+    """The leak and secret findings in a public commit message's summary (the rest of the message
+    is the exported file names, which the checks scan, and the private commit). No override
+    applies: a message is rewritten, not excused."""
+    if not message:
+        return []
+    try:
+        pats = leakscan.patterns_for(root)
+    except leakscan.LeakScanError as exc:
+        return [str(exc)]
+    leaks = leakscan.scan_text(message, "commit message", "content", pats)
+    keys = leakscan.scan_text(message, "commit message", "content", secretscan.SECRET_PATTERNS)
+    return ([f"{h.pattern} (line {h.line_number}): {h.match!r}" for h in leaks]
+            + [f"{h.pattern} (line {h.line_number}): {h.match[:6]}…(redacted)" for h in keys])
 
 
 CHANGE_WORDS = {"A": "added", "M": "changed", "D": "removed"}

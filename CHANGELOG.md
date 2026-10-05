@@ -9,6 +9,20 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
+## Unreleased
+
+- Publish scans and export, security fixes: the secret scan finds bare Notion, AWS secret and
+  Zenodo tokens; `.env`, `.env.*` and `*.env` files are never exported, in any directory; the
+  leak and secret scans read PDF page text and hex and UTF-16 PDF strings, UTF-16 text files,
+  JPEG and PNG EXIF metadata, long printable runs of binary files (for emails and IP
+  addresses), and the members of zip, tar, gz, bz2 and xz archives (7z, RAR and encrypted
+  members are refused); `push` scans its commit message; the export reads the committed tree
+  directly instead of with `git archive`, so `export-subst` and `export-ignore` no longer
+  apply; the `human-verified` check finds a quoted `verification` key; the review diff
+  accepts bytes that are not UTF-8; the site escapes page titles. Docs: the approval is
+  enforced by the skill, not the code; public history keeps files published once; raw HTML
+  in pages is for the reviewer to check.
+
 ## 0.3.3 - 2026-10-04
 
 - Context bar (the mod): one boundary, cold at 59 minutes after the main agent's last request

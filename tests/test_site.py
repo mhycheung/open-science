@@ -410,3 +410,13 @@ def test_bib_reference_style():
     assert refs["g"] == "K. Gödel and J.-L. von Neumann, Rev. Mod. Phys. 21, 447 (1949)."
     assert refs["p"] == "A et al., *A preprint* (2026), [arXiv:2609.07873](https://arxiv.org/abs/2609.07873)."
     assert refs["d"] == "[*Data*, Zenodo (2025)](https://zenodo.org/records/1)."
+
+
+def test_page_title_is_escaped(repo, tmp_path):
+    page(repo / "results/fit.md", "---\nid: r01-fit\ntitle: Fit <script>alert(1)</script>\ntype: result\n"
+         "status: done\nprivacy: public\nsummary: s\nverification: unverified\n---\n# Fit result\n")
+    problems = site.build(repo, tmp_path / "site")
+    assert problems == []
+    html = (tmp_path / "site/results/fit.html").read_text()
+    assert "<script>alert(1)" not in html.split("</title>")[0]
+    assert "<title>Fit &lt;script&gt;alert(1)&lt;/script&gt; - Demo project</title>" in html
