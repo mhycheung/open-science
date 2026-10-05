@@ -677,12 +677,11 @@ def scan_release(root: Path, members: list[tuple[str, Path]], extra: dict[str, s
         leak_pats = leakscan.patterns_for(Path(root))
     except leakscan.LeakScanError as exc:
         raise ZenodoError(f"leak scan: {exc}") from None
-    secret_pats = secretscan.SECRET_PATTERNS
     hits = []
     for arc, path in members:
-        hits += scan_member(path, f"data/{arc}", leak_pats, secret_pats)
+        hits += scan_member(path, f"data/{arc}", leak_pats, secretscan.SECRET_PATTERNS)
     for name, text in (extra or {}).items():
-        hits += leakscan.scan_text(text, name, "content", list(leak_pats) + list(secret_pats))
+        hits += leakscan.scan_text(text, name, "content", list(leak_pats) + list(secretscan.SECRET_PATTERNS))
     ovs = overrides(read_manifest(root))
     failed, overridden = [], []
     for h in hits:

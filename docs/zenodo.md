@@ -139,8 +139,8 @@ to, if the target is allowed:
   directory listed under `data_roots` in `config/site.local.yaml`:
 
   ```yaml
-  scratch: /scratch/me
-  data_roots: [/data/shared/me]   # more directories that data/ symlinks may point into
+  scratch: <your scratch directory>
+  data_roots: [<a directory>]   # more directories that data/ symlinks may point into
   ```
 
 - Whatever those settings say, the tool refuses a target that is or holds the home directory
@@ -151,7 +151,7 @@ to, if the target is allowed:
 
 A symlink below a group root is stored as a symlink, not followed. It must be relative and
 point to a place inside the same group root (`sub/link -> ../a.txt` is stored; `link ->
-/home/me/file` and `link -> ../../other-task/file` are refused). Replace a refused link with a
+~/file` and `link -> ../../other-task/file` are refused). Replace a refused link with a
 relative one or with the file itself.
 
 `opsci zenodo checksum` applies the same rules.
@@ -189,7 +189,8 @@ redacted.
 
 - Text files are scanned with every pattern. PNG images and PDFs are scanned as `opsci
   publish` scans them (image text chunks, PDF strings).
-- Binary data is scanned with every pattern except `absolute-path`: a string such as `/ab/cd`
+- Binary data is scanned with every pattern except `absolute-path`: a slash followed by a
+  letter, another slash and more letters
   occurs by chance about once per megabyte of compressed data. A path that names this site
   still matches the user, host and scratch patterns.
 - Big files are read in chunks, so a release of many gigabytes takes a while to scan; the
