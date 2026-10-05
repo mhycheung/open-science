@@ -1,11 +1,29 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git:*)"
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git switch *)",
+      "Bash(git checkout *)",
+      "Bash(git branch *)",
+      "Bash(git stash *)",
+      "Bash(git mv *)",
+      "Bash(git merge *)",
+      "Bash(git worktree add *)",
+      "Bash(git worktree list *)"
+    ],
+    "ask": [
+      "Bash(git push *)",
+      "Bash(git -C * push *)"
     ],
     "deny": [
-      "Bash(git push public:*)",
-      "Bash(git push --mirror:*)"
+      "Bash(git push public *)",
+      "Bash(git push --mirror *)",
+      "Bash(git -C * push public *)",
+      "Bash(git -C * push --mirror *)",
+      "Bash(git -C .opsci/public*)",
+      "Bash(git -C ./.opsci/public*)",
+      "Bash(git --git-dir*.opsci/public*)"
     ]
   }
 }

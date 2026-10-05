@@ -12,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-LAYOUT_VERSION = 2
+LAYOUT_VERSION = 3
 
 FRAMEWORK_YAML = "config/framework.yaml"
 # A top-level integer key. Read with a regular expression, not YAML, so that the template's
