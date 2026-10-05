@@ -59,7 +59,9 @@ MANIFEST = "data/MANIFEST.yaml"
 CITATION = "CITATION.cff"
 CITE_DESC = "Zenodo data record"  # prefix of the CITATION.cff identifiers this tool manages
 SITE_CONFIG = "config/site.local.yaml"
-# The scans read big files in chunks of this size, overlapping by SCAN_OVERLAP bytes.
+# The scans read a file whole up to SCAN_WHOLE bytes (archives opened, as opsci publish does);
+# bigger files in chunks of SCAN_CHUNK bytes, overlapping by SCAN_OVERLAP bytes.
+SCAN_WHOLE = 256 * 2**20
 SCAN_CHUNK = 8 * 2**20
 SCAN_OVERLAP = 4096
 
@@ -625,46 +627,66 @@ def _redact(text: str, secret: str) -> str:
     return text.replace(secret, secret[:6] + "…(redacted)")
 
 
+def _data_patterns(patterns) -> list:
+    """The patterns for data: ``absolute-path`` runs on text, and on binary data only on long
+    printable runs, as the patterns that match by chance do; on all of a compressed stream it
+    matches about once per megabyte."""
+    import dataclasses
+    return [dataclasses.replace(p, binary=False) if p.name == "absolute-path" else p for p in patterns]
+
+
+def _scan_chunked(f, first: bytes, rel: str, pats) -> list:
+    """Hits in a big file read in overlapping chunks: as text (UTF-8, no NUL byte in its first
+    8 kB) with every pattern; else as binary data, the chance-matching patterns only on long
+    printable runs. Archive members are not opened."""
+    from . import leakscan
+    head = first[:8192]
+    try:
+        head.decode("utf-8")
+        text = b"\0" not in head
+    except UnicodeDecodeError as exc:
+        text = exc.start > len(head) - 4 and b"\0" not in head  # a character cut at 8 kB
+    binary = [p for p in pats if p.binary]
+    chance = [p for p in pats if not p.binary]
+    hits, seen, chunk = [], set(), first
+    while chunk:
+        nxt = f.read(SCAN_CHUNK)
+        if text:
+            found = leakscan.scan_text(chunk.decode("utf-8", "replace"), rel, "content", pats, line_numbers=False)
+        else:
+            found = leakscan.scan_text(chunk.decode("latin-1"), rel, "content", binary, line_numbers=False)
+            runs = "\n".join(m.group().decode("ascii") for m in leakscan.STRINGS_RE.finditer(chunk))
+            if runs and chance:
+                found += leakscan.scan_text(runs, rel, "content (printable runs)", chance, line_numbers=False)
+        for h in found:
+            if (h.pattern, h.match, h.line) not in seen:
+                seen.add((h.pattern, h.match, h.line))
+                hits.append(h)
+        chunk = (chunk[-SCAN_OVERLAP:] + nxt) if nxt else b""
+    return hits
+
+
 def scan_member(path: Path, rel: str, leak_pats, secret_pats) -> list:
     """Leak and secret hits (``leakscan.Hit``) in one archived file or symlink.
 
-    The name is scanned with every pattern, a symlink's target as text. A PNG or PDF goes
-    through ``leakscan.scan_file`` (image text chunks, PDF strings). Other files are read in
-    chunks: text (UTF-8, no NUL byte in the first 8 kB) with every pattern, binary data with
-    the patterns meant for binary data less ``absolute-path``, which matches by chance about
-    once per megabyte of compressed data. Secrets are redacted in the hits.
+    The name is scanned with every pattern, a symlink's target as text. A file up to
+    SCAN_WHOLE bytes is scanned as ``opsci publish`` scans it (``leakscan.scan_bytes``: text,
+    image metadata, PDF strings, archive members), with ``absolute-path`` kept to text and
+    printable runs (``_data_patterns``). A bigger file is read in chunks (``_scan_chunked``).
+    Secrets are redacted in the hits.
     """
-    from . import leakscan, pdf
-    pats = list(leak_pats) + list(secret_pats)
+    from . import leakscan
+    pats = _data_patterns(list(leak_pats) + list(secret_pats))
     secret_names = {p.name for p in secret_pats}
     hits = leakscan.scan_text(rel, rel, "filename", pats)
     if path.is_symlink():
         hits += leakscan.scan_text(os.readlink(path), rel, "symlink target", pats)
     elif path.is_file():
-        with open(path, "rb") as f:
-            head = f.read(SCAN_CHUNK)
-            if head.startswith(leakscan.PNG_MAGIC) or pdf.is_pdf(head):
-                hits += [h for h in leakscan.scan_file(path, rel, pats) if h.where != "filename"]
-            else:
-                try:
-                    head[:8192].decode("utf-8")
-                    text = b"\0" not in head[:8192]
-                except UnicodeDecodeError as exc:
-                    text = exc.start > 8192 - 4 and b"\0" not in head[:8192]  # a cut character
-                use = pats if text else [p for p in pats if p.binary and p.name != "absolute-path"]
-                chunk, seen, first = head, set(), True
-                while chunk:
-                    nxt = f.read(SCAN_CHUNK)
-                    s = chunk.decode("utf-8", "replace") if text else chunk.decode("latin-1")
-                    for h in leakscan.scan_text(s, rel, "content", use):
-                        key = (h.pattern, h.match, h.line)
-                        if key not in seen:
-                            seen.add(key)
-                            single = first and not nxt
-                            hits.append(leakscan.Hit(h.path, h.where, h.pattern,
-                                                     h.line_number if single else None, h.line, h.match))
-                    chunk = (chunk[-SCAN_OVERLAP:] + nxt) if nxt else b""
-                    first = False
+        if path.stat().st_size <= SCAN_WHOLE:
+            hits += leakscan.scan_bytes(path.read_bytes(), rel, pats)
+        else:
+            with open(path, "rb") as f:
+                hits += _scan_chunked(f, f.read(SCAN_CHUNK), rel, pats)
     return [leakscan.Hit(h.path, h.where, h.pattern, h.line_number, _redact(h.line, h.match),
                          _redact(h.match, h.match)) if h.pattern in secret_names else h for h in hits]
 
@@ -681,7 +703,7 @@ def scan_release(root: Path, members: list[tuple[str, Path]], extra: dict[str, s
     for arc, path in members:
         hits += scan_member(path, f"data/{arc}", leak_pats, secretscan.SECRET_PATTERNS)
     for name, text in (extra or {}).items():
-        hits += leakscan.scan_text(text, name, "content", list(leak_pats) + list(secretscan.SECRET_PATTERNS))
+        hits += leakscan.scan_text(text, name, "content", _data_patterns(list(leak_pats) + list(secretscan.SECRET_PATTERNS)))
     ovs = overrides(read_manifest(root))
     failed, overridden = [], []
     for h in hits:

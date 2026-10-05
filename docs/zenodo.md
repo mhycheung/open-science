@@ -187,14 +187,16 @@ the user, host and `config/site.local.yaml` values, and the project's
 refuses the release, in the dry run as well, before any network call. Secrets are shown
 redacted.
 
-- Text files are scanned with every pattern. PNG images and PDFs are scanned as `opsci
-  publish` scans them (image text chunks, PDF strings).
-- Binary data is scanned with every pattern except `absolute-path`: a slash followed by a
-  letter, another slash and more letters
-  occurs by chance about once per megabyte of compressed data. A path that names this site
-  still matches the user, host and scratch patterns.
-- Big files are read in chunks, so a release of many gigabytes takes a while to scan; the
-  scan reads every byte once.
+- A file up to 256 MiB is scanned as `opsci publish` scans it: text with every pattern; PNG
+  and JPEG metadata; PDF strings and text; the members of zip (also `.npz`), tar, gz, bz2 and
+  xz archives (an archive that cannot be read, such as 7z or RAR, refuses the release). One
+  difference: in binary data, `absolute-path` runs only on long printable runs (16 or more
+  printable characters), as the email and IP address patterns do. On all of a compressed
+  stream it matches by chance about once per megabyte. A path stored as a string, such as an
+  HDF5 attribute, is such a run and is found.
+- A bigger file is read in overlapping chunks, with the same patterns; archive members in it
+  are not opened. A release of many gigabytes takes a while to scan; the scan reads every
+  byte once.
 - `gitleaks` is not run on data (it is run by `opsci publish`).
 
 The kinds that `opsci publish` lets the user accept (SLURM job numbers: `slurm-job-id`,

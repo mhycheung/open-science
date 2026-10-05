@@ -704,7 +704,7 @@ def test_secret_in_binary_data_refused(proj):
 
 
 def test_leaks_refused(proj):
-    (proj / "data" / "t02" / "log.txt").write_text("written to " + "/".join(["", "home", "someone", "out.h5"]) + "\n")
+    (proj / "data" / "t02" / "log.txt").write_text("written to " + abs_path() + "\n")
     assert any("absolute-path" in e and "data/t02/log.txt" in e for e in dry_plan(proj).errors)
     (proj / "data" / "t02" / "log.txt").unlink()
     # a site identifier inside binary data, and in a file name
@@ -724,7 +724,33 @@ def test_absolute_path_chance_match_in_binary_not_refused(proj):
     assert dry_plan(proj).errors == []
 
 
+def abs_path():
+    return "/".join(["", "home", "someone", "runs", "out.h5"])
+
+
+@pytest.mark.parametrize("whole", [True, False])
+def test_absolute_path_in_binary_string_refused(proj, monkeypatch, whole):
+    # a path stored as a string attribute (HDF5, pickle) is a long printable run: refused,
+    # whether the file is scanned whole or in chunks
+    if not whole:
+        monkeypatch.setattr(Z, "SCAN_WHOLE", 100)
+        monkeypatch.setattr(Z, "SCAN_CHUNK", 512)
+    (proj / "data" / "t02" / "h.bin").write_bytes(b"\0\x9f" * 300 + b"src=" + abs_path().encode()
+                                                  + b"\0" + bytes(range(256)))
+    assert any("absolute-path" in e and "data/t02/h.bin" in e for e in dry_plan(proj).errors)
+
+
+def test_secret_inside_archive_in_data_refused(proj):
+    import zipfile
+    tok = "ghp_" + "A1b2C3d4" * 5
+    with zipfile.ZipFile(proj / "data" / "t02" / "arr.npz", "w") as z:
+        z.writestr("notes.txt", f"token = {tok}\n")
+    errs = dry_plan(proj).errors
+    assert any("github-token" in e and "arr.npz" in e for e in errs) and not any(tok in e for e in errs)
+
+
 def test_large_file_scanned_in_chunks(proj, monkeypatch):
+    monkeypatch.setattr(Z, "SCAN_WHOLE", 100)
     monkeypatch.setattr(Z, "SCAN_CHUNK", 1024)
     monkeypatch.setattr(Z, "SCAN_OVERLAP", 64)
     tok = "ghp_" + "A1b2C3d4" * 5
