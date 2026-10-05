@@ -65,9 +65,11 @@ RECOVER_WINDOW="${OPSCI_JUMP_RECOVER_WINDOW:-1800}"
 die() { echo "jump.sh: $*" >&2; exit 1; }
 
 set_phase() {  # <request> <phase>; returns 1 if the request could not be updated
-  local tmp="$1.tmp.$$"
-  jq --arg p "$2" --arg at "$(date -Iseconds)" '.phase=$p | .phase_at=$at' "$1" > "$tmp" 2>/dev/null \
-    && mv "$tmp" "$1" || { rm -f "$tmp"; return 1; }
+  cm_jq_into "$1" --arg p "$2" --arg at "$(date -Iseconds)" '.phase=$p | .phase_at=$at' "$1"
+}
+finish_req() {  # <request> <phase>: set the phase and archive the request in jump/done/
+  set_phase "$1" "$2"
+  cm_mkdir "$OS_STATE/jump/done" && mv -f -- "$1" "$OS_STATE/jump/done/$(basename "$1" .json)-$(date +%s).json" 2>/dev/null
 }
 
 # ------------------------------------------------------------ codex worker ----
@@ -88,21 +90,22 @@ cx_fail() {  # <request> <message>: log, tell the user what state the pane is in
       full="[open-science] session jump FAILED before anything was changed; this session keeps running: $msg" ;;
   esac
   cm_log "codex worker $(jq -r .pane "$req"): $full"
-  jq --arg m "$full" '.failure=$m' "$req" > "$req.tmp" 2>/dev/null && mv "$req.tmp" "$req"
+  cm_jq_into "$req" --arg m "$full" '.failure=$m' "$req"
   # Queued to the old thread: it starts a turn if the session still runs, and is waiting
   # in the thread if it was ended (seen on `codex resume`).
   if command -v codex >/dev/null 2>&1; then
-    home=$(jq -r '.codex_home // ""' "$(cm_cx_thread_path "$tid")" 2>/dev/null)
+    home=$(cm_cx_home "$tid")
     ${home:+env CODEX_HOME="$home"} timeout 60 codex queue --thread "$tid" --message "$full" >/dev/null 2>&1 || true
   fi
-  set_phase "$req" failed
-  mkdir -p "$OS_STATE/jump/done"; mv "$req" "$OS_STATE/jump/done/$(basename "$req" .json)-$(date +%s).json" 2>/dev/null
+  finish_req "$req" failed
 }
 codex_worker() {
   local req="$1" sock pane old tf tpid tstart ppid cmd stable=0 waited=0 st shell model n cur
   sock=$(jq -r .sock "$req"); pane=$(jq -r .pane "$req"); old=$(jq -r .old_sid "$req")
   tf=$(cm_cx_thread_path "$old")
   cm_log "codex worker $pane: $(jq -r .kind "$req") jump started (thread ${old:0:8})"
+  cm_sock_ok "$sock" "$pane" || { cx_fail "$req" "the request names no tmux socket of this user and pane id ($sock $pane)"; return; }
+  cm_ctx_ok "$(jq -r '.context // ""' "$req")" || { cx_fail "$req" "the request's context file is not an absolute path to a file"; return; }
   while [ "$waited" -lt "$IDLE_TIMEOUT" ]; do
     st=$(jq -r '.status // ""' "$tf" 2>/dev/null)
     if [ "$st" = idle ] && ! cm_cap "$sock" "$pane" | grep -q "$OS_BUSY_RE"; then stable=$((stable+1)); else stable=0; fi
@@ -118,10 +121,11 @@ codex_worker() {
     cx_fail "$req" "pane $pane does not run a shell (it runs '${shell:-nothing}'), so a new codex cannot be started in it; start Codex from a shell in the pane"; return ;; esac
   cm_descends "$tpid" "$ppid" || { cx_fail "$req" "the Codex TUI is not running in pane $pane"; return; }
   model=$(jq -r '.model // ""' "$tf")
-  cmd=$(cm_codex_relaunch_cmd "$tpid" "$(jq -r .prompt "$req")" "$model" 2>&1) \
+  # The prompt is built from the context file here, never taken from the request.
+  cmd=$(cm_codex_relaunch_cmd "$tpid" "$(cm_codex_prompt "$(jq -r .context "$req")")" "$model" 2>&1) \
     || { cx_fail "$req" "cannot rebuild the codex command line: $cmd"; return; }
   cmd="cd $(printf '%q' "$(readlink "/proc/$tpid/cwd")") && $cmd"
-  jq --arg c "$cmd" '.relaunch=$c' "$req" > "$req.tmp" && mv "$req.tmp" "$req"
+  cm_jq_into "$req" --arg c "$cmd" '.relaunch=$c' "$req"
   set_phase "$req" terminating || { cx_fail "$req" "could not update the jump request $req"; return; }
   kill -TERM "$tpid" 2>/dev/null
   for n in $(seq 30); do cm_is_codex_proc "$tpid" "$tstart" || break; sleep 1; done
@@ -156,24 +160,31 @@ codex_worker() {
     sleep 1
   done
   cm_log "codex worker $pane: NO SessionStart from a new thread within ${OPSCI_CODEX_START_TIMEOUT:-120} s; the command was typed into the shell but the new session is unconfirmed (is cx_hook.sh installed and trusted?)"
-  set_phase "$req" unconfirmed
-  mkdir -p "$OS_STATE/jump/done"; mv "$req" "$OS_STATE/jump/done/$(basename "$req" .json)-$(date +%s).json" 2>/dev/null
+  finish_req "$req" unconfirmed
 }
 
 # ------------------------------------------------------------------ worker ----
 if [ "${1:-}" = "--worker" ]; then
   REQ="$2"
   [ -f "$REQ" ] || exit 0
+  cm_plain_file "$REQ" || { cm_log "worker: $REQ is not a plain file of this user; jump refused"; rm -f -- "$REQ"; exit 0; }
   KIND=$(jq -r .kind "$REQ"); SOCK=$(jq -r .sock "$REQ"); PANE=$(jq -r .pane "$REQ")
-  SF=$(jq -r .state_file "$REQ"); OLD=$(jq -r .old_sid "$REQ"); PROMPT=$(jq -r '.prompt // ""' "$REQ")
-  KEY=$(jq -r .key "$REQ")
-  exec 9>"$(cm_lock_path "$KEY")"
+  SF=$(jq -r .state_file "$REQ"); OLD=$(jq -r .old_sid "$REQ"); CTX=$(jq -r '.context // ""' "$REQ")
+  KEY=$(cm_key "$(jq -r .key "$REQ")")
+  exec 9<>"$(cm_lock_path "$KEY")"
   flock -w 120 9 || { cm_log "worker $PANE: pane lock busy for 120 s; jump aborted"; set_phase "$REQ" failed; exit 0; }
   set_phase "$REQ" running
   if [ "$(jq -r '.runtime // "claude"' "$REQ")" = codex ]; then codex_worker "$REQ"; exit 0; fi
   cm_log "worker $PANE: $KIND jump started (sid ${OLD:0:8})"
 
-  finish() { set_phase "$REQ" "$1"; mkdir -p "$OS_STATE/jump/done"; mv "$REQ" "$OS_STATE/jump/done/$(basename "$REQ" .json)-$(date +%s).json" 2>/dev/null; }
+  finish() { finish_req "$REQ" "$1"; }
+  # Typed only into a pane of a tmux server of this user, and the resume prompt is built
+  # here from a valid context file, never taken from the request.
+  cm_sock_ok "$SOCK" "$PANE" || { cm_log "worker $PANE: $SOCK is not a tmux socket of this user, or no pane id; jump refused"; finish failed; exit 0; }
+  if [ "$KIND" != wait ]; then
+    cm_ctx_ok "$CTX" || { cm_log "worker $PANE: context '$CTX' is not an absolute path to a file; jump refused"; finish failed; exit 0; }
+    PROMPT=$(cm_claude_prompt "$CTX")
+  fi
 
   skip_clear=0
   live=$(cm_sid "$SF")
@@ -240,14 +251,19 @@ else
   PKEY="$KEY"
 fi
 REQ=$(cm_request_path "$KEY")
+# Under Codex the request goes to the inbox (cm_lib.sh); the Codex hook takes it at Stop.
+CXREQ=""; [ "$(cm_runtime)" = codex ] && CXREQ="$(cm_inbox_dir "$KEY")/jump.json"
 
 case "$CMD" in
   status)
     echo "jumps allowed: $(cm_jump_mode) (OPSCI_JUMPS)"
     if [ "$MOD" = 1 ]; then echo "done by: the open-science mod (session ${OLD:0:8})"; else echo "done by: tmux typing (the open-science mod is not loaded)"; fi
-    if [ -f "$REQ" ]; then jq . "$REQ"; else echo "no jump pending"; fi; exit 0 ;;
+    if [ -f "$REQ" ]; then jq . "$REQ"
+    elif [ -n "$CXREQ" ] && [ -f "$CXREQ" ]; then echo "requested, taken by the Codex hook when this turn ends:"; jq . "$CXREQ"
+    else echo "no jump pending"; fi; exit 0 ;;
   cancel)
-    if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" = requested ]; then rm -f "$REQ"; echo "jump request cancelled"
+    if [ -n "$CXREQ" ] && [ -f "$CXREQ" ]; then rm -f "$CXREQ"; echo "jump request cancelled"
+    elif [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" = requested ]; then rm -f "$REQ"; echo "jump request cancelled"
     elif [ -f "$REQ" ]; then echo "a jump is already $(jq -r .phase "$REQ"); it cannot be cancelled" >&2; exit 1
     else echo "no jump pending"; fi
     exit 0 ;;
@@ -273,6 +289,7 @@ done
 [ -f "$CTX" ] || die "context file not found: $CTX"
 CTX=$(cd "$(dirname "$CTX")" && printf '%s/%s' "$PWD" "$(basename "$CTX")")
 case "$CTX" in *[[:space:]]*) die "context file path contains whitespace: $CTX" ;; esac
+cm_ctx_ok "$CTX" || die "context file path contains a control character: $CTX"
 # The context plugin needs the project management component (plugin open-science-project): the
 # context file must sit in a project with AGENTS.md and config/framework.yaml.
 d=$(dirname "$CTX")
@@ -298,7 +315,7 @@ send_report() {
     echo "WARNING: opsci is not on PATH, so the jump report was not sent to the user."
     return 0
   fi
-  out=$(opsci notify --project-root "$ROOT" --kind status --no-mention "$msg" 2>&1); rc=$?
+  out=$(umask "$CM_UMASK0"; opsci notify --project-root "$ROOT" --kind status --no-mention "$msg" 2>&1); rc=$?
   if [ "$rc" = 0 ]; then echo "Report sent: $out"
   else
     cm_log "jump report FAILED (opsci notify exit $rc): ${REPORT%%$'\n'*}"
@@ -324,12 +341,9 @@ if [ "$(cm_runtime)" = codex ]; then
   PROMPT=$(cm_codex_prompt "$CTX")
   [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" != requested ] && die "a jump is already $(jq -r .phase "$REQ") for this pane"
   send_report
-  mkdir -p "$(dirname "$REQ")" 2>/dev/null || die "cannot write to $OS_STATE; in the Codex sandbox, add it as a writable root"
-  jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${TMUX%%,*}" \
-        --arg pane "$TMUX_PANE" --arg key "$KEY" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
-    '{version:1, runtime:"codex", kind:$kind, context:$ctx, prompt:$prompt, sock:$sock, pane:$pane,
-      key:$key, state_file:"", old_sid:$sid, requested_at:$at, phase:"requested"}' > "$REQ.tmp" \
-    && mv "$REQ.tmp" "$REQ" || die "could not write $REQ (in the Codex sandbox, add $OS_STATE as a writable root)"
+  cm_write_json "$CXREQ" --arg kind "$CMD" --arg ctx "$CTX" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
+    '{version:1, thread_id:$sid, kind:$kind, context:$ctx, requested_at:$at}' \
+    || { cm_state_hint >&2; exit 3; }
   cm_log "launcher $TMUX_PANE: codex $CMD jump requested (context $CTX)"
   bash "$HERE/pane_context.sh" set "$CTX" >/dev/null 2>&1 || true
   echo "Codex $CMD jump requested. When this turn ends, this Codex session is ENDED and a fresh one"
@@ -351,20 +365,19 @@ if [ "$CMD" = active ]; then
     [ -n "$tokens" ] || die "cannot read the context size; pass --force to jump anyway"
     [ "$tokens" -ge "$FLOOR" ] || die "context is ${tokens} tokens, below the active-jump floor ${FLOOR}: a jump costs more than it saves. Continue here, or pass --force."
   fi
-  PROMPT="/open-science-context:continue-context $CTX"
+  PROMPT=$(cm_claude_prompt "$CTX")
 else
   PROMPT=""
 fi
 
 [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ")" != requested ] && die "a jump is already $(jq -r .phase "$REQ") for this pane"
 send_report
-mkdir -p "$(dirname "$REQ")"
 T="${TMUX:-}"
-jq -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${T%%,*}" \
+cm_jq_into "$REQ" -n --arg kind "$CMD" --arg ctx "$CTX" --arg prompt "$PROMPT" --arg sock "${T%%,*}" \
       --arg pane "${TMUX_PANE:-}" --arg key "$KEY" --arg sf "${SF:-}" --arg sid "$OLD" --arg at "$(date -Iseconds)" \
       --arg rt "$([ "$MOD" = 1 ] && echo claude-mod || echo claude)" --arg report "$MSG" \
   '{version:1, runtime:$rt, kind:$kind, context:$ctx, prompt:$prompt, report:$report, sock:$sock, pane:$pane,
-    key:$key, state_file:$sf, old_sid:$sid, requested_at:$at, phase:"requested"}' > "$REQ.tmp" && mv "$REQ.tmp" "$REQ" \
+    key:$key, state_file:$sf, old_sid:$sid, requested_at:$at, phase:"requested"}' \
   || die "could not write $REQ"
 cm_log "launcher ${TMUX_PANE:-session ${OLD:0:8}}: $CMD jump requested (context $CTX)"
 # Register the pane, so a session woken after a wait jump finds its file with

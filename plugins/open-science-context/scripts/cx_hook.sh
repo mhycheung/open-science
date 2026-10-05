@@ -8,7 +8,9 @@
 #   every event        write codex/threads/<thread>.json and, in tmux, codex/panes/<key>.json:
 #                      status (busy after UserPromptSubmit, idle after SessionStart and Stop),
 #                      TUI pid, pane, model, rollout path. Nothing else can tell which Codex
-#                      thread runs in which pane.
+#                      thread runs in which pane. Then the inbox (cm_lib.sh): what this
+#                      thread's sandboxed tool shells asked for (registration, jump request,
+#                      wakers) is checked and turned into records here.
 #   SessionStart       a Codex jump that relaunched this pane: hand the pane's context
 #                      registration to the new thread and mark the jump done.
 #   Stop               1. a pending jump request for this pane (jump.sh): a wait jump with no
@@ -63,15 +65,72 @@ fi
 MODE=$(cm_jump_mode)
 REQ=""; [ -n "$KEY" ] && REQ=$(cm_request_path "$KEY")
 
+# ---- the inbox: what this thread's sandboxed tool shells asked for (cm_lib.sh) ------------
+# Only this pane's and this thread's entries, only of this thread, only valid values; every
+# record is built here from what the hook itself knows (thread, pane, socket), and the
+# resume prompt is built from the context file, never read.
+cm_mkdir "$OS_INBOX" || true
+import_inbox() {  # <target>
+  local tgt="$1" in f tid doc kind ctx name n=0
+  in=$(cm_inbox_take "$tgt") || return 0
+  f="$in/context.json"
+  if cm_plain_file "$f" && [ "$(jq -r '.thread_id // ""' "$f" 2>/dev/null)" = "$SID" ]; then
+    doc=$(jq -r '.doc_path // ""' "$f" 2>/dev/null)
+    if [ -z "$doc" ]; then
+      rm -f -- "$(cm_sess_reg_path codex "$SID")"
+      [ "$tgt" = "$KEY" ] && [ -n "$KEY" ] && [ "$(cm_registered_sid "$KEY")" = "$SID" ] && rm -f -- "$(cm_reg_path "$KEY")"
+      cm_log "cx inbox $tgt: registration of thread ${SID:0:8} cleared"
+    elif cm_ctx_ok "$doc"; then
+      cm_write_json "$(cm_sess_reg_path codex "$SID")" --arg doc "$doc" --arg at "$(date -Iseconds)" --arg sid "$SID" \
+        '{version:1, runtime:"codex", session_id:$sid, doc_path:$doc, registered_at:$at}'
+      [ "$tgt" = "$KEY" ] && [ -n "$KEY" ] && cm_write_json "$(cm_reg_path "$KEY")" --arg pane "${TMUX_PANE:-}" \
+        --arg doc "$doc" --arg at "$(date -Iseconds)" --arg sid "$SID" \
+        '{version:1, pane_id:$pane, doc_path:$doc, registered_at:$at, session_id:$sid}'
+    else
+      cm_log "cx inbox $tgt: registration refused (not an absolute path to a file, or odd characters)"
+    fi
+  fi
+  for f in "$in"/wakers/*.json; do
+    cm_plain_file "$f" || continue
+    [ "$(jq -r '.thread_id // ""' "$f" 2>/dev/null)" = "$SID" ] || continue
+    jq -e '(.jobs | type == "array") and (.jobs | length) > 0 and (.jobs | length) <= 200
+           and all(.jobs[]; type == "string" and test("^[0-9]+(_[0-9]+)?$"))' "$f" >/dev/null 2>&1 \
+      || { cm_log "cx inbox $tgt: waker $(basename "$f") refused (bad job ids)"; continue; }
+    name=$(cm_key "$(basename "$f" .json)")
+    cm_write_json "$OS_STATE/wakers/$tgt/$name.json" --argjson jobs "$(jq -c .jobs "$f")" --arg tid "$SID" \
+        --arg key "$KEY" --arg sock "$SOCKP" --arg pane "${TMUX_PANE:-}" --arg at "$(date -Iseconds)" \
+        '{version:1, runtime:"codex", jobs:$jobs, thread_id:$tid, key:$key, sock:$sock, pane:$pane,
+          requested_at:$at, state:"requested"}' && n=$((n+1))
+  done
+  [ "$n" -gt 0 ] && cm_log "cx inbox $tgt: $n waker(s) queued for thread ${SID:0:8}"
+  f="$in/jump.json"
+  if [ -n "$KEY" ] && [ "$tgt" = "$KEY" ] && cm_plain_file "$f" \
+     && [ "$(jq -r '.thread_id // ""' "$f" 2>/dev/null)" = "$SID" ]; then
+    kind=$(jq -r '.kind // ""' "$f" 2>/dev/null); ctx=$(jq -r '.context // ""' "$f" 2>/dev/null)
+    if [ "$kind" != active ] && [ "$kind" != wait ] || ! cm_ctx_ok "$ctx"; then
+      cm_log "cx inbox $tgt: jump request refused (kind '$kind', context not a valid file path)"
+    elif [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ" 2>/dev/null)" != requested ]; then
+      cm_log "cx inbox $tgt: jump request ignored; a jump is already $(jq -r .phase "$REQ" 2>/dev/null)"
+    else
+      cm_write_json "$REQ" --arg kind "$kind" --arg ctx "$ctx" --arg sock "$SOCKP" --arg pane "${TMUX_PANE:-}" \
+          --arg key "$KEY" --arg sid "$SID" --arg at "$(date -Iseconds)" \
+        '{version:1, runtime:"codex", kind:$kind, context:$ctx, sock:$sock, pane:$pane,
+          key:$key, state_file:"", old_sid:$sid, requested_at:$at, phase:"requested"}'
+    fi
+  fi
+  rm -rf -- "$(dirname "$in")"
+}
+[ -n "$KEY" ] && [ -n "${TMUX:-}" ] && import_inbox "$KEY"
+import_inbox "thread__$(cm_key "$SID")"
+
 # ---- SessionStart: finish a relaunch --------------------------------------------------
 if [ "$EVENT" = SessionStart ]; then
-  if [ -n "$REQ" ] && [ -f "$REQ" ] && [ "$(jq -r '.runtime // ""' "$REQ")" = codex ] \
+  if [ -n "$REQ" ] && cm_plain_file "$REQ" && [ "$(jq -r '.runtime // ""' "$REQ")" = codex ] \
      && [ "$(jq -r .phase "$REQ")" = relaunched ] && [ "$(jq -r .old_sid "$REQ")" != "$SID" ]; then
     cm_reg_handover "$KEY" "$SID"
     cm_log "cx SessionStart $TMUX_PANE: relaunched as thread ${SID:0:8}; registration handed over"
-    tmp="$REQ.tmp.$$"
-    jq --arg s "$SID" --arg at "$(date -Iseconds)" '.new_sid=$s | .phase="done" | .phase_at=$at' "$REQ" > "$tmp" \
-      && mkdir -p "$OS_STATE/jump/done" && mv "$tmp" "$OS_STATE/jump/done/$KEY-$(date +%s).json" && rm -f "$REQ"
+    cm_jq_into "$OS_STATE/jump/done/$KEY-$(date +%s).json" --arg s "$SID" --arg at "$(date -Iseconds)" \
+        '.new_sid=$s | .phase="done" | .phase_at=$at' "$REQ" && rm -f "$REQ"
   fi
   exit 0
 fi
@@ -115,7 +174,7 @@ start_wakers() {
 [ "$MODE" = off ] && exit 0
 
 if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ" 2>/dev/null)" = requested ]; then
-  if [ "$(jq -r '.runtime // "claude"' "$REQ")" != codex ] || [ "$(jq -r .old_sid "$REQ")" != "$SID" ]; then
+  if ! cm_plain_file "$REQ" || [ "$(jq -r '.runtime // "claude"' "$REQ")" != codex ] || [ "$(jq -r .old_sid "$REQ")" != "$SID" ]; then
     cm_log "cx stop $TMUX_PANE: stale jump request from sid $(jq -r .old_sid "$REQ" | cut -c1-8) dropped"
     rm -f "$REQ"
   elif [ "$(jq -r .kind "$REQ")" = wait ] && [ "$(live_wakers)" -eq 0 ]; then
@@ -123,7 +182,7 @@ if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ" 2>/dev/null)" = requested ]; then
     cm_log "cx stop $TMUX_PANE: wait jump REFUSED, no waker"
     block "open-science: wait jump refused and cancelled. Nothing will wake the new Codex session: no waker is queued or running for this pane. Start one first (for SLURM jobs: bash <plugin>/scripts/wait_slurm.sh --notify <jobid>...) and request the wait jump again, or do an active jump (jump.sh active <context file> --report \"<report>\")."
   else
-    tmp="$REQ.tmp.$$"; jq '.phase="launched"' "$REQ" > "$tmp" && mv "$tmp" "$REQ"
+    cm_jq_into "$REQ" '.phase="launched"' "$REQ"
     setsid nohup bash "$HERE/jump.sh" --worker "$REQ" </dev/null >>"$OS_LOG" 2>&1 &
     cm_log "cx stop $TMUX_PANE: codex $(jq -r .kind "$REQ") jump worker started"
     exit 0
@@ -148,5 +207,5 @@ REPEAT="${OPSCI_JUMP_REPEAT:-50000}"
 NF="$OS_STATE/size/$KEY"
 read -r nsid ntok < "$NF" 2>/dev/null || { nsid=""; ntok=0; }
 if [ "$nsid" = "$SID" ] && [ "$tokens" -lt "$(( ${ntok:-0} + REPEAT ))" ] 2>/dev/null; then exit 0; fi
-mkdir -p "$OS_STATE/size" && printf '%s %s\n' "$SID" "$tokens" > "$NF"
+printf '%s %s\n' "$SID" "$tokens" | cm_write_text "$NF"
 block "open-science: context is ${tokens} tokens, above ${TH}. Do an active jump now (skill open-science-context:context-management): save the state to the context file, then run jump.sh active <context file> --report \"<report for the user>\"; this Codex session then ends and a fresh one starts in this pane from the context file. If you are about to wait on running work, do a wait jump instead. If this turn ends waiting for the user (a question, a decision, something only the user can do), do not jump: say so in one line and stop."

@@ -66,12 +66,17 @@ async function sh($, script, args, stdin, timeoutMs) {
 
 const log = ($, text) => sh($, 'cm_mod.sh', ['log', text])
 
-// A resume prompt is a slash command (`/open-science-context:continue-context <file>`):
-// run it as the command it is. Anything else is a prompt.
-async function runPrompt($, text) {
-  const m = /^\/(\S+)\s*([\s\S]*)$/.exec(text.trim())
-  if (m) return $.command.run({ command: m[1], args: m[2] })
-  return $.prompt.submit({ text })
+// The resume command, built here from the context file: no prompt or command is ever taken
+// from a record in the state directory. The file must be an absolute path with no
+// whitespace or control character, to a file that exists; otherwise continue-context runs
+// with no file and finds the session's registration.
+const RESUME_CMD = 'open-science-context:continue-context'
+const ctxOk = c => typeof c === 'string' && /^\/[^\s\x00-\x1f\x7f-\x9f]+$/.test(c)
+
+async function resume($, ctx) {
+  const ok = ctxOk(ctx) && (await $.fs.exists(ctx))
+  if (ctx && !ok) await log($, 'resume: context path refused; continuing from the registration')
+  return $.command.run({ command: RESUME_CMD, args: ok ? ctx : '' })
 }
 
 // The records cm_mod.sh and pane_context.sh keep, by session id.
@@ -151,8 +156,8 @@ function jump($, j) {
       await sh($, 'cm_mod.sh', ['handover', old, now])
       await log($, j.kind + ' jump: cleared ' + old.slice(0, 8) + ' -> ' + now.slice(0, 8))
       if (pendingJump) { const text = pendingJump; pendingJump = null; await jumpNoteFallback($, text) }
-      if (j.kind === 'active' && j.prompt) {
-        await runPrompt($, j.prompt)
+      if (j.kind === 'active') {
+        await resume($, j.context)
       } else {
         waiting = true
         await sh($, 'cm_mod.sh', ['waiting', now, j.context || ''])
@@ -359,7 +364,8 @@ export function register(on) {
       // A session left waiting by another process (resumed after a SLURM resurrection or
       // by hand) lost the background tasks that were to wake it: wake it now.
       const r = await sh($, 'cm_mod.sh', ['resumed', sid])
-      if (r.stdout.trim()) await runPrompt($, r.stdout.trim())
+      const m = /^\/open-science-context:continue-context(?: (\S*))?$/.exec(r.stdout.trim())
+      if (m) await resume($, m[1] || '')
       // Only when the name should change: session.start also fires at every reload of a mod,
       // and a resumed session keeps its name (the session record has it; a session without
       // one gets it here).

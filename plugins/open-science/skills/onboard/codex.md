@@ -31,8 +31,10 @@ shell in the pane (not `exec codex`), so that a jump can start a new session the
 - 1e, session names: Codex has no session names to set. Do not ask; say this in one line.
 - 1f, jumps: ask the "1f" text, but leave out the sentence about Claude's one-hour cache
   (Codex has no cache-cold notice). Codex reads `OPSCI_JUMPS` from the environment: offer a
-  launch command such as `OPSCI_JUMPS=<choice> codex --add-dir ~/.local/state/open-science`
-  (the state directory must be writable from the sandbox; `--add-dir` grants only that), and
+  launch command such as `OPSCI_JUMPS=<choice> codex --add-dir ~/.local/state/open-science/inbox`
+  after `mkdir -p ~/.local/state/open-science/inbox` (the sandbox must be able to write the
+  state directory's `inbox` and nothing else of it: the hooks act on the rest outside the
+  sandbox; `--add-dir` grants only the inbox), and
   keep the user's own model, sandbox and approval options.
 - Then the hooks: the context and project plugins have hooks that run only after the user
   trusts them with `/hooks` in Codex. Show what they run and ask the user to review and

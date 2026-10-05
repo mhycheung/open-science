@@ -21,9 +21,11 @@ never invent a session id or reuse another session's registration. Subagents do 
 If a path was given explicitly, it remains the source for handoff even when registration
 is unavailable: report that limitation, read it, and continue with durable file updates.
 
-State is stored under `OPSCI_STATE_DIR` (default `~/.local/state/open-science`). The tool
-sandbox must allow writing there to register or request automated handoffs. Do not bypass
-the sandbox or silently widen permissions. See the framework's agent setup guide for a
+State is stored under `OPSCI_STATE_DIR` (default `~/.local/state/open-science`). Tool
+calls write only its `inbox` subdirectory, which the tool sandbox must allow writing to
+register or request automated handoffs; the Codex hook turns what is there into records
+when the turn ends. Do not bypass the sandbox or silently widen permissions, and never ask
+for the whole state directory to be writable. See the framework's agent setup guide for a
 scoped launch configuration. Hooks and tool calls must use the same state directory.
 Run `bash "$SCRIPTS/pane_context.sh" check` to test access. Exit 3 explains the setup
 needed; use an explicit context-file path until the user provides that access.

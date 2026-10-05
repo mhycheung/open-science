@@ -50,6 +50,17 @@ layout 1) and the framework's, in order, before it applies the other template ch
   checks that a context file's next steps follow from the plan and the log, and asks the
   user before anything outside the task (publishing, pushing, sending files, credentials,
   settings).
+- Context management, security: the Codex sandbox can no longer write what the hooks act on
+  outside it. Sandboxed tool shells write only the state directory's `inbox`
+  (`codex --add-dir ~/.local/state/open-science/inbox`; users who made the whole state
+  directory writable should grant only the inbox now, and `pane_context.sh check` warns);
+  the Codex hook checks each inbox entry and writes the records itself. Hooks and workers
+  write through `mktemp` and a rename, lock without truncating, and refuse links, so a link
+  planted in the state directory is replaced, not written through. `codex_home` from a
+  record is used only when it is the waker's own `$CODEX_HOME` or `~/.codex`. No resume
+  prompt is read from a jump request: the worker and the mod build it from a checked context
+  file. The state directory is created 0700 with 0600 files, and one owned by another user
+  is refused. Text typed into a pane loses every control character.
 
 ### Project migration (layout 2 -> 3)
 

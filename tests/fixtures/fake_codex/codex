@@ -3,6 +3,7 @@
 # is `codex`. Put its directory first on PATH.
 #
 #   codex queue --thread <id> --message <text>   append "<id>\t<text>" to $FAKE_CX_QUEUE_LOG
+#       (and its $CODEX_HOME to $FAKE_CX_HOME_LOG, when set)
 #   codex [options] [prompt]                     a fake TUI: appends its argv (one line,
 #       NUL-free, space-joined) to $FAKE_CX_ARGV_LOG, and runs the hook $FAKE_CX_HOOK as
 #       real Codex does, as its child: SessionStart when the first prompt arrives, then
@@ -14,6 +15,7 @@ if [ "${1:-}" = queue ]; then
   shift; t=""; m=""
   while [ $# -gt 0 ]; do case "$1" in --thread) t="$2"; shift 2 ;; --message) m="$2"; shift 2 ;; *) shift ;; esac; done
   printf '%s\t%s\n' "$t" "$m" >> "$FAKE_CX_QUEUE_LOG"
+  [ -n "${FAKE_CX_HOME_LOG:-}" ] && printf '%s\n' "${CODEX_HOME:-}" >> "$FAKE_CX_HOME_LOG"
   echo "Queued message for thread $t."
   exit 0
 fi

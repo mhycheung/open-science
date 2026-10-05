@@ -368,7 +368,7 @@ def test_unwritable_state_dir_is_reported_with_the_fix_under_codex(env, tmp_path
                      ("wait_slurm.sh", "--notify", "123")):
             r = run(me, *args)
             assert r.returncode == 3, (args, r.stderr)
-            assert f"--add-dir {st}" in r.stderr and "mkdir -p" in r.stderr
+            assert f"--add-dir {st}/inbox" in r.stderr and "mkdir -p" in r.stderr
         r = run(dict(me, TMUX="/tmp/os-cx-sock,1,0", TMUX_PANE="%7"), "jump.sh", "active", ctx, "--force")
         assert r.returncode == 3 and "--add-dir" in r.stderr
         assert run(me, "pane_context.sh", "get").stdout.strip() == str(ctx)   # reading still works
@@ -463,3 +463,134 @@ def test_jobs_ending_during_the_jump_wake_the_new_thread_not_the_ended_one(env, 
     assert new != rec["thread_id"]
     tid, msg = lines(env["FAKE_CX_QUEUE_LOG"])[0].split("\t", 1)
     assert "job 123: COMPLETED" in msg and tid == new
+
+
+# ---- the sandbox boundary: the inbox, links, forged records ------------------------------------
+# A Codex tool shell runs in a sandbox that can write the inbox only; the hooks and workers
+# run outside it. Each test reproduces an attack from inside the sandbox (or, for a user who
+# made the whole state directory writable as older docs said, from inside the hooks' part).
+
+TMUXE = {"TMUX": "/tmp/os-cx-sock,1,0", "TMUX_PANE": "%7"}
+K7 = key("/tmp/os-cx-sock", "%7")
+
+
+def test_tool_shells_write_only_the_inbox_and_the_hook_makes_the_records(env, tmp_path):
+    make_project(tmp_path)
+    ctx = tmp_path / "context.md"
+    ctx.write_text("x\n")
+    sh = dict(env, CODEX_THREAD_ID="thread-1", **TMUXE)
+    assert run(sh, "pane_context.sh", "set", ctx).returncode == 0
+    assert run(sh, "wait_slurm.sh", "--notify", "123").returncode == 0
+    st = state(env)
+    assert {p.relative_to(st).parts[0] for p in st.rglob("*") if p.is_file()} == {"inbox"}
+    assert run(sh, "pane_context.sh", "get").stdout.strip() == str(ctx)   # pending, read back
+    e = dict(env, **TMUXE, FAKE_SQUEUE_HOLD=str(tmp_path / "hold"))
+    (tmp_path / "hold").touch()                     # the job stays queued: the waker waits
+    hook(e, "Stop")
+    assert not (st / "inbox" / K7).exists()
+    assert json.loads((st / "pane_context" / f"{K7}.json").read_text())["session_id"] == "thread-1"
+    assert json.loads((st / "session_context" / "codex__thread-1.json").read_text())["doc_path"] == str(ctx)
+    [w] = (st / "wakers" / K7).glob("*.json")
+    rec = json.loads(w.read_text())
+    assert rec["jobs"] == ["123"] and rec["sock"] == "/tmp/os-cx-sock" and rec["pane"] == "%7"
+    (tmp_path / "hold").unlink()
+
+
+def test_links_and_other_threads_entries_in_the_inbox_are_never_followed(env, tmp_path):
+    st = state(env)
+    victim = tmp_path / "victim.json"                # a user file that looks like a waker request
+    victim.write_text(json.dumps({"thread_id": "thread-1", "jobs": ["123"]}))
+    mine = tmp_path / "mine"                         # a user directory
+    mine.mkdir()
+    (mine / "notes.json").write_text("{}")
+    inbox = st / "inbox"
+    (inbox / K7 / "wakers").mkdir(parents=True)
+    (inbox / K7 / "wakers" / "1.json").symlink_to(victim)
+    (inbox / K7 / "wakers" / "2.json").write_text(json.dumps({"thread_id": "thread-OTHER", "jobs": ["9"]}))
+    (inbox / K7 / "wakers" / "3.json").write_text(json.dumps({"thread_id": "thread-1", "jobs": ["1;touch x"]}))
+    (inbox / K7 / "context.json").symlink_to(victim)
+    (inbox / "thread__thread-1").symlink_to(mine)
+    hook(dict(env, **TMUXE), "Stop")
+    assert victim.exists() and json.loads(victim.read_text())["jobs"] == ["123"]
+    assert (mine / "notes.json").read_text() == "{}"
+    assert not (st / "wakers").exists() and not (st / "pane_context").exists()
+    assert not (inbox / K7).exists() and not (inbox / "thread__thread-1").exists()
+
+
+def test_a_jump_request_from_the_inbox_is_rebuilt_by_the_hook(env, tmp_path):
+    # Regression: the worker ran `codex ... <prompt>` and typed into <sock>/<pane> from the
+    # request, which the sandbox could write. Now only kind and context are read.
+    make_project(tmp_path)
+    ctx = tmp_path / "context.md"
+    ctx.write_text("x\n")
+    f = state(env) / "inbox" / K7 / "jump.json"
+    f.parent.mkdir(parents=True)
+    f.write_text(json.dumps({"thread_id": "thread-1", "kind": "active", "context": str(ctx),
+                             "prompt": "$(touch PWNED)", "sock": "/tmp/evil", "pane": "%0"}))
+    hook(dict(env, **TMUXE), "SessionStart")        # imports, and starts no worker
+    req = json.loads((state(env) / "jump" / f"{K7}.json").read_text())
+    assert "prompt" not in req and req["sock"] == "/tmp/os-cx-sock" and req["pane"] == "%7"
+    assert req["old_sid"] == "thread-1" and req["context"] == str(ctx)
+    f.parent.mkdir(parents=True)
+    f.write_text(json.dumps({"thread_id": "thread-1", "kind": "active", "context": "/etc/x y"}))
+    (state(env) / "jump" / f"{K7}.json").unlink()
+    hook(dict(env, **TMUXE), "SessionStart")
+    assert not (state(env) / "jump" / f"{K7}.json").exists()
+
+
+def test_links_planted_in_the_hooks_state_are_replaced_not_written_through(env, tmp_path):
+    # Regression (the reported exploit): wakers/done/<dir>-1.json -> ~/.bashrc and
+    # 1.json.lock -> ~/.codex/config.toml; `wait_slurm.sh --run-waker` overwrote the first
+    # with JSON and truncated the second.
+    st = state(env)
+    bashrc, config = tmp_path / "bashrc", tmp_path / "config.toml"
+    bashrc.write_text("# rc\n")
+    config.write_text("model = 'x'\n")
+    d = st / "wakers" / "thread__thread-1"
+    d.mkdir(parents=True)
+    w = d / "1.json"
+    w.write_text(json.dumps({"version": 1, "runtime": "codex", "jobs": ["123"], "thread_id": "thread-1",
+                             "key": "", "state": "running", '$(touch PWNED)': 1}))
+    (st / "wakers" / "done").mkdir()
+    (st / "wakers" / "done" / "thread__thread-1-1.json").symlink_to(bashrc)
+    (d / "1.json.lock").symlink_to(config)
+    r = run(env, "wait_slurm.sh", "--run-waker", w)
+    assert r.returncode == 0, r.stderr
+    assert bashrc.read_text() == "# rc\n" and config.read_text() == "model = 'x'\n"
+    done = st / "wakers" / "done" / "thread__thread-1-1.json"
+    assert not done.is_symlink() and json.loads(done.read_text())["state"] == "done"
+    assert not w.exists()
+
+
+@pytest.mark.parametrize("home,used", [("/tmp/evil-codex-home", False), ("same", True)])
+def test_a_forged_codex_home_is_not_used(env, tmp_path, home, used):
+    # Regression: the waker ran `CODEX_HOME=<record's codex_home> codex queue`, so a forged
+    # thread record could make codex load another config.toml outside the sandbox.
+    real = str(tmp_path / "codex-home")
+    home = real if home == "same" else home
+    st = state(env)
+    (st / "codex" / "threads").mkdir(parents=True)
+    (st / "codex" / "threads" / "thread-1.json").write_text(json.dumps({"thread_id": "thread-1", "codex_home": home}))
+    d = st / "wakers" / "thread__thread-1"
+    d.mkdir(parents=True)
+    w = d / "1.json"
+    w.write_text(json.dumps({"jobs": ["123"], "thread_id": "thread-1", "key": "", "state": "running"}))
+    homes = tmp_path / "homes.log"
+    r = run(dict(env, CODEX_HOME=real, FAKE_CX_HOME_LOG=str(homes)), "wait_slurm.sh", "--run-waker", w)
+    assert r.returncode == 0, r.stderr
+    assert lines(homes) == [real]                    # the waker's own CODEX_HOME either way
+    assert ("neither" in (st / "cm.log").read_text()) is not used
+
+
+def test_check_warns_when_the_whole_state_dir_is_writable_under_codex(env):
+    me = dict(env, CODEX_THREAD_ID="thread-1")
+    st = state(env)
+    r = run(me, "pane_context.sh", "check")
+    assert r.returncode == 0 and "WARNING" in r.stderr and f"{st}/inbox" in r.stderr
+    (st / "inbox").mkdir(exist_ok=True)
+    st.chmod(0o500)                                  # as the sandbox sees it: inbox only
+    try:
+        r = run(me, "pane_context.sh", "check")
+        assert r.returncode == 0 and "WARNING" not in r.stderr
+    finally:
+        st.chmod(0o700)
