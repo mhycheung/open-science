@@ -11,6 +11,12 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Update check: the notice compares the version the session loaded with the higher of the
+  last lookup and the local marketplace checkout's manifest, so a release that `claude plugin
+  update` already fetched is known before the next daily lookup. When that release is
+  already installed on disk (Claude Code's `installed_plugins.json`, else the plugin's version
+  directories), the notice says that a new session loads it instead of giving the update
+  commands.
 - Publish scans and export, security fixes: the secret scan finds bare Notion, AWS secret and
   Zenodo tokens; `.env`, `.env.*` and `*.env` files are never exported, in any directory; the
   leak and secret scans read PDF page text and hex and UTF-16 PDF strings, UTF-16 text files,
