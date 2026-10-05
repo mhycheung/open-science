@@ -9,8 +9,13 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
-## Unreleased
+## 0.3.4 - 2026-10-05
 
+- New skill `open-science:dispatch`: on request, starts another agent session (Claude Code or
+  Codex) in a new window of the current tmux session, in a directory the user names, with
+  Remote Control on for Claude Code, and hands it a first prompt if the user said what it
+  should do. The session is named after the project: `<project>`, or `<project>-2`, `-3`,
+  ..., the lowest number no live session holds.
 - Update check: the notice compares the version the session loaded with the higher of the
   last lookup and the local marketplace checkout's manifest, so a release that `claude plugin
   update` already fetched is known before the next daily lookup. When that release is
