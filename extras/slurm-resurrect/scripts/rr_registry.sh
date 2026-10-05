@@ -80,12 +80,19 @@ slurm-resurrect: read this once before you register a session.
 A registered tmux session is rebuilt in a new SLURM job when this job reaches
 its time limit, and every Claude pane in it is resumed with no one watching.
 
-  * Permission mode (default: bypassPermissions). In bypass mode a resumed
-    session runs every command, including edits and deletions, without asking.
-    Choose another mode with --permission-mode MODE (e.g. acceptEdits, manual).
+  * Permission mode. Each Claude pane is resumed in the permission mode it
+    was started with (read from its command line), never a wider one. With
+    --permission-mode MODE (e.g. acceptEdits, manual) no pane is resumed in a
+    mode wider than MODE, and MODE is used for a pane whose own mode cannot be
+    read. A pane started in bypassPermissions is resumed in it unless you set a
+    narrower MODE: in bypass mode a resumed session runs every command,
+    including edits and deletions, without asking.
   * Remote Control (default: on). With Remote Control on, the resumed session
     can be read and driven from any device logged in to your Claude account.
     Turn it off with --remote-control off.
+  * Folder trust (default: left to you). If a resumed Claude session asks
+    whether to trust its folder, the plugin answers only if you ran
+    `set auto_trust true`; otherwise the session waits for you.
 
 Resurrection repeats up to the hop cap (default 10); `reset` raises it, `stop`
 ends the lineage. Nothing was registered. Run the same command again to
@@ -95,21 +102,21 @@ WARN
 
 cmd_register() {
   rr_require_user "register" || return 3
-  local rc="on" perm="bypassPermissions"
+  local rc="on" perm="" explicit=false
   local -a sessions=()
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --remote-control) rc="${2:-}"; shift 2 || { echo "--remote-control needs on|off" >&2; return 2; } ;;
       --remote-control=*) rc="${1#*=}"; shift ;;
-      --permission-mode) perm="${2:-}"; shift 2 || { echo "--permission-mode needs a value" >&2; return 2; } ;;
-      --permission-mode=*) perm="${1#*=}"; shift ;;
+      --permission-mode) perm="${2:-}"; explicit=true; shift 2 || { echo "--permission-mode needs a value" >&2; return 2; } ;;
+      --permission-mode=*) perm="${1#*=}"; explicit=true; shift ;;
       -*) echo "unknown option $1" >&2; return 2 ;;
       *) sessions+=("$1"); shift ;;
     esac
   done
   case "$rc" in on|true|yes) rc=true ;; off|false|no) rc=false ;;
     *) echo "--remote-control must be on or off, not '$rc'" >&2; return 2 ;; esac
-  [[ " $RR_PERM_MODES " == *" $perm "* ]] || {
+  [[ "$explicit" == false || " $RR_PERM_MODES " == *" $perm "* ]] || {
     echo "--permission-mode must be one of: $RR_PERM_MODES (got '$perm')" >&2; return 2; }
   [[ -n "${SLURM_JOB_ID:-}" ]] || { echo "SLURM_JOB_ID is not set -- run inside a SLURM batch job." >&2; return 1; }
   [[ -n "${TMUX:-}" ]] || {
@@ -129,6 +136,10 @@ cmd_register() {
   rr_sync_scripts || rr_log "WARNING: could not copy scripts to $RR_STABLE_SCRIPTS"
   prune_stale
   local sock="${TMUX%%,*}"
+  if ! rr_sock_ok "$sock"; then
+    echo "refusing: the tmux socket $sock is in a directory other users can reach; start tmux with a private socket (the default /tmp/tmux-\$UID is one) and register from there." >&2
+    return 1
+  fi
   [[ ${#sessions[@]} -gt 0 ]] || sessions=("$(current_session "$sock")")
 
   local dir="$RR_REG_ROOT/$SLURM_JOB_ID"; mkdir -p "$dir/snapshot"
@@ -140,16 +151,24 @@ cmd_register() {
     fi
     san=$(sanitize "$s")
     jq -n --arg s "$s" --arg sock "$sock" --arg job "$SLURM_JOB_ID" --arg san "$san" \
-          --arg perm "$perm" --argjson rc "$rc" --arg via "$via" \
+          --arg perm "$perm" --argjson ex "$explicit" --argjson rc "$rc" --arg via "$via" \
       '{tmux_session:$s, tmux_socket:$sock, sanitized:$san,
         registered_in_job:$job, registered_at:(now|todate), registered_via:$via,
-        permission_mode:$perm, remote_control:$rc}' > "$dir/$san.json"
+        permission_mode:(if $perm == "" then null else $perm end),
+        permission_mode_explicit:$ex, remote_control:$rc}' > "$dir/$san.json"
     RR_SELFREG_DIR="$dir/panes" bash "$RR_SCRIPTS_DIR/rr_snapshot.sh" "$sock" "$s" "$dir/snapshot/$san.json" \
       || rr_log "registered '$s' but initial snapshot failed"
-    echo "registered tmux session '$s' in job $SLURM_JOB_ID (permission mode $perm, remote control $([[ $rc == true ]] && echo on || echo off)); it will be resurrected (all windows/panes/Claude sessions)."
+    echo "registered tmux session '$s' in job $SLURM_JOB_ID (permission mode: $([[ -n $perm ]] && echo "each pane's own, at most $perm" || echo "each pane's own"), remote control $([[ $rc == true ]] && echo on || echo off)); it will be resurrected (all windows/panes/Claude sessions)."
     added=$((added+1))
   done
   [[ $added -gt 0 ]] || { echo "nothing registered." >&2; return 1; }
+  # auto_trust has no default value written: unset means the user has not chosen yet
+  # (the plugin then leaves the folder-trust question to the user).
+  if [[ "$(jq -r 'has("auto_trust")' "$RR_CONFIG" 2>/dev/null)" != true ]]; then
+    echo "Folder trust: not chosen yet. A resumed Claude session that asks whether to trust its folder will wait for you. To let the plugin answer 'Yes' for you, run: set auto_trust true (to keep it for you: set auto_trust false)."
+  else
+    echo "Folder trust: auto_trust is $(jq -r '.auto_trust' "$RR_CONFIG")."
+  fi
   [[ "${RR_NO_COORDINATOR:-0}" != "1" ]] && ensure_coordinator "$SLURM_JOB_ID"
   return 0
 }
@@ -269,7 +288,7 @@ cmd_set_notify() {
 RR_SET_KEYS="queue_mode early_lead_seconds handoff_timeout_seconds handoff_grace_seconds
 snapshot_interval_seconds pause_threshold_seconds winddown_threshold_seconds
 launch_cmd codex_launch_cmd sbatch_extra account partition default_time_limit nodes ntasks cpus_per_task
-context_window_suffix core_scripts_dir"
+context_window_suffix core_scripts_dir auto_trust"
 cmd_set() {
   if [[ $# -lt 2 ]]; then
     echo "usage: set <key> <value>. Keys:"; echo "$RR_SET_KEYS" | tr ' ' '\n' | sed '/^$/d; s/^/  /'
@@ -286,6 +305,12 @@ cmd_set() {
     *_seconds|nodes|ntasks|cpus_per_task)
       [[ "$val" =~ ^[0-9]+$ ]] || { echo "$key must be a whole number" >&2; return 2; }
       rr_cfg_set ".$key=$val" ;;
+    auto_trust)
+      # Whether to answer Claude Code's folder-trust dialog in a resumed session for
+      # the user. Accepting lets that folder's .claude/settings.json hooks and MCP
+      # servers run without review. Codex's trust question is never answered.
+      [[ "$val" == true || "$val" == false ]] || { echo "auto_trust is true or false" >&2; return 2; }
+      rr_cfg_set ".auto_trust=$val" ;;
     context_window_suffix)
       jq -e 'type=="object"' <<<"$val" >/dev/null 2>&1 || { echo "context_window_suffix must be a JSON object" >&2; return 2; }
       local tmp; tmp=$(mktemp); jq --argjson v "$val" '.context_window_suffix=$v' "$RR_CONFIG" > "$tmp" && mv "$tmp" "$RR_CONFIG" ;;

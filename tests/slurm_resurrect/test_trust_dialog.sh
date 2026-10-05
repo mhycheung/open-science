@@ -5,11 +5,18 @@
 #
 # Claude Code's trust dialog starts with the cursor on "No, exit", so a bare
 # Enter quits the session. A fake dialog in a private tmux pane records which
-# option it received. Cases:
+# option it received. The answer is given only when the user opted in (config
+# auto_trust true); accepting lets the folder's hooks and MCP servers run unreviewed.
+# Cases:
+#   0. auto_trust unset (the default for existing users) and auto_trust false: a
+#      dialog gets no key at all, and the user is told the session waits there.
+#   With auto_trust true:
 #   1. dialog with the cursor on "No": rr_deliver must move to "Yes", then Enter.
 #   2. control, no dialog on screen: rr_deliver must type nothing.
 #   3. refusal, a dialog whose cursor cannot reach "Yes": rr_deliver must press
 #      no Enter (which would choose "No, exit") and must notify the user.
+# The Codex side (its trust question is never answered, auto_trust or not) is in
+# test_codex_panes.sh.
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 rr_test_setup
 
@@ -54,7 +61,21 @@ run_case() {  # <window> <mode>
   sleep 1
 }
 
-echo "== 1. cursor on 'No': move to 'Yes', then Enter =="
+echo "== 0a. auto_trust unset: nothing pressed, user told =="
+out=$(run_case 4 dialog)
+has   "says the question is left for the user" "$out" "left for the user (auto_trust is off)"
+check "the dialog received no key" "$(cat "$TMP/out.4" 2>/dev/null)" ""
+has   "the pane still shows the dialog" "$(tmux -S "$SOCK" capture-pane -p -t t:4)" "Yes, I trust this folder"
+has   "user notified" "$(cat "$RR_STATE_DIR/notifications.log" 2>/dev/null)" "t:4 is waiting at the workspace trust question"
+
+echo "== 0b. auto_trust false: the same =="
+echo '{"auto_trust": false}' > "$RR_STATE_DIR/rr_config.json"
+out=$(run_case 5 dialog)
+has   "says the question is left for the user" "$out" "left for the user (auto_trust is off)"
+check "the dialog received no key" "$(cat "$TMP/out.5" 2>/dev/null)" ""
+
+echo '{"auto_trust": true}' > "$RR_STATE_DIR/rr_config.json"
+echo "== 1. auto_trust true, cursor on 'No': move to 'Yes', then Enter =="
 out=$(run_case 1 dialog)
 has "says it accepted the dialog" "$out" "accepted the trust dialog in t:1"
 check "the dialog received 'yes' only" "$(cat "$TMP/out.1" 2>/dev/null)" "yes"

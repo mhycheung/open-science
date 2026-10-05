@@ -49,6 +49,7 @@ snapshot_registered() {
   for f in "$dir"/*.json; do
     san=$(basename "$f" .json)
     sock=$(jq -r '.tmux_socket' "$f"); name=$(jq -r '.tmux_session' "$f")
+    # rr_snapshot.sh refuses a socket whose directory is not private (rr_sock_ok).
     if RR_SELFREG_DIR="$dir/panes" bash "$RR_SCRIPTS_DIR/rr_snapshot.sh" "$sock" "$name" "$dir/snapshot/$san.json" 2>>"$LOG"; then
       rr_log "re-snapshotted tmux session '$name' (socket $sock)"
     else
@@ -78,6 +79,9 @@ winddown_nudge() {
   shopt -s nullglob
   for f in "$RR_REG_ROOT/$JOB_ID"/*.json; do
     sock=$(jq -r '.tmux_socket' "$f"); name=$(jq -r '.tmux_session' "$f")
+    if ! rr_sock_ok "$sock" 2>>"$LOG"; then
+      rr_log "wind-down nudge SKIPPED for '$name': its tmux socket directory is not private"; continue
+    fi
     while IFS=$'\t' read -r widx pidx ppid paneid; do
       # A busy Codex pane gets the same message through `codex queue` (it waits behind
       # the running turn); nothing is typed into Codex. Idle Codex panes are left alone.

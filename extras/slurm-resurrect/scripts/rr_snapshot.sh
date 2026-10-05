@@ -7,7 +7,8 @@
 #   * for panes running a Claude Code session: the session_id (for --resume),
 #     which config dir it belongs to and whether the process had CLAUDE_CONFIG_DIR
 #     set (restored on relaunch), the model it was last using (transcript base id + the context-window suffix
-#     read off the live process's argv), and its live status (busy/idle/shell).
+#     read off the live process's argv), the permission mode it was started with
+#     (its argv), and its live status (busy/idle/shell).
 #
 # The layout string restores exact pane geometry via `tmux select-layout` on
 # rebuild. Non-Claude panes are captured as plain panes (recreated as empty
@@ -27,6 +28,8 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rr_common.sh"
 SOCK="${1:?tmux socket path required}"
 SESSION="${2:?tmux session name required}"
 OUT="${3:-/dev/stdout}"
+# Talk only to a server whose socket directory is private to this user (rr_sock_ok).
+rr_sock_ok "$SOCK" || { echo "rr_snapshot: refusing the tmux socket $SOCK" >&2; exit 1; }
 
 read -ra CONFIG_DIRS <<< "$(rr_config_dirs | tr '\n' ' ')"
 
@@ -122,6 +125,9 @@ while IFS=$'\t' read -r widx wname wactive wlayout; do
       # default). The rebuild sets the same value, so the session resumes from
       # the config dir that holds its transcript, whatever the launch command is.
       cdir_env=$(rr_proc_env "$cpid" CLAUDE_CONFIG_DIR)
+      # The permission mode this process was started with (rr_proc_perm). The rebuild
+      # resumes the pane with exactly this mode, or a narrower one, never a wider one.
+      IFS='|' read -r pknown pmode pallow <<< "$(rr_proc_perm "$cpid")"
       rcname=$(rr_rc_name "$cdir" "$cpid" "$SESSION" "$widx" "$pidx")
       read_note "$paneid" "$sid"; note="$NOTE"; nsrc="$NOTE_SRC"
       read_jump "$paneid" "$cpid" "$sid" "$cdir"
@@ -141,9 +147,12 @@ while IFS=$'\t' read -r widx wname wactive wlayout; do
         --arg model "$model" --arg status "$status" --arg rcname "$rcname" \
         --arg note "$note" --arg nsrc "$nsrc" \
         --argjson jump "$JUMP" --arg jsrc "$JUMP_SRC" \
+        --arg pknown "$pknown" --arg pmode "$pmode" --arg pallow "$pallow" \
         '{index:$idx, cwd:$cwd, claude:true, session_id:$sid, pane_id:$pane,
           config_dir:$cdir, config_dir_env:$cdenv, model:$model, status:$status,
           rc_name:$rcname,
+          permission_mode_known:($pknown == "known"), permission_mode:$pmode,
+          allow_bypass:($pallow == "1"),
           note:$note, note_src:$nsrc, jump:$jump, jump_src:$jsrc}')")
     elif cinfo=$(rr_resolve_codex "$ppid" "$paneid" "$SOCK") || [[ $? -eq 2 ]]; then
       # A live Codex TUI (rr_common.sh, "Codex panes"). Resumed only when its thread is

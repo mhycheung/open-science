@@ -46,12 +46,16 @@ shell in the pane (not `exec codex`), so that a jump can start a new session the
 launch command is the user's `codex` command. 4c and 4d (permission mode, Remote Control)
 are Claude Code settings: a Codex pane resumes with the sandbox, approval and other options
 it was started with. Ask them only if the user will also run Claude Code in that tmux
-session; otherwise say this in one line. Codex panes resume only after the context plugin's
-Codex hook has run in them; say so. 4e and 4g: Codex has no `/slurm-resurrect:resurrect`
-command. Give the terminal form, `bash <plugin root of slurm-resurrect>/scripts/rr_registry.sh
-<command>`, to type in a plain shell pane of that tmux session (outside Codex): for 4e
-`set queue_mode early`; for 4g `register` (with `--permission-mode <mode> --remote-control
-off` if 4c was asked), run twice as in the text.
+session; otherwise say this in one line. 4f (folder trust): ask it with the same text and
+options if the user will also run Claude Code there; either way say that a Codex pane's
+folder-trust question is always left to the user, whatever they choose. Codex panes resume
+only after the context plugin's Codex hook has run in them; say so. 4e, 4f and 4g: Codex has
+no `/slurm-resurrect:resurrect` command. Give the terminal form, `bash <plugin root of
+slurm-resurrect>/scripts/rr_registry.sh <command>`, to type in a plain shell pane of that
+tmux session (outside Codex): for 4e `set queue_mode early`; for 4f `set auto_trust true` or
+`set auto_trust false` if 4f was asked; for 4g `register` (with `--permission-mode <mode>`
+if a limit was chosen in 4c, and `--remote-control off` if chosen in 4d), run twice as in
+the text.
 
 **Step 9, tokens.** `secret_file.sh` refuses to run inside Codex too. The deny rule
 (`Read(~/.config/opsci/**)`) has no Codex equivalent: skip that offer and say so.

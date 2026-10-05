@@ -11,17 +11,25 @@
 # the job actually runs.
 #
 # Steps:
-#   1. Dismiss a workspace-trust dialog, and ONLY if one is actually on screen --
-#      never a blanket Enter, which would queue an empty message into a session
-#      that is already running.
+#   1. A workspace-trust dialog on screen: answer "Yes, I trust this folder" only
+#      when the user opted in (config auto_trust true, asked at setup); otherwise
+#      press nothing and tell the user the session waits there. Never a blanket
+#      Enter, which would queue an empty message into a session already running.
 #   2. Finish a session jump of the open-science core that the wall-clock limit
 #      interrupted, or wake a pane that was waiting after a wait jump.
 #   3. Deliver each pane's checkpoint note.
 #   4. Remote Control audit (read only).
 #
-# Codex panes (manifest runtime "codex"): no trust answer is given (Codex saves it to
-# the user's config), notes go through `codex queue`, and no jump is recovered (a
-# Codex jump is not carried across a hop; the thread is resumed as it was).
+# Codex panes (manifest runtime "codex"): no trust answer is ever given, whatever
+# auto_trust says (Codex saves it to the user's config), notes go through `codex
+# queue`, and no jump is recovered (a Codex jump is not carried across a hop; the
+# thread is resumed as it was).
+#
+# Delivered text is not the user's: rr_safe_text strips control characters and
+# keeps it from starting with `/`, `!` or `#` (only the core's own continue-context
+# resume prompt may), and a note always goes behind a fixed prefix (rr_note_text).
+# A pane whose tmux socket directory is not private to this user (rr_sock_ok) is
+# not touched.
 #
 # Delivery rule for notes: a note is delivered whenever one exists, regardless of
 # the pane's status at snapshot. A note is written only by an agent that chose to
@@ -70,7 +78,7 @@ MANIFEST="${1:?manifest jsonl required}"
 # Returns non-zero if the text could not be VERIFIABLY submitted.
 inject() {  # <sock> <target> <text>
   local sock="$1" target="$2" text="$3" lock
-  if [[ "$DRY" == "1" ]]; then echo "DRYRUN inject -> $target: $text"; return 0; fi
+  if [[ "$DRY" == "1" ]]; then echo "DRYRUN inject -> $target: $(rr_safe_text "$text")"; return 0; fi
   lock=$(rr_pane_lock "$sock" "$target")
   (
     exec 9>"$lock"
@@ -91,11 +99,27 @@ wait_idle() {  # <sock> <target> [timeout]
 }
 
 
+# The pane's tmux socket must be private to this user. Not checked in a dry run,
+# which touches no pane.
+sock_safe() {  # <sock>
+  [[ "$DRY" == "1" ]] && return 0
+  rr_sock_ok "$1" 2>/dev/null && return 0
+  echo "rr_deliver: not touching panes on $1: its directory is not private to this user"
+  return 1
+}
+
+# auto_trust (config, default false): the user's answer to the setup question
+# whether to accept Claude Code's folder-trust dialog for them.
+AUTO_TRUST=$(jq -r 'if .auto_trust == true then "true" else "false" end' "$RR_CONFIG" 2>/dev/null)
+[[ "$AUTO_TRUST" == true ]] || AUTO_TRUST=false
+
 # Give the rebuilt sessions time to boot before touching their panes.
 [[ "$DRY" == "1" ]] || sleep "${RR_BOOT_WAIT:-40}"
 
 # --- 1. trust dialogs, only where one is showing -----------------------------
-# The dialog's cursor starts on "No, exit" (MEASURED on Claude Code 2.1.280), so a
+# Accepting the dialog lets that folder's .claude/settings.json hooks and MCP
+# servers run without the user reviewing them, so it is done only with auto_trust
+# true. The dialog's cursor starts on "No, exit" (MEASURED on Claude Code 2.1.280), so a
 # bare Enter would quit the resumed session. Move the cursor with Down until the
 # "Yes, I trust this folder" line is the selected one, and only then press Enter.
 # If that line never becomes selected, press nothing and report it.
@@ -115,6 +139,7 @@ while IFS= read -r line; do
   [[ -n "$line" ]] || continue
   sock=$(jq -r '.socket // empty' <<<"$line"); target=$(jq -r '.target // empty' <<<"$line")
   [[ -n "$sock" && -n "$target" ]] || continue
+  sock_safe "$sock" || continue
   if [[ "$(jq -r '.runtime // "claude"' <<<"$line")" == codex ]]; then
     # Codex's folder-trust answer is saved to the user's Codex config; never give it here.
     if tmux -S "$sock" capture-pane -p -t "$target" 2>/dev/null | grep -qi 'trust this folder'; then
@@ -124,6 +149,11 @@ while IFS= read -r line; do
     continue
   fi
   if tmux -S "$sock" capture-pane -p -t "$target" 2>/dev/null | grep -qi 'trust this folder'; then
+    if [[ "$AUTO_TRUST" != true ]]; then
+      echo "rr_deliver: the resumed session in $target asks whether to trust its folder; left for the user (auto_trust is off)"
+      [[ "$DRY" == "1" ]] || rr_notify "slurm-resurrect: the resumed session in $target is waiting at the workspace trust question (job ${SLURM_JOB_ID:-?}). Attach and answer it."
+      continue
+    fi
     if [[ "$DRY" == "1" ]]; then
       echo "DRYRUN trust-dialog accept -> $target"
       continue
@@ -195,6 +225,7 @@ while IFS= read -r line; do
   [[ -n "$jump" && "$jump" != "null" ]] || continue
   sock=$(jq -r '.socket // empty' <<<"$line"); target=$(jq -r '.target // empty' <<<"$line")
   [[ -n "$sock" && -n "$target" ]] || continue
+  sock_safe "$sock" || continue
   snap_sid=$(jq -r '.session_id // ""' <<<"$line")
 
   where=$(jq -r '.rr_where // "pending"' <<<"$jump")
@@ -209,6 +240,8 @@ while IFS= read -r line; do
 
   rp="$prompt"
   [[ "$kind" == active && -n "$rp" ]] || rp=$([[ -n "$ctx" ]] && rr_continue_prompt "$ctx")
+  # The core's worker types this prompt too: make it safe here (rr_safe_text).
+  [[ -n "$rp" ]] && rp=$(rr_safe_text "$rp")
   if [[ -z "$rp" ]]; then
     echo "rr_deliver: $target has a $where $kind jump record with no prompt and no context file; left alone"
     continue
@@ -259,6 +292,9 @@ while IFS= read -r line; do
   sid=$(jq -r '.session_id // empty' <<<"$line")
   note=$(jq -r '.note // ""' <<<"$line"); nsrc=$(jq -r '.note_src // ""' <<<"$line")
   [[ -n "$sock" && -n "$target" && -n "$note" ]] || continue
+  sock_safe "$sock" || continue
+  # Behind a fixed prefix, so a note is never a command (rr_note_text).
+  note=$(rr_note_text "$note")
   if [[ "$(jq -r '.runtime // "claude"' <<<"$line")" == codex ]]; then
     if [[ "$DRY" == "1" ]]; then echo "DRYRUN codex queue -> $sid: $note"
     elif ! rr_codex_queue "$sid" "$(jq -r '.codex_home // ""' <<<"$line")" "$note" >/dev/null 2>&1; then
@@ -304,6 +340,7 @@ while IFS= read -r line; do
   want=$(jq -r '.rc_name // ""' <<<"$line")
   rcon=$(jq -r 'if .remote_control == false then "false" else "true" end' <<<"$line")
   [[ -n "$sock" && -n "$target" ]] || continue
+  sock_safe "$sock" || continue
   if [[ "$(jq -r '.runtime // "claude"' <<<"$line")" == codex ]]; then
     echo "$target: Codex pane ($(jq -r '.status' <<<"$line")); Remote Control does not apply" >> "$RC_OUT"; continue
   fi

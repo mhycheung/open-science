@@ -110,6 +110,39 @@ Run from the project root, on a branch, with `FW` a framework checkout at this r
   cannot add text to the notice or break its JSON.
 - Docs and onboarding: the Notion integration needs no comment capabilities; the
   instructions no longer ask for them.
+- SLURM resurrection, security fixes:
+  - **Folder trust is now opt-in.** A resumed Claude session waiting at Claude Code's
+    folder-trust question is answered "Yes, I trust this folder" only with
+    `set auto_trust true`; otherwise the plugin presses nothing and notifies you. Accepting
+    lets that folder's `.claude/settings.json` hooks and MCP servers run unreviewed.
+    **Existing users have no `auto_trust` key and so get "leave it to me"; type
+    `/slurm-resurrect:resurrect set auto_trust true` (or run `rr_registry.sh set auto_trust
+    true` in a terminal pane) to keep the old behaviour.** Onboarding (4f) and the
+    `register` output ask the question. Codex's trust question is still never answered.
+  - **Permission mode per pane.** Each Claude pane resumes in the mode its process was
+    started with (read from its argv), never a wider one; `--permission-mode` at
+    registration is now an upper limit (and the mode for panes whose own mode cannot be
+    read), with no limit by default. A pane started without a mode flag resumes without
+    one. A missing registration record now means at most `manual` and Remote Control off,
+    not `bypassPermissions` and Remote Control on. Snapshots taken before this release
+    have no per-pane mode, so their panes resume in the registered mode if you chose one
+    explicitly, else without a mode flag.
+  - tmux sockets: a socket whose directory is not a real directory owned by you with no
+    group or other permissions (another user can create `/tmp/tmux-<uid>` first on a fresh
+    node) is not used; the session is rebuilt on a new private socket and the notice gives
+    its attach command. The coordinator, snapshot and delivery skip such sockets, and
+    `register` refuses them.
+  - The resume command quotes every value from the snapshot (session name, model, config
+    directory) with `printf %q`; a session name like `x$(cmd)` ran `cmd` before. A Claude
+    session id must be a UUID.
+  - Notes and resume prompts typed into a pane lose all control characters (a CR split a
+    note into several prompts) and cannot start with `/`, `!` or `#` except the core's
+    `/open-science-context:continue-context` prompt; notes always go behind a
+    `[slurm-resurrect]` prefix. The prompt hook does not run a `/slurm-resurrect:resurrect`
+    command submitted while a script holds the pane's typing lock.
+  - If no Claude or Codex pane is alive after a hop, the lineage ends with a notice instead
+    of holding the allocation and queueing another job; a session with no live agent pane
+    is not carried to the next job.
 
 ## 0.3.3 - 2026-10-04
 

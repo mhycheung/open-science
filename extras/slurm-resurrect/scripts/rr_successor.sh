@@ -9,10 +9,15 @@
 #      before the source ended), ask the source's coordinator for a final
 #      snapshot, wait for it (handoff_timeout_seconds), then scancel the source
 #      and wait for it to leave the queue.
-#   2. Rebuild every tmux session from the source job's snapshots, each with the
-#      permission mode and Remote Control setting recorded at registration.
+#   2. Rebuild every tmux session from the source job's snapshots (rr_rebuild.sh:
+#      each Claude pane with its own permission mode, at most the registered one,
+#      and the registered Remote Control setting), on the recorded tmux socket if
+#      its directory is private to this user, else on a fresh private one.
 #   3. Carry the registrations forward to this job, deliver notes / interrupted
 #      jumps (rr_deliver.sh), notify how to attach, elect this job's coordinator.
+#      A session with no live Claude or Codex pane after delivery is not carried
+#      further; if no session has one, the lineage ends here: no coordinator, no
+#      successor, and the job exits.
 #
 # Test switches: RR_REBUILD_DRYRUN=1 / RR_DELIVER_DRYRUN=1 (no Claude started),
 # RR_NO_COORDINATOR=1 (do not elect a coordinator), RR_SUCCESSOR_NO_HOLD=1 (exit
@@ -78,6 +83,11 @@ for snap in "$SNAPDIR"/*.json; do
   # Rebuild on the session's ORIGINAL socket path so the attach command is unchanged.
   TSOCK=$(jq -r '.tmux_socket // empty' "$snap")
   [[ -n "$TSOCK" && "$TSOCK" != "null" ]] || TSOCK="$DEFSOCK"
+  # Never start a server in a socket directory another user could control
+  # (rr_safe_sock: falls back to a fresh private directory and tells the user).
+  if ! TSOCK=$(rr_safe_sock "$TSOCK"); then
+    echo "ERROR: no safe tmux socket for '$name'; not rebuilt"; continue
+  fi
   # If that exact name is already live on that socket (node reuse, a surviving
   # server), rebuild under a suffixed name rather than clobbering it.
   RNAME="$name"
@@ -95,13 +105,16 @@ for snap in "$SNAPDIR"/*.json; do
       '.tmux_session=$s | .tmux_socket=$sock | .sanitized=$san | .registered_in_job=$job
        | .carried_at=(now|todate)' "$rec" > "$newdir/$san.json"
   else
+    # No record of the user's choices: the narrow defaults (at most `manual`, Remote
+    # Control off), never bypassPermissions.
     jq -n --arg s "$RNAME" --arg sock "$TSOCK" --arg job "$JOB" --arg san "$san" \
       '{tmux_session:$s, tmux_socket:$sock, sanitized:$san, registered_in_job:$job,
-        registered_at:(now|todate), permission_mode:"bypassPermissions", remote_control:true}' \
+        registered_at:(now|todate), permission_mode:"manual", permission_mode_explicit:false,
+        remote_control:false}' \
       > "$newdir/$san.json"
   fi
 done
-count=$(jq -s '[.[] | select((.runtime // "claude") == "claude")] | length' "$MANIFEST" 2>/dev/null); count=${count:-0}
+count=$(jq -s '[.[] | select((.runtime // "claude") == "claude" and .status != "unresumable")] | length' "$MANIFEST" 2>/dev/null); count=${count:-0}
 xcount=$(jq -s '[.[] | select(.runtime == "codex" and .status != "unresumable")] | length' "$MANIFEST" 2>/dev/null); xcount=${xcount:-0}
 xlost=$(jq -r 'select(.runtime == "codex" and .status == "unresumable") | "\(.target): \(.reason)"' "$MANIFEST" 2>/dev/null)
 echo "launched $count Claude pane(s) and $xcount Codex pane(s); waiting for boot..."
@@ -113,6 +126,40 @@ rr_uninhibit "$SRC_JOB"
 
 # Post-boot steps (trust dialog, interrupted jumps, notes, Remote Control audit).
 bash "$SCRIPTS/rr_deliver.sh" "$MANIFEST"
+
+# A registered session with no live Claude or Codex pane is not carried to the next
+# job: holding an allocation for plain shells helps no one. If no session has one,
+# every resume failed: tell the user and end the lineage here (no coordinator, so no
+# successor; the job exits instead of holding the allocation). Skipped in a rebuild
+# dry run, which starts no agent.
+if [[ "${RR_REBUILD_DRYRUN:-0}" != "1" ]]; then
+  alive_total=0; dropped=""
+  for f in "$newdir"/*.json; do
+    [[ -e "$f" ]] || continue
+    name=$(jq -r '.tmux_session' "$f"); sock=$(jq -r '.tmux_socket' "$f"); alive=0
+    for ((i=0; i<${RR_ALIVE_WAIT:-30}; i++)); do
+      while IFS= read -r ppid; do
+        rr_pane_agent_alive "$ppid" && { alive=1; break; }
+      done < <(tmux -S "$sock" list-panes -s -t "=$name" -F '#{pane_pid}' 2>/dev/null)
+      [[ $alive -eq 1 ]] && break
+      sleep 1
+    done
+    if [[ $alive -eq 1 ]]; then alive_total=$((alive_total+1))
+    else
+      san=$(basename "$f" .json)
+      rm -f "$f" "$newdir/snapshot/$san.json"
+      dropped="$dropped '$name'"
+      echo "no live Claude or Codex pane in '$name'; not carried to the next job"
+    fi
+  done
+  if [[ $alive_total -eq 0 ]]; then
+    rr_notify "slurm-resurrect: job $JOB on $NODE resumed no Claude or Codex session (sessions:${dropped:- none}). Resurrection stops here: no successor will be queued and this job ends now. Start the sessions by hand and register again if you need it."
+    rm -rf "$SRCDIR"; rm -f "$RR_HOME/handoff_${SRC_JOB}.request" "$RR_HOME/handoff_${SRC_JOB}.done"
+    echo "no live agent pane in any rebuilt session; ending the lineage"
+    exit 0
+  fi
+  [[ -n "$dropped" ]] && rr_notify "slurm-resurrect: job $JOB: no live Claude or Codex pane in tmux session(s)$dropped after the resume; they stay open in this job but are not carried to the next one."
+fi
 
 # Fresh fallback snapshot for THIS job (post-boot, so panes are detectable).
 for f in "$newdir"/*.json; do

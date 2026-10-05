@@ -138,6 +138,105 @@ rr_tmux_coords() {
   RR_TMUX_TARGET=$(tmux display-message -p '#S' 2>/dev/null)
 }
 
+# --- tmux socket safety ---------------------------------------------------------
+# tmux does not check the directory of an explicit `-S` socket. On a fresh compute
+# node another user can create /tmp/tmux-<uid> first (mode 777, owned by them); a
+# server started there could then be reached or replaced by that user. Every script
+# that starts or talks to a tmux server from a recorded socket path checks it first:
+# the socket's directory must be a real directory (not a symlink), owned by this uid,
+# with no group or other permissions; an existing socket must be a socket owned by
+# this uid. Nothing here changes the permissions of an existing directory.
+rr_sock_ok() {  # <socket path> -> 0 safe, 1 not (reason on stderr)
+  local sock="${1:-}" dir uid mode
+  [[ -n "$sock" && "$sock" == /* ]] || { echo "socket path '$sock' is not absolute" >&2; return 1; }
+  dir=$(dirname -- "$sock"); uid=$(id -u)
+  if [[ -L "$dir" || ! -d "$dir" ]]; then echo "socket directory $dir is missing or a symlink" >&2; return 1; fi
+  if [[ "$(stat -c %u -- "$dir" 2>/dev/null)" != "$uid" ]]; then
+    echo "socket directory $dir is not owned by uid $uid" >&2; return 1; fi
+  mode=$(stat -c %a -- "$dir" 2>/dev/null) || { echo "cannot stat $dir" >&2; return 1; }
+  if (( (8#$mode & 8#077) != 0 )); then
+    echo "socket directory $dir has group/other permissions (mode $mode)" >&2; return 1; fi
+  if [[ -e "$sock" || -L "$sock" ]]; then
+    if [[ -L "$sock" || ! -S "$sock" || "$(stat -c %u -- "$sock" 2>/dev/null)" != "$uid" ]]; then
+      echo "$sock exists but is not a socket owned by uid $uid" >&2; return 1; fi
+  fi
+  return 0
+}
+
+# The socket path to rebuild a session on: the recorded one when its directory is
+# safe (created here with mode 700 if it does not exist), else a socket in a fresh
+# private directory (mktemp -d under XDG_RUNTIME_DIR, TMPDIR or /tmp). Prints the
+# path; a fallback is reported on stderr and to the user.
+rr_safe_sock() {  # <recorded socket path>
+  local sock="$1" dir why base d
+  dir=$(dirname -- "$sock")
+  [[ -e "$dir" || -L "$dir" ]] || mkdir -m 700 -- "$dir" 2>/dev/null
+  if why=$(rr_sock_ok "$sock" 2>&1); then printf '%s\n' "$sock"; return 0; fi
+  for base in "${XDG_RUNTIME_DIR:-}" "${TMPDIR:-}" /tmp; do
+    [[ -n "$base" && -d "$base" && -w "$base" ]] || continue
+    d=$(mktemp -d "$base/rr-tmux.XXXXXX" 2>/dev/null) || continue
+    chmod 700 "$d"
+    echo "rr: refusing socket $sock ($why); using $d/$(basename -- "$sock")" >&2
+    rr_notify "slurm-resurrect: did not use the tmux socket $sock on $(hostname) ($why). The session was rebuilt on $d/$(basename -- "$sock") instead; the attach command in the next message names it."
+    printf '%s\n' "$d/$(basename -- "$sock")"; return 0
+  done
+  echo "rr: refusing socket $sock ($why) and found no private directory for another" >&2
+  return 1
+}
+
+# --- permission modes -----------------------------------------------------------
+# The modes `claude --permission-mode` accepts (2.1.287), plus the older `default`,
+# ranked from the narrowest to the widest. The ranking is this plugin's judgement:
+# plan (no edits), dontAsk (only pre-approved tools), manual/default (asks),
+# acceptEdits, auto (a classifier approves), bypassPermissions (nothing asked).
+rr_perm_rank() {  # <mode> -> rank, or return 1 if not a known mode
+  case "${1:-}" in
+    plan) echo 0 ;; dontAsk) echo 1 ;; manual|default) echo 2 ;;
+    acceptEdits) echo 3 ;; auto) echo 4 ;; bypassPermissions) echo 5 ;; *) return 1 ;;
+  esac
+}
+
+# The permission mode a running Claude process was started with, read from its argv.
+# Prints "known|<mode>|<allow_bypass>": mode is empty when no mode flag was given
+# (Claude Code's own settings decide), `--dangerously-skip-permissions` counts as
+# bypassPermissions, allow_bypass is 1 for `--allow-dangerously-skip-permissions`.
+# With several mode flags the NARROWEST is taken. Prints "unknown||0" when argv
+# cannot be read or holds a mode this plugin does not know.
+rr_proc_perm() {  # <pid>
+  local pid="${1:-}" a next=0 mode="" allow=0 m
+  local -a argv=() modes=()
+  [[ -n "$pid" && -r "/proc/$pid/cmdline" ]] || { echo "unknown||0"; return 0; }
+  mapfile -d '' -t argv < "/proc/$pid/cmdline" 2>/dev/null
+  [[ ${#argv[@]} -gt 0 ]] || { echo "unknown||0"; return 0; }
+  for a in "${argv[@]}"; do
+    if (( next )); then modes+=("$a"); next=0; continue; fi
+    case "$a" in
+      --permission-mode) next=1 ;;
+      --permission-mode=*) modes+=("${a#--permission-mode=}") ;;
+      --dangerously-skip-permissions) modes+=(bypassPermissions) ;;
+      --allow-dangerously-skip-permissions) allow=1 ;;
+    esac
+  done
+  for m in "${modes[@]}"; do
+    rr_perm_rank "$m" >/dev/null || { echo "unknown||0"; return 0; }
+    if [[ -z "$mode" ]] || (( $(rr_perm_rank "$m") < $(rr_perm_rank "$mode") )); then mode="$m"; fi
+  done
+  echo "known|$mode|$allow"
+}
+
+# A Claude Code session id is a UUID; anything else is not typed into a shell.
+rr_valid_uuid() { [[ "${1:-}" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]]; }
+
+# True if a live Claude or Codex process runs in the pane's process tree.
+rr_pane_agent_alive() {  # <pane_pid>
+  local pid c
+  for pid in "$1" $(rr_descendants "$1"); do
+    c=$(ps -o comm= -p "$pid" 2>/dev/null)
+    [[ "$c" == claude || "$c" == codex ]] && return 0
+  done
+  return 1
+}
+
 # --- Claude session discovery (shared by snapshot + coordinator) -------------
 # Config dirs holding per-session state (sessions/<pid>.json). Override with
 # RR_CONFIG_DIRS (space-separated). The live process's own CLAUDE_CONFIG_DIR is
@@ -709,6 +808,34 @@ rr_pane_paste() {  # <sock> <target> <text>
   return 0
 }
 
+# Make text safe to type into an agent's input box. Delivered text (a note an agent
+# saved, a jump record's prompt) is not the user's, so it must not act as user input:
+#   * every control character goes: newline, CR and tab become a space (a CR would
+#     submit early and split the text into several prompts), the other C0 characters,
+#     ESC and DEL are deleted, and so are UTF-8 encoded C1 characters;
+#   * text starting with `/` (a slash command, e.g. the user-only
+#     `/slurm-resurrect:resurrect set-notify ...`), `!` (shell mode) or `#` is
+#     prefixed with "[slurm-resurrect] " so that the agent reads it as a message,
+#     unless it is the core's own resume prompt `/open-science-context:continue-context <file>`.
+RR_SAFE_SLASH='^/open-science-context:continue-context [^[:space:]]'
+rr_safe_text() {  # <text> -> sanitized text on stdout
+  local t
+  t=$(printf '%s' "${1:-}" | LC_ALL=C tr '\n\r\t' '   ' | LC_ALL=C tr -d '\000-\037\177' \
+      | LC_ALL=C sed 's/\xc2[\x80-\x9f]//g')
+  t="${t#"${t%%[![:space:]]*}"}"
+  case "$t" in
+    [/!#]*) [[ "$t" =~ $RR_SAFE_SLASH ]] || t="[slurm-resurrect] $t" ;;
+  esac
+  printf '%s' "$t"
+}
+
+# The text delivered for a checkpoint note: always behind a fixed prefix, so a note
+# can never be a command, whatever it starts with.
+rr_note_text() {  # <note>
+  local n; n=$(rr_safe_text "${1:-}"); n="${n#\[slurm-resurrect\] }"
+  printf '[slurm-resurrect] Message you saved for yourself before the last job ended: %s' "$n"
+}
+
 # Deliver a prompt and CONFIRM it was submitted. 0 = submitted, 1 = not.
 # The caller must already hold the pane lock (rr_pane_lock).
 #
@@ -720,7 +847,7 @@ rr_pane_paste() {  # <sock> <target> <text>
 rr_pane_deliver() {  # <sock> <target> <text> [attempts]
   local sock="$1" target="$2" text="$3" attempts="${4:-4}"
   local cmd rest head tail frag i w box want_head want_tail payload
-  text=$(printf '%s' "$text" | tr '\n' ' ')          # a newline submits early
+  text=$(rr_safe_text "$text")
   [[ -n "$text" ]] || return 1
   case "$text" in
     /*) cmd="${text%% *}"; rest="${text#"$cmd"}" ;;  # keep the leading space
@@ -990,6 +1117,7 @@ rr_inhibit_panes() {  # <job> <message>
   shopt -s nullglob
   for f in "$RR_REG_ROOT/$job"/*.json; do
     sock=$(jq -r '.tmux_socket' "$f"); name=$(jq -r '.tmux_session' "$f")
+    rr_sock_ok "$sock" 2>/dev/null || continue
     while IFS=$'\t' read -r ppid paneid; do
       rr_resolve_claude "$ppid" "$paneid" >/dev/null || rr_codex_pid "$ppid" >/dev/null || continue
       p="$RR_OS_STATE/inhibit_jump_$(rr_os_key "$sock" "$paneid")"

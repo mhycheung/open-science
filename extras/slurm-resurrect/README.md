@@ -48,14 +48,16 @@ nothing. Run it again to register. The warning is not shown again.
 
 Options:
 
-- `--permission-mode MODE` (Claude Code only): permission mode of the resumed sessions. Default
-  `bypassPermissions`.
+- `--permission-mode MODE` (Claude Code only): the widest permission mode a resumed session
+  may get. Without it, each Claude pane resumes in the mode it was started with. See
+  "Remote Control and permission mode".
 - `--remote-control on|off` (Claude Code only): Remote Control for the resumed sessions. Default on.
 - `session ...`: register named tmux sessions instead of the current one.
 
 Other commands: `status`, `timeleft`, `reset [N]` (new hop budget; the default
 cap is 10 hops), `set KEY VALUE` (run `set` alone for the keys),
-`set-notify CMD` (run `CMD` with the message in `$RR_MSG` at each notice).
+`set-notify CMD` (run `CMD` with the message in `$RR_MSG` at each notice),
+`set auto_trust true|false` (see "Folder trust" below).
 Agents may run `note "<text>"`, which delivers a message to their own pane
 after the hop.
 
@@ -99,18 +101,60 @@ Codex panes in a registered tmux session are resumed too, with these differences
 ## Remote Control and permission mode
 
 A resumed session runs with no one watching. The first time you register, the
-plugin says so and explains the two defaults, which apply to Claude Code panes only
+plugin says so and explains the settings below, which apply to Claude Code panes only
 (Codex panes keep their own options; see "Codex" above):
 
-- **Permission mode**, default `bypassPermissions`. In bypass mode a resumed
-  session runs every command, including edits and deletions, without asking.
-  Choose `acceptEdits`, `manual` or another mode with `--permission-mode`
-  (the modes `claude --permission-mode` accepts).
+- **Permission mode.** Each Claude pane is resumed in the permission mode its
+  process was started with, read from its command line (`--permission-mode`, or
+  `--dangerously-skip-permissions`, which counts as `bypassPermissions`). A pane
+  started without a mode flag is resumed without one, so Claude Code's settings
+  decide, as they did before. `--permission-mode MODE` at registration sets the
+  widest mode any pane may get: a pane started in a wider mode is resumed in
+  `MODE`, and a pane whose own mode cannot be read is resumed in `MODE`. Without
+  it, a pane whose mode cannot be read is resumed without a mode flag. A pane
+  started in `bypassPermissions` resumes in it unless you set a narrower `MODE`:
+  in bypass mode the resumed session runs every command, including edits and
+  deletions, without asking. If the registration record of a session is missing,
+  its panes resume in at most `manual` and with Remote Control off. The order used,
+  narrowest first: `plan`, `dontAsk`, `manual`, `acceptEdits`, `auto`,
+  `bypassPermissions`.
 - **Remote Control**, default on. The resumed session can be read and driven
   from any device logged in to your Claude account. Turn it off with
   `--remote-control off`.
 
 Both are recorded per registered session and applied at every hop.
+
+### Folder trust
+
+A resumed Claude session can open in a folder Claude Code has not trusted yet,
+for example when the pane's directory or the config directory changed. Claude
+Code then asks "Do you trust the files in this folder?". The plugin answers
+"Yes, I trust this folder" for you only if you chose so (`set auto_trust true`,
+asked during setup). Accepting lets that folder's `.claude/settings.json` hooks
+and MCP servers run without your review, so a folder holding code you did not
+write (a cloned repository, for example) could run commands as you. With
+`auto_trust` false, the default, the plugin presses nothing and notifies you
+each time a session waits at the question. A Codex folder-trust question is
+always left to you.
+
+### What the plugin checks
+
+- A tmux server is started, or talked to, only on a socket whose directory is
+  a real directory owned by you with no group or other permissions. If the
+  recorded directory fails this (on a fresh node another user can create
+  `/tmp/tmux-<uid>` first), the session is rebuilt on a socket in a new private
+  directory, and the notice gives the attach command for it.
+- Values typed into a pane's shell (session name, model, config directory,
+  session id) are quoted, and a Claude session id must be a UUID.
+- Notes and resume prompts typed into a pane have control characters removed
+  and cannot start with `/`, `!` or `#` (only the core's
+  `/open-science-context:continue-context` prompt can); a note is always
+  delivered behind the prefix `[slurm-resurrect] Message you saved for yourself
+  ...`. A `/slurm-resurrect:resurrect` prompt submitted while a script is typing
+  into the pane is not run.
+- If no Claude or Codex pane is alive after a hop, the lineage ends: the user is
+  notified, no successor is queued and the job exits. A session with no live
+  agent pane is not carried to the next job.
 
 ## Queueing
 
@@ -151,9 +195,10 @@ way and skips these steps. Details: `reference/jump-hook.md`.
 - The resume command line was checked with Claude Code 2.1.280 in a tmux pane
   (same session id, permission mode, Remote Control and session name), but not
   inside a real SLURM hop; the real-hop test uses a stand-in program.
-- If a resumed session shows the workspace trust dialog, the plugin selects
-  "Yes, I trust this folder". If it cannot select it, it presses nothing and
-  notifies you.
+- If a resumed session shows the workspace trust dialog and `auto_trust` is
+  true, the plugin selects "Yes, I trust this folder"; if it cannot select it,
+  it presses nothing and notifies you. With `auto_trust` false it presses
+  nothing and notifies you.
 - Registration is checked by process ancestry, not enforced by the operating
   system.
 - The Codex resume was checked against a stand-in `codex` (tests/slurm_resurrect/

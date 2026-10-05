@@ -108,11 +108,16 @@ question also put the longer text in its `preview`. Do not shorten the texts int
      anything else ask the user. 4a: Claude must run in tmux inside a batch job; if
      `batch_job=no` and 1c did not already write it, offer the job script of 1c (`sbatch` it
      only after a yes). 4b: ask how they start Claude; if not plain `claude`, they will run
-     `set launch_cmd <command>`. 4c, 4d with the texts; 4e is not a question. 4g: **you cannot register.**
-     Give the user the exact line to type in a Claude pane of that tmux session, e.g.
+     `set launch_cmd <command>`. 4c, 4d, 4f with the texts; 4e is not a question. 4f is
+     always asked, with "Leave it to me" as the default; never choose for the user. 4g:
+     **you cannot register or change settings.** Give the user the exact lines to type in a
+     Claude pane of that tmux session: for 4f
+     `/slurm-resurrect:resurrect set auto_trust true` ("Accept automatically") or
+     `/slurm-resurrect:resurrect set auto_trust false` ("Leave it to me"); then
      `/slurm-resurrect:resurrect register --permission-mode acceptEdits --remote-control off`
-     (the mode chosen in 4c: `acceptEdits`, `auto`, `bypassPermissions` or `manual`),
-     and tell them it shows a warning the first time and registers the second time.
+     (the limit chosen in 4c: `acceptEdits`, `auto` or `manual`; no `--permission-mode`
+     for "Keep each session's own mode"), and tell them `register` shows a warning the
+     first time and registers the second time.
 
 8. **Notifications** (if any component or extra was chosen): one single-select question,
    Notion (recommended, first), Slack or Files, texts in `explanations.md`. Files needs nothing.
