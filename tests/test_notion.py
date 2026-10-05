@@ -740,7 +740,7 @@ def test_enable_existing_project_idempotent(S):
     assert run_opsci("template", "check", proj).returncode == 0
     # the permissions in settings.json are kept
     data, _ = _hooks(proj)
-    assert "Bash(git:*)" in data["permissions"]["allow"]
+    assert "Bash(git commit *)" in data["permissions"]["allow"]
     files = [gi, proj / "AGENTS.md", proj / "CLAUDE.md", proj / ".claude" / "settings.json",
              proj / "config" / "framework.yaml"]
     snap = [f.read_text() for f in files]
