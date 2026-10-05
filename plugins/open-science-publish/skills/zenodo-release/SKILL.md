@@ -60,7 +60,9 @@ within a release the user asked for.
    Show the user the sandbox record link and the file list it printed.
 
 4. **Production: only after the user confirms, in this conversation, this version label
-   and this file list.** A general "go ahead" given earlier does not cover it. Then:
+   and this file list.** Never pass `--production` before that confirmation: the tool asks
+   nothing and publishes permanently. A general "go ahead" given earlier does not cover it.
+   Then:
 
    ```bash
    opsci zenodo release --version <label> --production

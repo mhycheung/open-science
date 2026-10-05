@@ -25,7 +25,10 @@ Options of `release`:
 - `--dry-run`: builds each tar in memory to get its checksum and size, then prints the groups,
   checksums, reuse decisions and limit checks. It makes no network call and writes no file.
 - `--production`: required for zenodo.org. Without it the tool uses sandbox.zenodo.org, and an
-  `--api-url` that points at zenodo.org is refused.
+  `--api-url` that points at zenodo.org is refused. With it the tool publishes a permanent,
+  public record with no confirmation prompt. The `zenodo-release` skill's instructions are what
+  require the user's explicit confirmation first: an agent must not pass `--production` until
+  the user has confirmed the version and file list in the conversation.
 - `--write-citation`: write the DOIs to `CITATION.cff` and to the datasets in
   `data/MANIFEST.yaml` also for a sandbox release. Production releases always do this.
   Sandbox DOIs do not resolve, so by default they are recorded only in the manifest's
