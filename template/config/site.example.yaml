@@ -1,6 +1,7 @@
 # Site settings: copy this file to config/site.local.yaml (git-ignored) and fill it in.
 # Scripts read these values; nothing site-specific is written into tracked files.
 scratch: <path to your scratch or bulk-storage directory>
+# data_roots: []              # more directories that data/ symlinks may point into (opsci zenodo)
 batch:
   scheduler: slurm            # slurm | none
   account: <allocation account>
