@@ -34,7 +34,7 @@ def test_tex_text_escapes_text_and_keeps_math():
 
 
 @pytest.mark.parametrize("math", [
-    r"\input{/etc/passwd}", r"\include{x}", r"\read16 to\x", r"\openin1=x", r"\immediate\write18{id}",
+    r"\input{secret.env}", r"\include{x}", r"\read16 to\x", r"\openin1=x", r"\immediate\write18{id}",
     r"\catcode`\@=11", r"\def\x{1}", r"\csname input\endcsname", r"\usepackage{x}",
     r"\IfFileExists{x}{}{}", r"^^5cinput{x}", r"\let\a\b", r"\expandafter\x", r"\scantokens{x}",
     r"\includegraphics{x}", r"\pdffiledump{x}", r"\newcommand\x{}",
