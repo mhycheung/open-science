@@ -40,7 +40,7 @@ Only you can register a session. From any Claude Code pane in the tmux session, 
 ```
 
 The plugin's `UserPromptSubmit` hook runs the command before the model sees the prompt. The
-first `register` only shows a warning about the two defaults below and registers nothing;
+first `register` only shows a warning about the settings below and registers nothing;
 run it again to register. The successor job is queued as soon as a session is registered.
 Codex has no such command: run `bash <plugin dir>/scripts/rr_registry.sh register` in a
 plain terminal pane of the session.
@@ -54,13 +54,35 @@ Options of `register`:
 
 | option | default | what |
 |---|---|---|
-| `--permission-mode MODE` | `bypassPermissions` | Claude Code only: permission mode of the resumed sessions (any mode `claude --permission-mode` accepts, for example `acceptEdits`) |
+| `--permission-mode MODE` | none: each pane's own mode | Claude Code only: the widest permission mode a resumed pane may get (any mode `claude --permission-mode` accepts, for example `acceptEdits`), and the mode for a pane whose own mode cannot be read |
 | `--remote-control on\|off` | `on` | Claude Code only: whether the resumed sessions can be read and driven from any device logged in to your Claude account |
 | `session ...` | the current session | register named tmux sessions instead |
 
-A resumed session runs with no one watching. In `bypassPermissions` mode it runs every
-command, including edits and deletions, without asking. Both settings are recorded per
-session and applied at every hop.
+A resumed session runs with no one watching. Each Claude pane resumes in the permission
+mode its process was started with (`--permission-mode`, or `--dangerously-skip-permissions`,
+which counts as `bypassPermissions`), or in `MODE` if that is narrower; a pane started
+without a mode flag resumes without one, so Claude Code's settings decide as before. A pane
+that ran in `bypassPermissions` therefore resumes in it unless you register with a narrower
+`--permission-mode`; in that mode it runs every command, including edits and deletions,
+without asking. A session whose registration record is missing resumes in at most `manual`,
+with Remote Control off. Both settings are recorded per session and applied at every hop.
+
+**Folder trust.** A resumed Claude session can open in a folder Claude Code has not trusted
+yet (the pane's directory or the config directory changed), and then asks whether to trust
+it. The plugin answers "Yes, I trust this folder" only with `set auto_trust true`, which
+setup asks about. Accepting lets that folder's `.claude/settings.json` hooks and MCP servers
+run without your review, so a folder with code you did not write (a cloned repository, for
+example) could run commands as you. With `auto_trust` false, the default, the plugin presses
+nothing and notifies you each time. A Codex folder-trust question is always left to you.
+
+**Other safeguards.** tmux servers are started or contacted only on a socket whose directory
+is yours alone (owned by you, no group or other permissions, not a symlink); otherwise the
+session is rebuilt on a new private socket and the notice gives the attach command. Values
+typed into a pane's shell are quoted. Notes and resume prompts typed into a pane lose their
+control characters and cannot start with `/`, `!` or `#` (except the context plugin's own
+`/open-science-context:continue-context` prompt), and a note is always delivered behind a
+fixed `[slurm-resurrect]` prefix. If no Claude or Codex pane is alive after a hop, the
+lineage ends and you are notified.
 
 ## Commands
 
@@ -83,7 +105,7 @@ Settings for `set`: `queue_mode`, `early_lead_seconds`, `handoff_timeout_seconds
 `handoff_grace_seconds`, `snapshot_interval_seconds`, `pause_threshold_seconds`,
 `winddown_threshold_seconds`, `launch_cmd`, `sbatch_extra`, `account`, `partition`,
 `default_time_limit`, `nodes`, `ntasks`, `cpus_per_task`, `context_window_suffix`,
-`core_scripts_dir`.
+`core_scripts_dir`, `auto_trust` (`true` or `false`; see "Folder trust" above).
 
 To resume with a command other than `claude` (for example a wrapper that sets the config
 directory), run `set launch_cmd <command>`; for Codex, `set codex_launch_cmd <command>`.
@@ -132,8 +154,9 @@ the plugin works the same way and skips these steps. Details:
 
 - A session started with `--plugin-dir` loses that flag on resume unless `launch_cmd`
   includes it.
-- If a resumed session shows the workspace trust dialog, the plugin selects "Yes, I trust
-  this folder". If it cannot select it, it presses nothing and notifies you.
+- If a resumed session shows the workspace trust dialog and `auto_trust` is true, the plugin
+  selects "Yes, I trust this folder"; if it cannot select it, it presses nothing and notifies
+  you. With `auto_trust` false it presses nothing and notifies you.
 - Registration is checked by process ancestry, not enforced by the operating system.
 - Further limits of the tests are listed in the plugin's `README.md`.
 
@@ -148,6 +171,6 @@ options or a missing thread identity leave a plain shell and a notice.
 Register from your own plain terminal pane using the `rr_registry.sh` commands in the
 extra's README. Codex agents cannot register a session. The core context plugin's trusted
 hooks provide thread identity; wind-down notices and wake-ups use `codex queue`.
-Codex folder-trust prompts need your response. An interrupted Codex jump is not re-driven
+Codex folder-trust prompts always need your response, whatever `auto_trust` says. An interrupted Codex jump is not re-driven
 after a hop: the thread is resumed as it was. Fake-scheduler tests and live Codex resume
 checks cover these adapters; a real SLURM hop with Codex has not been tested.

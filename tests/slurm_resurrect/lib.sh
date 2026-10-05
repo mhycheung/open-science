@@ -120,10 +120,17 @@ pane_rc() { cat "$TMP/pane.rc" 2>/dev/null || echo none; }
 # Start a fake Claude in a pane: a process named `claude` (exec'd, so it keeps
 # the pane's pid), CLAUDE_CONFIG_DIR in its environment, a sessions/<pid>.json
 # state file and a transcript naming the model. Prints the pid.
+# FAKE_CLAUDE_ARGS (e.g. "--permission-mode plan") puts those arguments on the
+# fake process's command line, where the snapshot reads the permission mode.
 fake_claude() {  # <target> <session_id> [model] [status]
   local target="$1" sid="$2" model="${3:-claude-test-model}" status="${4:-idle}" pid i
   pid=$(tmux -S "$SOCK" display-message -p -t "$target" '#{pane_pid}')
-  tmux -S "$SOCK" send-keys -t "$target" "CLAUDE_CONFIG_DIR=$TMP/cfg exec $TMP/bin/claude 3600" Enter
+  if [[ -n "${FAKE_CLAUDE_ARGS:-}" ]]; then
+    # A bash named `claude` that stays alive (no exec of sleep), with the arguments.
+    tmux -S "$SOCK" send-keys -t "$target" "CLAUDE_CONFIG_DIR=$TMP/cfg exec $TMP/bin/as/claude -c 'sleep 3600; :' claude $FAKE_CLAUDE_ARGS" Enter
+  else
+    tmux -S "$SOCK" send-keys -t "$target" "CLAUDE_CONFIG_DIR=$TMP/cfg exec $TMP/bin/claude 3600" Enter
+  fi
   for ((i=0; i<50; i++)); do
     [[ "$(ps -o comm= -p "$pid" 2>/dev/null)" == claude ]] && break; sleep 0.2
   done

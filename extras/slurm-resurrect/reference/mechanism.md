@@ -11,12 +11,13 @@
 | `rr_snapshot.sh` | Captures one tmux session as JSON. |
 | `rr_successor.sh` | Body of the successor job. |
 | `rr_rebuild.sh` | Rebuilds one tmux session from a snapshot and starts Claude in its Claude panes. |
-| `rr_deliver.sh` | After all sessions are rebuilt: trust dialogs, interrupted session jumps, notes, Remote Control check. Codex panes: notes through `codex queue`; no trust answer, no jump recovery. |
+| `rr_deliver.sh` | After all sessions are rebuilt: trust dialogs (answered only with `auto_trust` true, else left to the user with a notice), interrupted session jumps, notes, Remote Control check. Codex panes: notes through `codex queue`; no trust answer, no jump recovery. |
 
 ## One hop
 
 1. **Register.** `register` writes `registry/<job>/<session>.json` with the
-   permission mode and Remote Control setting, copies the scripts to
+   permission-mode limit (if given, `permission_mode_explicit` true) and the
+   Remote Control setting, copies the scripts to
    `<state>/scripts`, re-reads account, partition and time limit from the job,
    and starts the coordinator if none is running.
 2. **Submit.** The coordinator submits one successor job as soon as the
@@ -39,9 +40,19 @@
    runs optional hooks in `<state>/hooks/`, and exits.
 6. **Successor.** If the source job is still running (early mode), the
    successor requests the handoff, waits up to `handoff_timeout_seconds`, then
-   cancels the source. It then rebuilds each session on its own tmux socket,
-   copies the registrations to the new job, runs `rr_deliver.sh`, sends a
-   notice with the attach command, and starts the new job's coordinator.
+   cancels the source. It then rebuilds each session on its own tmux socket
+   (or, if that socket's directory is not private to the user, on a socket in a
+   new `mktemp -d` directory, with a notice), copies the registrations to the
+   new job, runs `rr_deliver.sh`, and checks that a Claude or Codex process is
+   alive in each session. A session with none is not carried further; if no
+   session has one, it notifies the user and exits without a coordinator, so
+   the lineage ends. Otherwise it sends a notice with the attach command and
+   starts the new job's coordinator.
+
+Every script checks a tmux socket before using it (`rr_sock_ok` in
+`rr_common.sh`): its directory must be a real directory owned by the user with
+no group or other permissions, and an existing socket must be a socket owned by
+the user. tmux itself does not check this for `-S` paths.
 
 The hop counter rises by one at each submission (and falls back if the
 successor is cancelled). At `max_resurrections` (default 10) no successor is
@@ -76,12 +87,23 @@ In each Claude pane of the rebuilt session:
 ```
 [CLAUDE_CONFIG_DIR=<original value>] [CLAUDE_CODE_SESSION_NAME=<name>] \
   <launch_cmd> [--model M] --resume <session id> \
-  --permission-mode <mode> [--remote-control]
+  [--permission-mode <mode>] [--allow-dangerously-skip-permissions] [--remote-control]
 ```
 
 `CLAUDE_CONFIG_DIR` is set only if the original process had it set. The
 session name and `--remote-control` are added only when Remote Control is on.
-`launch_cmd` defaults to `claude`.
+`launch_cmd` defaults to `claude`. Every value is quoted with `printf %q`, and
+the session id must be a UUID (otherwise the pane is left a shell and marked
+`unresumable`).
+
+`<mode>` is the mode the pane's process was started with, read by the snapshot
+from its argv (`--permission-mode`, `--dangerously-skip-permissions` =
+`bypassPermissions`; with several, the narrowest), lowered to the registered
+`--permission-mode` if that is narrower. No mode flag on the process: none on
+resume. Argv unreadable: the registered mode if the user chose one, else none.
+No registry record: at most `manual`, Remote Control off.
+`--allow-dangerously-skip-permissions` is carried only if the process had it and
+the registered limit allows `bypassPermissions`.
 
 In each resumable Codex pane:
 

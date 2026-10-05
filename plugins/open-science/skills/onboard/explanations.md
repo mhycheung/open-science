@@ -254,21 +254,41 @@ your explicit yes. Do you want to be able to archive project data there?"
 
 ## Branch 4 — SLURM time limits (optional extra)
 
-**4c — permission mode of resumed sessions**
-- **Ask before edits (acceptEdits)**: the resumed agent may edit files but asks before
-  running other commands. Safer, but it stops and waits when nobody is watching.
-- **Automatic checks (auto)**: before each action runs, a separate automatic check decides
-  whether it is safe. Ordinary work goes ahead without asking; actions that look risky are
-  blocked and the agent looks for another way. A middle ground for unattended work. It may
-  not be available on every Claude plan; if Claude Code refuses it, pick another mode.
-- **Run everything (bypassPermissions, the default)**: the resumed agent runs every command
-  without asking, including deleting files. Needed for work that must continue unattended.
-- **Ask for everything (manual)**: safest, but an unattended session will mostly wait.
+**4c — permission mode of resumed sessions**: "Each resumed session continues in the
+permission mode it was started with; it never gets a wider one. You can also set a limit:
+no resumed session then runs in a mode wider than the limit, and a session whose mode
+cannot be read uses the limit."
+- **Keep each session's own mode (the default)**: no limit. A session you started with
+  `--permission-mode bypassPermissions` or `--dangerously-skip-permissions` continues to run
+  every command without asking, including deleting files, with nobody watching. A session
+  whose mode cannot be read starts without a mode flag, so your Claude Code settings decide.
+- **At most ask before edits (acceptEdits)**: the resumed agent may edit files but asks
+  before running other commands. Safer, but it stops and waits when nobody is watching.
+- **At most automatic checks (auto)**: before each action runs, a separate automatic check
+  decides whether it is safe. Ordinary work goes ahead without asking; actions that look
+  risky are blocked and the agent looks for another way. A middle ground for unattended
+  work. It may not be available on every Claude plan; if Claude Code refuses it, pick
+  another mode.
+- **At most ask for everything (manual)**: safest, but an unattended session will mostly
+  wait.
 
 **4d — Remote Control**
 - **On (default)**: you can watch and steer the resumed sessions from the Claude app on your
   phone or another computer, logged in to your account.
 - **Off**: the resumed sessions can only be reached from the cluster.
+
+**4f — folder trust**: "A resumed session can open in a folder that Claude Code has not
+trusted yet, for example when the pane's folder or the Claude config folder changed. Claude
+Code then asks whether you trust the folder, and the session waits until someone answers.
+The plugin can answer 'Yes, I trust this folder' for you. That lets the folder's
+`.claude/settings.json` hooks and MCP servers run without your review: if the folder holds
+code you did not write, for example a repository you cloned, that code could run commands
+as you. Should the plugin answer for you?" (For Codex panes the plugin never answers: the
+question is always left to you.)
+- **Leave it to me (the default)**: the plugin presses nothing and sends you a notice each
+  time a resumed session waits at the question; you attach and answer it.
+- **Accept automatically**: the plugin selects "Yes, I trust this folder" for you. Choose this
+  only if your sessions work in folders whose contents you trust.
 
 **4e — queueing** (no question): the next job is queued to start when the current one ends
 (the default, `queue_mode afterany`). Set nothing. List it in the summary with the way to

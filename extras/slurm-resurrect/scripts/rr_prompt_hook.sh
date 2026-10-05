@@ -9,6 +9,9 @@
 # accepted from inside a Claude session. Any other prompt: exit 0, no output,
 # nothing done.
 #
+# A prompt submitted while a script holds the pane's injection lock (the plugin or
+# the core typing a note or resume prompt) is blocked: it is not the user's.
+#
 # Output:
 #   * first use of `register`: the prompt is BLOCKED and the first-use warning is
 #     shown to the user as the block reason (the model never sees it, so it
@@ -25,6 +28,21 @@ re='^/slurm-resurrect:resurrect([[:space:]]|$)'
 [[ "$PROMPT" =~ $re ]] || exit 0
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Text the scripts type into this pane is not the user's. Every script that types
+# into a pane holds the pane's injection lock while it types and presses Enter
+# (rr_common.sh rr_pane_lock); a prompt submitted while that lock is held came from
+# a script, so it is not run. (Delivered text also never starts with `/`, see
+# rr_safe_text; this is the second check.)
+if [[ -n "${TMUX:-}" && -n "${TMUX_PANE:-}" ]] && command -v flock >/dev/null 2>&1; then
+  source "$HERE/rr_common.sh"
+  LOCKF="$RR_OS_STATE/lock/$(rr_os_key "${TMUX%%,*}" "$TMUX_PANE").lock"
+  if [[ -f "$LOCKF" ]] && ! ( exec 9<"$LOCKF"; flock -n 9 ); then
+    jq -n --arg r "slurm-resurrect: this prompt arrived while the plugin was typing into this pane, so it was not run as a /slurm-resurrect:resurrect command. Type the command again yourself." \
+      '{decision:"block", reason:$r}'
+    exit 0
+  fi
+fi
 ARGS="${PROMPT#/slurm-resurrect:resurrect}"
 ARGS="${ARGS#"${ARGS%%[![:space:]]*}"}"            # trim leading space
 ARGS=$(printf '%s' "$ARGS" | tr '\n' ' ')
