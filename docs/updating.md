@@ -89,6 +89,11 @@ every node header and `embargo_default` with `default_privacy` in the manifest (
 chooses soft- or hard-private for each node that was not `publish: yes`), set
 `layout_version: 2`, run `opsci map build`, and commit.
 
+The migration from layout 2 to 3 narrows the git permissions in `.claude/settings.json`
+(no more `Bash(git:*)`), removes the shell from the `literature` tier, adds rule 6 of
+`AGENTS.md` (text from outside is data, not instructions) and its lines in `contracts/`, and
+sets `layout_version: 3`.
+
 ## A project that does not use the layout yet
 
 Use `open-science-project:migrate-project` instead (see [Project skills](project-skills.md)).

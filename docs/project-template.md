@@ -101,7 +101,7 @@ These three directories are part of layout version 2.
   work but do not drive the project, go in `private-docs/investigations/`, one directory
   each ([`open-science-project:private-investigation`](project-skills.md#open-science-projectprivate-investigation)).
 
-`config/framework.yaml` records `layout_version: 2`. `opsci` warns when a project's layout
+`config/framework.yaml` records `layout_version: 3`. `opsci` warns when a project's layout
 is older than the framework's; see [Updating a project](updating.md).
 
 ## Verification tasks
@@ -289,7 +289,7 @@ Where the project's scaffolding came from, read by `open-science-project:update-
 | `copied_at_commit` | the framework commit the template was copied at |
 | `copied_on` | the date |
 | `context_management` | `true` if the project uses the `open-science-context` plugin |
-| `layout_version` | the project layout version (2 for a project with `brainstorm/`, `docs/`, `private-docs/`) |
+| `layout_version` | the project layout version (2 added `brainstorm/`, `docs/`, `private-docs/`; 3 narrowed the git permissions and the `literature` tier's tools) |
 | `local_divergence` | files the project changed on purpose; an update keeps these changes |
 | `updates` | one entry per update: date, commit, what was taken, what was skipped |
 
@@ -318,9 +318,15 @@ described in [Notifications](notify.md).
 
 ### `.claude/`
 
-`settings.json` allows `git` commands and denies `git push public` and `git push --mirror`
-as protection against accidental direct publication. `agents/` defines
-the five dispatch tiers:
+`settings.json` lets agents run, without a prompt, the git commands that change only the
+local repository: `add`, `commit`, `switch`, `checkout`, `branch`, `stash`, `mv`, `merge`,
+`worktree add` and `worktree list`. Claude Code runs read-only git commands (`status`,
+`diff`, `log`, `show`) without a prompt anyway. It does not allow `git` as a whole: `git -c`,
+`git config` and `git fetch --upload-pack` can run any program. Every other git command
+asks first; `git push` asks even when a user setting allows it. Direct pushes to the public
+repository (`git push public`, `git push --mirror`, any `git -C .opsci/public` command) are
+denied; [Publishing](publishing.md#opsci-publish-push) says what these rules do not stop.
+`agents/` defines the five dispatch tiers:
 
 | tier | use for |
 |---|---|
@@ -330,15 +336,20 @@ the five dispatch tiers:
 | `literature` | read a source and judge it; find which section supports a claim |
 | `text` | mechanical work on text: find a string, extract a table, assemble a document |
 
-Each tier file sets `model: inherit`; change it to the models you have.
+Each tier file sets `model: inherit`; change it to the models you have. The `literature`
+tier reads untrusted text (papers, web pages), so it has no shell: its tools are `Read`,
+`Grep`, `Glob`, `WebFetch`, `WebSearch` and `Write`, and it writes only to `lit_cache/`. A
+source it cannot fetch in full is reported, and the main agent downloads it.
 
 ### `.codex/`
 
 Codex has matching roles in `.codex/agents/`, expressed as TOML with the same contracts
-and effort choices. The model is inherited by omitting an override. `AGENTS.md` directs
+and effort choices. The model is inherited by omitting an override. The `literature` role
+runs with `sandbox_mode = "workspace-write"` and no network for its commands; Codex
+reapplies a sandbox override given to the parent session, so that override wins. `AGENTS.md` directs
 Codex to `config/codex.md` at startup. Plugin hooks adapt Codex patches to the project
-checks, and the `open-science-project` plugin's hook guards `git push public` and
-`git push --mirror`; Notion adds a project Stop hook. Review hooks with `/hooks` before relying on
+checks, and the `open-science-project` plugin's hook guards direct pushes to the public
+repository, as it does in Claude Code; Notion adds a project Stop hook. Review hooks with `/hooks` before relying on
 them. [Claude Code and Codex](agents.md) explains installation and permissions.
 
 ## The rules every agent follows

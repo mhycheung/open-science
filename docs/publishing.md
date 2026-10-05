@@ -325,10 +325,24 @@ git-ignored) with the export, keeping `.github/`; writes the site workflow
 `main`. Then it writes the private and public commits, the date and the export id to
 `publish/LAST_PUBLISHED` and commits that file in the private repository.
 
-The project's `.claude/settings.json` denies `git push public` and `git push --mirror`.
-A Codex plugin hook of `open-science-project`, once trusted, guards those direct commands too. These checks prevent
-accidental direct publication; they are not a complete boundary against arbitrary shell
-programs. Both agents must use the publication skill and its approved export. Agent
+Two layers stop an agent from pushing to the public repository by mistake.
+
+- **Claude Code permissions.** The project's `.claude/settings.json` denies `git push public`,
+  `git push --mirror` (also after `git -C <dir>`) and every `git -C .opsci/public` command,
+  and asks before any other `git push`. These rules match the command text from its start:
+  they do not match `git -c x=y push`, `cd .opsci/public && git push`, a push by URL, a git
+  alias, or a push inside `sh -c` or a script. Claude Code's own rule makes a `cd` into
+  another directory followed by `git` prompt.
+- **The `open-science-project` plugin's hook** (Claude Code and Codex; in Codex once
+  trusted with `/hooks`) reads each Bash command and refuses a push to the public remote,
+  `--mirror`, a push run in or aimed at `.opsci/public` (by `cd`, `-C`, `--git-dir` or
+  `GIT_DIR`), a push to the public repository's URL (from `public_repo:`, the `public`
+  remote or the checkout's `origin`), and the same commands inside `sh -c`, `bash -c` or
+  `eval`. It does not follow git aliases, scripts, variables or programs other than git.
+
+These checks prevent accidental direct publication; they are not a security boundary
+against an agent that runs arbitrary programs. Both agents must use the publication skill
+and its approved export. Agent
 commits carry `Agent: claude` or `Agent: codex`; unmarked commits cannot reliably be
 distinguished from human commits by the attribution check.
 

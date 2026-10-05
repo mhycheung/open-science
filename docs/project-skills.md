@@ -180,20 +180,22 @@ project was copied from, applied by hand, never a re-copy. See
 
 ## Hooks
 
-The Claude Code plugin installs two hooks. Both act only inside a project made from the template (a
-directory holding both `AGENTS.md` and `config/framework.yaml`); without `jq`, the line-cap
-hook does nothing and the guard checks every edit.
+The Claude Code plugin installs three hooks. All act only inside a project made from the
+template (a directory holding both `AGENTS.md` and `config/framework.yaml`). Without `jq`,
+the line-cap hook does nothing; without `python3`, the human-verified guard falls back to a
+stricter text search of the whole request and the push guard does nothing.
 
 | hook | when | what it does |
 |---|---|---|
 | line cap | after an agent's Edit or Write | when a `context.md` is over 200 lines or `map/README.md` over 150, reports it to the agent as an error with the instruction to prune it now; after a task context edit it reminds the agent of the four questions. Needs `jq` |
-| human-verified guard | before an agent's Edit or Write | refuses an edit whose new content sets `verification: human-verified` |
+| human-verified guard | before an agent's Edit, Write or NotebookEdit | refuses an edit after which the file sets `verification: human-verified` more often than before, in any YAML spelling (quotes, escapes, tags, block scalars, anchors); paths are resolved through symlinks. Needs `python3`; PyYAML, if installed, adds a parse of the front matter |
+| public push guard | before an agent's Bash command | refuses a direct push to the public repository (see [Publishing](publishing.md#opsci-publish-push)). Needs `python3` |
 
-Bash commands are not checked by the guard. The publish check is the second line: it refuses
-a `human-verified` node whose `verification:` line was last changed in an agent's commit.
+Both guard against mistakes; they are not security boundaries. Bash commands are not
+checked by the human-verified guard. The publish check is the second line: it refuses a
+`human-verified` node whose `verification:` line was last changed in an agent's commit.
 
 Codex uses separate adapters for `apply_patch`, including patches touching several files.
-They enforce the same human-verification and line-cap rules. A Bash hook also guards
-accidental `git push public` and `git push --mirror`. Trust the definitions using `/hooks`.
+They enforce the same human-verification and line-cap rules, and the same public push guard. Trust the definitions using `/hooks`.
 Shell/custom-tool edits can bypass file checks; run `opsci context check` and publication
 checks as well. Every agent commit includes `Agent: claude` or `Agent: codex`.
