@@ -34,9 +34,10 @@ INTERVAL="${RR_COORD_INTERVAL:-5}"
 export RR_SELFREG_DIR="$RR_REG_ROOT/$JOB_ID/panes"
 
 LOCK="$RR_LOCK_DIR/coordinator_${JOB_ID}.lock"
-exec {LFD}>"$LOCK"
+LOCK=$(rr_lock_file "$LOCK")
+exec {LFD}<>"$LOCK"
 if ! flock -n "$LFD"; then rr_log "another coordinator holds the lock; exiting"; exit 0; fi
-MARK="$RR_LOCK_DIR/coordinator_${JOB_ID}.running"; touch "$MARK"
+MARK="$RR_LOCK_DIR/coordinator_${JOB_ID}.running"; rr_nolink "$MARK"; touch "$MARK"
 trap 'rm -f "$MARK"' EXIT
 
 # Re-snapshot every registered tmux session in this job into its snapshot dir.
@@ -104,7 +105,7 @@ winddown_nudge() {
           target="$name:$widx.$pidx"
           lock=$(rr_pane_lock "$sock" "$target")
           (
-            exec 9>"$lock"
+            exec 9<>"$lock"
             if ! flock -w 120 9; then
               rr_log "wind-down nudge SKIPPED for $target -- pane lock busy 120s (a jump worker holds it)"
               exit 0
@@ -143,7 +144,7 @@ generate_successor_script() {
     echo ""
     echo "export RR_STATE_DIR=\"$RR_HOME\""
     echo "exec bash \"\$RR_STATE_DIR/scripts/rr_successor.sh\" $JOB_ID"
-  } > "$script"
+  } | rr_write "$script"
   chmod +x "$script"; echo "$script"
 }
 
@@ -202,7 +203,7 @@ handoff() {
     sleep "$grace"
   fi
   snapshot_registered
-  date -Iseconds > "$RR_HOME/handoff_${JOB_ID}.done"
+  date -Iseconds | rr_write "$RR_HOME/handoff_${JOB_ID}.done"
   rr_notify "Job ${JOB_ID}: handed off to successor ${who:-?}, which started early; it will end this job and rebuild $(rr_reg_count "$JOB_ID") tmux session(s)."
   run_pause_hooks
   rr_log "coordinator exiting after handoff"; exit 0
@@ -285,7 +286,7 @@ while true; do
   # Wind-down nudge: once, when we cross the (earlier) wind-down threshold but are
   # still above the final pause threshold. Active panes only; idle panes untouched.
   if [[ $left_s -le $wd && $left_s -gt $th && ! -f "$RR_HOME/winddown_${JOB_ID}" && $n -gt 0 ]]; then
-    touch "$RR_HOME/winddown_${JOB_ID}"
+    rr_nolink "$RR_HOME/winddown_${JOB_ID}"; touch "$RR_HOME/winddown_${JOB_ID}"
     inhibit_jumps
     rr_log "wind-down threshold reached (${left_s}s <= ${wd}s); nudging active panes"
     winddown_nudge "$(( left_s / 60 ))"
@@ -302,7 +303,7 @@ while true; do
 
   if [[ $left_s -le $th ]]; then
     rr_log "pause threshold reached"
-    touch "$RR_HOME/paused_${JOB_ID}"
+    rr_nolink "$RR_HOME/paused_${JOB_ID}"; touch "$RR_HOME/paused_${JOB_ID}"
     inhibit_jumps
 
     # Authoritative snapshot: capture final layout + live idle/busy status of

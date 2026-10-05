@@ -146,4 +146,49 @@ rr_sock_ok "$TMP/private/notasock" 2>/dev/null && bad "a regular file must be re
 rr_sock_ok "$TMP/private/s" && ok "control: private dir accepted" || bad "private dir must be accepted" "refused"
 rr_sock_ok "$SOCK" && ok "control: the test's own live socket accepted" || bad "live socket must be accepted" "refused"
 
+echo "== 7. a symlink at a state or lock path is replaced, its target never written =="
+# A sandboxed agent that can write the state directory could plant links there; a
+# `>`-opened lock or state file would then truncate or overwrite the link's target.
+VICTIM="$TMP/victim"; vic() { printf 'precious' > "$VICTIM"; }
+intact() { check "$1: the link's target is untouched" "$(cat "$VICTIM")" "precious"
+           [[ ! -L "$2" ]] && ok "$1: the link was replaced" || bad "$1: link still there" "$2"; }
+# pane lock, opened by rr_deliver.sh (trust step) and the coordinator's nudge
+LOCKF=$(rr_pane_lock "$SOCK" "$PANE"); vic; rm -f "$LOCKF"; ln -s "$VICTIM" "$LOCKF"
+tmux -S "$SOCK" new-window -d -t work:7 "printf 'Do you trust this folder?\n'; sleep 30"
+LOCKF7=$(rr_pane_lock "$SOCK" work:7); rm -f "$LOCKF7"; ln -s "$VICTIM" "$LOCKF7"
+jq -nc --arg s "$SOCK" '{socket:$s, target:"work:7", status:"idle", session_id:"x", note:"", jump:null}' > "$TMP/m7.jsonl"
+echo '{"auto_trust": true}' | rr_write "$RR_STATE_DIR/rr_config.json"
+out=$(RR_BOOT_WAIT=0 RR_SETTLE_WAIT=0 RR_TRUST_KEY_WAIT=0.1 bash "$SCRIPTS/rr_deliver.sh" "$TMP/m7.jsonl" 2>&1)
+has "rr_deliver took the pane lock for the trust dialog" "$out" "trust this folder"
+intact "pane lock (rr_deliver)" "$LOCKF7"
+rr_lock_file "$LOCKF" >/dev/null; intact "pane lock (rr_pane_lock)" "$LOCKF"
+# coordinator lock and marker
+LK="$RR_STATE_DIR/locks/coordinator_77.lock"; mkdir -p "$RR_STATE_DIR/locks"; vic; ln -sf "$VICTIM" "$LK"
+ln -sf "$VICTIM" "$RR_STATE_DIR/locks/coordinator_77.running"
+job 77 RUNNING 0:00:01 1:00:00
+timeout 20 bash "$SCRIPTS/rr_coordinator.sh" 77 >/dev/null 2>&1
+intact "coordinator lock" "$LK"
+intact "coordinator marker" "$RR_STATE_DIR/locks/coordinator_77.running"
+# notification log (appended)
+vic; rm -f "$RR_STATE_DIR/notifications.log"; ln -s "$VICTIM" "$RR_STATE_DIR/notifications.log"
+rr_notify "test message"
+intact "notifications.log" "$RR_STATE_DIR/notifications.log"
+has "the message went to the real log" "$(cat "$RR_STATE_DIR/notifications.log")" "test message"
+# config (rewritten by set); the link points at a JSON file the user cares about
+CFG="$RR_STATE_DIR/rr_config.json"; JV="$TMP/victim.json"
+echo '{"queue_mode":"afterany","mine":1}' > "$JV"; rm -f "$CFG"; ln -s "$JV" "$CFG"
+in_pane work:0.0 "RR_STATE_DIR='$RR_STATE_DIR' bash $RR set queue_mode early" >/dev/null
+check "config: the link's target is untouched" "$(jq -c . "$JV")" '{"queue_mode":"afterany","mine":1}'
+[[ ! -L "$CFG" ]] && ok "config: the link was replaced" || bad "config: link still there" "$CFG"
+check "config: the setting went to the real config" "$(jq -r .queue_mode "$CFG")" "early"
+# a pane's note
+NOTE="$RR_STATE_DIR/registry/424242/notes/$(printf '%s' "$PANE" | tr -c 'A-Za-z0-9._-' '_').txt"
+mkdir -p "$(dirname "$NOTE")"; vic; rm -f "$NOTE"; ln -s "$VICTIM" "$NOTE"
+CLAUDECODE=1 TMUX="$TMUXVAL" TMUX_PANE="$PANE" bash "$RR" note "the next step" >/dev/null 2>&1
+intact "note" "$NOTE"
+check "the note was written to its own file" "$(cat "$NOTE")" "the next step"
+# control: rr_write writes a normal file and refuses empty input
+printf 'x' | rr_write "$TMP/plain" && check "control: rr_write writes a file" "$(cat "$TMP/plain")" "x"
+: | rr_write "$TMP/plain"; check "rr_write keeps the file on empty input" "$(cat "$TMP/plain")" "x"
+
 finish

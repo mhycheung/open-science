@@ -21,6 +21,31 @@ RR_STABLE_SCRIPTS="$RR_HOME/scripts"
 
 rr_log() { echo "[$(date -Iseconds)] $*" >&2; }
 
+# --- writing state and lock files -------------------------------------------------
+# A redirection (`>`, `>>`, `exec 9>`, `touch`) follows a symbolic link: a link planted
+# at a state or lock path (for example by a sandboxed agent that can write the state
+# directory) would make these scripts truncate or write the file it points to, as the
+# user. So no state or lock file is opened through a link:
+#   * rr_write: whole files are written to a temp file in the same directory and
+#     renamed over the path (a rename replaces a link, it never follows it);
+#   * rr_nolink: before appending to a log, touching a marker or opening a lock, a
+#     link at the path is removed;
+#   * locks are opened with `exec N<>` (read-write, no truncation) after rr_nolink.
+# Same rule as the open-science-context plugin's cm_lib.sh (cm_lock_path).
+rr_nolink() { local f; for f in "$@"; do [[ -L "$f" ]] && rm -f -- "$f"; done; return 0; }
+rr_write() {  # <file>: stdin -> file, atomically, never through a link
+  # Empty input is refused and leaves the file as it was: a failed `jq ... | rr_write`
+  # must not blank a config or record.
+  local f="$1" t
+  t=$(mktemp "$(dirname -- "$f")/.rr_write.XXXXXX") || return 1
+  if cat > "$t" && [[ -s "$t" ]] && mv -f -- "$t" "$f"; then return 0; fi
+  rm -f -- "$t"; return 1
+}
+rr_lock_file() {  # <path> -> the path, with any link there removed; open it with exec N<>
+  mkdir -p -- "$(dirname -- "$1")" 2>/dev/null
+  rr_nolink "$1"; printf '%s' "$1"
+}
+
 rr_ensure_dirs() { mkdir -p "$RR_HOME" "$RR_REG_ROOT" "$RR_LOCK_DIR" "$RR_HOOK_DIR"; }
 
 # Copy the scripts to $RR_HOME/scripts, so queued successor jobs and the
@@ -79,7 +104,7 @@ rr_ensure_config() {
         winddown_threshold_seconds:$wd, context_window_suffix:{},
         core_scripts_dir:"",
         notify_cmd:(if $notify=="" then null else $notify end),
-        job_lineage:[], pending_resurrection_jobid:null}' > "$RR_CONFIG"
+        job_lineage:[], pending_resurrection_jobid:null}' | rr_write "$RR_CONFIG"
     rr_log "created $RR_CONFIG"
     rr_refresh_job_meta
   fi
@@ -91,7 +116,7 @@ rr_ensure_config() {
 rr_refresh_job_meta() {
   rr_detect_job_meta
   [[ -n "${SLURM_JOB_ID:-}" || -n "${RR_ACCOUNT:-}${RR_PARTITION:-}" ]] || return 0
-  local tmp; tmp=$(mktemp)
+  local tmp; tmp=$(mktemp "$RR_HOME/.cfg.XXXXXX") || return 1
   jq --arg a "${RR_ACCOUNT:-$RR_DET_ACCOUNT}" --arg p "${RR_PARTITION:-$RR_DET_PART}" \
      --arg tl "${RR_TIME_LIMIT:-${RR_DET_TL:-}}" \
      --arg n "${RR_NODES:-${RR_DET_NODES:-}}" --arg t "${RR_NTASKS:-${RR_DET_NTASKS:-}}" \
@@ -106,7 +131,7 @@ rr_refresh_job_meta() {
 }
 
 rr_cfg_get() { jq -r "$1" "$RR_CONFIG"; }
-rr_cfg_set() { local tmp; tmp=$(mktemp); jq "$1" "$RR_CONFIG" > "$tmp" && mv "$tmp" "$RR_CONFIG"; }
+rr_cfg_set() { local tmp; tmp=$(mktemp "$RR_HOME/.cfg.XXXXXX") || return 1; jq "$1" "$RR_CONFIG" > "$tmp" && mv -f "$tmp" "$RR_CONFIG" || rm -f "$tmp"; }
 
 rr_parse_time_to_seconds() {
   local t="$1" days=0
@@ -299,7 +324,7 @@ rr_caller_is_agent() {
 rr_require_user() {  # <what> -> 0 if the caller is the user, else 3 (refused)
   local what="$1"
   rr_caller_is_agent || return 0
-  mkdir -p "$RR_HOME" 2>/dev/null
+  mkdir -p "$RR_HOME" 2>/dev/null; rr_nolink "$RR_HOME/refused.log"
   echo "[$(date -Iseconds)] REFUSED '$what' from an agent (pid $$, job ${SLURM_JOB_ID:-none}, pane ${TMUX_PANE:-none})" \
     >> "$RR_HOME/refused.log" 2>/dev/null
   cat >&2 <<MSG
@@ -419,7 +444,7 @@ rr_pane_cache_put() {  # <pane_id> <session_id> <config_dir>
   mkdir -p "$dir" 2>/dev/null || return 0
   jq -n --arg sid "$sid" --arg cdir "$cdir" --arg pid "$paneid" \
     '{session_id:$sid, config_dir:$cdir, pane_id:$pid, cached_at:(now|todate)}' \
-    > "$f" 2>/dev/null || true
+    | rr_write "$f" 2>/dev/null || true
   return 0
 }
 
@@ -540,7 +565,7 @@ rr_pane_cache_put_codex() {  # <pane_id> <thread_id> <codex_home> <model>
   mkdir -p "$dir" 2>/dev/null || return 0
   jq -n --arg sid "$2" --arg h "${3:-}" --arg m "${4:-}" --arg pid "$paneid" \
     '{runtime:"codex", session_id:$sid, codex_home:$h, model:$m, pane_id:$pid, cached_at:(now|todate)}' \
-    > "$f" 2>/dev/null || true
+    | rr_write "$f" 2>/dev/null || true
 }
 rr_pane_cache_get_codex() {  # <pane_id> -> "thread_id|model", or empty
   local paneid="${1:-}" dir="${RR_SELFREG_DIR:-}" f
@@ -625,8 +650,7 @@ rr_pane_lock() {  # <sock> <target> -> lock file path
   local sock="${1:-}" target="${2:-}" paneid
   paneid=$(tmux -S "$sock" display-message -p -t "$target" '#{pane_id}' 2>/dev/null)
   [[ -n "$paneid" ]] || paneid="$target"
-  mkdir -p "$RR_OS_STATE/lock" 2>/dev/null || true
-  printf '%s/lock/%s.lock' "$RR_OS_STATE" "$(rr_os_key "$sock" "$paneid")"
+  rr_lock_file "$RR_OS_STATE/lock/$(rr_os_key "$sock" "$paneid").lock"
 }
 
 # --- verified prompt delivery ------------------------------------------------
@@ -1121,7 +1145,7 @@ rr_inhibit_panes() {  # <job> <message>
     while IFS=$'\t' read -r ppid paneid; do
       rr_resolve_claude "$ppid" "$paneid" >/dev/null || rr_codex_pid "$ppid" >/dev/null || continue
       p="$RR_OS_STATE/inhibit_jump_$(rr_os_key "$sock" "$paneid")"
-      printf '%s\n' "$msg" > "$p" && echo "$p" >> "$list"
+      rr_nolink "$list"; printf '%s\n' "$msg" | rr_write "$p" && echo "$p" >> "$list"
     done < <(tmux -S "$sock" list-panes -s -t "$name" -F $'#{pane_pid}\t#{pane_id}' 2>/dev/null)
   done
   shopt -u nullglob
@@ -1151,6 +1175,7 @@ rr_inhibit_sweep() {  # [job to keep]
 # (set it with `rr_registry.sh set-notify '<cmd>'`). Never fails the caller.
 rr_notify() {
   local msg="$1"
+  rr_nolink "$RR_HOME/notifications.log"
   echo "[$(date -Iseconds)] $msg" >> "$RR_HOME/notifications.log"
   local cmd; cmd=$(jq -r '.notify_cmd // empty' "$RR_CONFIG" 2>/dev/null)
   if [[ -n "$cmd" ]]; then

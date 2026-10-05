@@ -140,6 +140,10 @@ Run from the project root, on a branch, with `FW` a framework checkout at this r
     `/open-science-context:continue-context` prompt; notes always go behind a
     `[slurm-resurrect]` prefix. The prompt hook does not run a `/slurm-resurrect:resurrect`
     command submitted while a script holds the pane's typing lock.
+  - State and lock files are never opened through a symbolic link (a link planted in the
+    state directory made `exec 9>` truncate its target): records and the config are
+    written to a temporary file and renamed, a link at a log, marker or lock path is
+    removed first, and locks are opened with `exec 9<>`, as in the context plugin (#8).
   - If no Claude or Codex pane is alive after a hop, the lineage ends with a notice instead
     of holding the allocation and queueing another job; a session with no live agent pane
     is not carried to the next job.

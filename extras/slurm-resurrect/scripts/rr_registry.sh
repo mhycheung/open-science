@@ -46,12 +46,13 @@ prune_stale() {
 # --- elect a single coordinator for this job via flock -----------------------
 ensure_coordinator() {
   local job="$1" fd
-  local lock="$RR_LOCK_DIR/coordinator_${job}.lock"
-  exec {fd}>"$lock"
+  local lock; lock=$(rr_lock_file "$RR_LOCK_DIR/coordinator_${job}.lock")
+  exec {fd}<>"$lock"
   if flock -n "$fd"; then
     flock -u "$fd"; exec {fd}>&-
     if [[ ! -f "$RR_LOCK_DIR/coordinator_${job}.running" ]]; then
       rr_log "electing coordinator for job $job"
+      rr_nolink "$RR_HOME/coordinator_${job}.log"
       setsid nohup bash "$RR_STABLE_SCRIPTS/rr_coordinator.sh" "$job" \
         >> "$RR_HOME/coordinator_${job}.log" 2>&1 < /dev/null &
     fi
@@ -127,7 +128,7 @@ cmd_register() {
   rr_ensure_dirs
   if [[ ! -f "$RR_HOME/warning_shown" ]]; then
     first_use_warning
-    date -Iseconds > "$RR_HOME/warning_shown"
+    date -Iseconds | rr_write "$RR_HOME/warning_shown"
     return 4
   fi
 
@@ -155,7 +156,7 @@ cmd_register() {
       '{tmux_session:$s, tmux_socket:$sock, sanitized:$san,
         registered_in_job:$job, registered_at:(now|todate), registered_via:$via,
         permission_mode:(if $perm == "" then null else $perm end),
-        permission_mode_explicit:$ex, remote_control:$rc}' > "$dir/$san.json"
+        permission_mode_explicit:$ex, remote_control:$rc}' | rr_write "$dir/$san.json"
     RR_SELFREG_DIR="$dir/panes" bash "$RR_SCRIPTS_DIR/rr_snapshot.sh" "$sock" "$s" "$dir/snapshot/$san.json" \
       || rr_log "registered '$s' but initial snapshot failed"
     echo "registered tmux session '$s' in job $SLURM_JOB_ID (permission mode: $([[ -n $perm ]] && echo "each pane's own, at most $perm" || echo "each pane's own"), remote control $([[ $rc == true ]] && echo on || echo off)); it will be resurrected (all windows/panes/Claude sessions)."
@@ -202,13 +203,13 @@ cmd_note() {
   [[ $# -gt 0 ]] || { echo "usage: note \"<what to do next>\"" >&2; return 2; }
   if [[ -n "${TMUX_PANE:-}" && -n "${SLURM_JOB_ID:-}" ]]; then
     local dir="$RR_REG_ROOT/$SLURM_JOB_ID/notes"; mkdir -p "$dir"
-    printf '%s' "$*" > "$dir/$(sanitize "$TMUX_PANE").txt"
+    printf '%s' "$*" | rr_write "$dir/$(sanitize "$TMUX_PANE").txt"
     echo "self-message saved for this pane; it will be delivered after resurrection."
   else
     local sid="${CLAUDE_CODE_SESSION_ID:-${CODEX_THREAD_ID:-}}"
     : "${sid:?not set -- run inside a Claude Code or Codex session in tmux}"
     mkdir -p "$RR_HOME/notes"
-    printf '%s' "$*" > "$RR_HOME/notes/${sid}.txt"
+    printf '%s' "$*" | rr_write "$RR_HOME/notes/${sid}.txt"
     echo "self-message saved; it will be delivered after resurrection."
   fi
 }
@@ -279,8 +280,7 @@ cmd_reset() {
 cmd_set_notify() {
   rr_require_user "set-notify" || return 3
   rr_ensure_config
-  local tmp; tmp=$(mktemp)
-  jq --arg c "$*" '.notify_cmd=(if $c=="" then null else $c end)' "$RR_CONFIG" > "$tmp" && mv "$tmp" "$RR_CONFIG"
+  jq --arg c "$*" '.notify_cmd=(if $c=="" then null else $c end)' "$RR_CONFIG" | rr_write "$RR_CONFIG"
   echo "notify_cmd set."
 }
 
@@ -313,9 +313,9 @@ cmd_set() {
       rr_cfg_set ".auto_trust=$val" ;;
     context_window_suffix)
       jq -e 'type=="object"' <<<"$val" >/dev/null 2>&1 || { echo "context_window_suffix must be a JSON object" >&2; return 2; }
-      local tmp; tmp=$(mktemp); jq --argjson v "$val" '.context_window_suffix=$v' "$RR_CONFIG" > "$tmp" && mv "$tmp" "$RR_CONFIG" ;;
+      jq --argjson v "$val" '.context_window_suffix=$v' "$RR_CONFIG" | rr_write "$RR_CONFIG" ;;
     *)
-      local tmp; tmp=$(mktemp); jq --arg k "$key" --arg v "$val" '.[$k]=$v' "$RR_CONFIG" > "$tmp" && mv "$tmp" "$RR_CONFIG" ;;
+      jq --arg k "$key" --arg v "$val" '.[$k]=$v' "$RR_CONFIG" | rr_write "$RR_CONFIG" ;;
   esac
   echo "$key = $(jq -c --arg k "$key" '.[$k]' "$RR_CONFIG")"
 }

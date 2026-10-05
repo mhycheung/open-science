@@ -152,6 +152,9 @@ always left to you.
   delivered behind the prefix `[slurm-resurrect] Message you saved for yourself
   ...`. A `/slurm-resurrect:resurrect` prompt submitted while a script is typing
   into the pane is not run.
+- No state or lock file is opened through a symbolic link: files are written to a
+  temporary file and renamed into place, a link at a log, marker or lock path is
+  removed before it is opened, and locks are opened without truncation.
 - If no Claude or Codex pane is alive after a hop, the lineage ends: the user is
   notified, no successor is queued and the job exits. A session with no live
   agent pane is not carried to the next job.

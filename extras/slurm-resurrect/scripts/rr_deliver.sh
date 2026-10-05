@@ -81,7 +81,7 @@ inject() {  # <sock> <target> <text>
   if [[ "$DRY" == "1" ]]; then echo "DRYRUN inject -> $target: $(rr_safe_text "$text")"; return 0; fi
   lock=$(rr_pane_lock "$sock" "$target")
   (
-    exec 9>"$lock"
+    exec 9<>"$lock"
     flock -w 300 9 || { echo "rr_deliver: could not lock $target within 300s; not injecting"; exit 1; }
     rr_pane_deliver "$sock" "$target" "$text"
   )
@@ -159,7 +159,7 @@ while IFS= read -r line; do
       continue
     fi
     lock=$(rr_pane_lock "$sock" "$target")
-    if ( exec 9>"$lock"; flock -w 60 9 && accept_trust "$sock" "$target" ); then
+    if ( exec 9<>"$lock"; flock -w 60 9 && accept_trust "$sock" "$target" ); then
       echo "accepted the trust dialog in $target"
     else
       echo "rr_deliver: FAILED to select 'Yes, I trust this folder' in $target; pressed nothing"
@@ -173,19 +173,18 @@ done < "$MANIFEST"
 # --- 2. interrupted session jumps --------------------------------------------
 # Archive a record once acted on, so no later hop acts on it again.
 mark_handled() {  # <record path> <where>
-  local f="$1" where="$2" tmp dest
+  local f="$1" where="$2" dest
   [[ -f "$f" ]] || return 0
-  tmp="$f.tmp.$$"
   if [[ "$where" == done ]]; then
-    jq --arg j "${SLURM_JOB_ID:-}" '.rr_handled=$j' "$f" > "$tmp" && mv "$tmp" "$f"
+    jq --arg j "${SLURM_JOB_ID:-}" '.rr_handled=$j' "$f" | rr_write "$f"
   else
     mkdir -p "$RR_OS_STATE/jump/done"
     dest="$RR_OS_STATE/jump/done/$(basename "$f" .json)-$(date +%s).json"
     jq --arg j "${SLURM_JOB_ID:-}" --arg at "$(date -Iseconds)" \
-      '.phase="done" | .phase_at=$at | .rr_handled=$j' "$f" > "$tmp" \
-      && mv "$tmp" "$dest" && rm -f "$f"
+      '.phase="done" | .phase_at=$at | .rr_handled=$j' "$f" | rr_write "$dest" \
+      && rm -f "$f"
   fi
-  rm -f "$tmp" 2>/dev/null
+  return 0
 }
 
 # Re-drive an unfinished jump in the rebuilt pane through the core's worker.
@@ -211,8 +210,8 @@ redrive() {  # <sock> <target> <resume prompt> <core dir> <record json>
      'del(.rr_where, .rr_src, .rr_core_scripts, .rr_handled, .phase_at)
       | .rr_orig_kind=.kind | .kind="active" | .prompt=$prompt
       | .sock=$sock | .pane=$pane | .key=$key | .state_file=$sf | .old_sid=$sid
-      | .requested_at=$at | .phase="launched" | .rr_redriven_in=$job' <<<"$rec" > "$req.tmp" \
-    && mv "$req.tmp" "$req" || { echo "rr_deliver: could not write $req"; return 1; }
+      | .requested_at=$at | .phase="launched" | .rr_redriven_in=$job' <<<"$rec" | rr_write "$req" || { echo "rr_deliver: could not write $req"; return 1; }
+  rr_nolink "$RR_OS_STATE/cm.log"
   setsid nohup bash "$core/jump.sh" --worker "$req" </dev/null >>"$RR_OS_STATE/cm.log" 2>&1 &
   echo "rr_deliver: started the core's jump worker for $target (request $req)"
   return 0
@@ -332,7 +331,7 @@ echo "rr_deliver: $jumps jump(s) recovered, $delivered note(s) delivered; panes 
 # across hops. The name is the part that used to churn.
 RC_OUT="$RR_HOME/rc_status_${SLURM_JOB_ID:-manual}.txt"
 mkdir -p "$RR_HOME" 2>/dev/null
-: > "$RC_OUT" 2>/dev/null || RC_OUT=/dev/null
+rr_nolink "$RC_OUT"; : > "$RC_OUT" 2>/dev/null || RC_OUT=/dev/null
 rc_ok=0; rc_bad=0
 while IFS= read -r line; do
   [[ -n "$line" ]] || continue

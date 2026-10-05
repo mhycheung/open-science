@@ -27,7 +27,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/rr_common.sh"
 
 SOCK="${1:?tmux socket path required}"
 SESSION="${2:?tmux session name required}"
-OUT="${3:-/dev/stdout}"
+OUT="${3:-}"   # empty: write to stdout
 # Talk only to a server whose socket directory is private to this user (rr_sock_ok).
 rr_sock_ok "$SOCK" || { echo "rr_snapshot: refusing the tmux socket $SOCK" >&2; exit 1; }
 
@@ -209,4 +209,4 @@ jq -n --arg name "$SESSION" --arg sock "$SOCK" --argjson windows "$windows_json"
   --argjson bi "$base_index" --argjson pbi "$pane_base_index" \
   '{session_name:$name, tmux_socket:$sock,
     base_index:$bi, pane_base_index:$pbi, windows:$windows,
-    snapshot_at:(now|todate)}' > "$OUT"
+    snapshot_at:(now|todate)}' | if [[ -z "$OUT" ]]; then cat; else rr_write "$OUT"; fi

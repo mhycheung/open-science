@@ -165,7 +165,7 @@ launch_codex() {  # <window array idx> <pane array idx>
       mkdir -p "$RR_WRITE_SELFREG_DIR"; san=$(printf '%s' "$newpid" | tr -c 'A-Za-z0-9._-' '_')
       jq -n --arg sid "$tid" --arg h "$home" --arg m "$model" --arg pid "$newpid" \
         '{runtime:"codex", session_id:$sid, codex_home:$h, model:$m, pane_id:$pid, registered_at:(now|todate)}' \
-        > "$RR_WRITE_SELFREG_DIR/$san.json"
+        | rr_write "$RR_WRITE_SELFREG_DIR/$san.json"
     fi
   fi
 }
@@ -284,7 +284,7 @@ for ((w=0; w<nwin; w++)); do
           '{session_id:$sid, config_dir:$cdir, pane_id:$pid,
             tmux_socket:$sock, tmux_session:$sess,
             window_index:($win|tonumber), pane_index:($pidx|tonumber),
-            registered_at:(now|todate)}' > "$RR_WRITE_SELFREG_DIR/$san.json"
+            registered_at:(now|todate)}' | rr_write "$RR_WRITE_SELFREG_DIR/$san.json"
       fi
     fi
   done

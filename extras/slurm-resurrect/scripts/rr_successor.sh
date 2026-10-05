@@ -50,7 +50,7 @@ if [[ "$st" == RUNNING || "$st" == SUSPENDED || "$st" == CONFIGURING ]]; then
   grace=$(rr_cfg_get '.handoff_grace_seconds // 0')
   poll="${RR_HANDOFF_POLL:-5}"
   echo "source job $SRC_JOB is still $st: requesting a handoff (timeout ${timeout}s + grace ${grace}s)"
-  echo "$JOB" > "$RR_HOME/handoff_${SRC_JOB}.request"
+  echo "$JOB" | rr_write "$RR_HOME/handoff_${SRC_JOB}.request"
   waited=0; limit=$(( timeout + grace ))
   while [[ ! -f "$RR_HOME/handoff_${SRC_JOB}.done" && $waited -lt $limit ]]; do
     sleep "$poll"; waited=$((waited + poll))
@@ -74,7 +74,7 @@ n=$(find "$SNAPDIR" -maxdepth 1 -name '*.json' -type f 2>/dev/null | wc -l)
 if [[ "$n" -eq 0 ]]; then echo "no snapshots; nothing to respawn."; exit 0; fi
 
 # --- 2. rebuild every tmux session; collect a manifest of the Claude panes ---
-MANIFEST="$RR_HOME/rr_manifest_${JOB}.jsonl"; : > "$MANIFEST"
+MANIFEST="$RR_HOME/rr_manifest_${JOB}.jsonl"; rr_nolink "$MANIFEST"; : > "$MANIFEST"
 newdir="$RR_REG_ROOT/$JOB"; mkdir -p "$newdir/snapshot"
 for snap in "$SNAPDIR"/*.json; do
   san=$(basename "$snap" .json)
@@ -103,7 +103,7 @@ for snap in "$SNAPDIR"/*.json; do
   if [[ -f "$rec" ]]; then
     jq --arg s "$RNAME" --arg sock "$TSOCK" --arg job "$JOB" --arg san "$san" \
       '.tmux_session=$s | .tmux_socket=$sock | .sanitized=$san | .registered_in_job=$job
-       | .carried_at=(now|todate)' "$rec" > "$newdir/$san.json"
+       | .carried_at=(now|todate)' "$rec" | rr_write "$newdir/$san.json"
   else
     # No record of the user's choices: the narrow defaults (at most `manual`, Remote
     # Control off), never bypassPermissions.
@@ -111,7 +111,7 @@ for snap in "$SNAPDIR"/*.json; do
       '{tmux_session:$s, tmux_socket:$sock, sanitized:$san, registered_in_job:$job,
         registered_at:(now|todate), permission_mode:"manual", permission_mode_explicit:false,
         remote_control:false}' \
-      > "$newdir/$san.json"
+      | rr_write "$newdir/$san.json"
   fi
 done
 count=$(jq -s '[.[] | select((.runtime // "claude") == "claude" and .status != "unresumable")] | length' "$MANIFEST" 2>/dev/null); count=${count:-0}
@@ -194,6 +194,7 @@ rm -f "$RR_HOME/handoff_${SRC_JOB}.request" "$RR_HOME/handoff_${SRC_JOB}.done"
 
 # Elect a coordinator for THIS job so the cycle keeps going.
 if [[ "${RR_NO_COORDINATOR:-0}" != "1" ]]; then
+  rr_nolink "$RR_HOME/coordinator_${JOB}.log"
   setsid nohup bash "$SCRIPTS/rr_coordinator.sh" "$JOB" \
     >> "$RR_HOME/coordinator_${JOB}.log" 2>&1 < /dev/null &
   echo "elected coordinator for job $JOB"
