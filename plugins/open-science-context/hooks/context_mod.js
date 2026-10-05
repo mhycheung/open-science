@@ -296,13 +296,15 @@ function coldNote(st) {
 //
 // A typed prompt gets the mod's own dialog in the terminal, with exactly two answers. A hook
 // may not wait on its own code for more than 10 s, so the prompt is dropped at once and the
-// dialog sends it again on Submit, as the user's (resubmit, below). Claude Code's question
-// dialog is used where the mod's cannot be: a prompt from Remote Control (the app draws only
-// that dialog, and adds its own Other answers), or one with attachments, which a resubmit
-// would lose.
+// dialog sends it again on Submit. Claude Code shows it as a prompt the plugin sent, and no
+// hook can make it the user's (2.1.287: the mod's own hooks are skipped for a prompt sent from
+// a button's handler; from a ui.press hook, a result without the plugin origin is still shown
+// as the plugin's, and next() refuses another origin). The mod's own prompt.submit hook does
+// not see it, so it is not asked about again. Claude Code's question dialog is used where the
+// mod's cannot be: a prompt from Remote Control (the app draws only that dialog, and adds its
+// own Other answers), or one with attachments, which sending it again would lose.
 const ASK_PANE = 'opsci-cold-ask'
 let asking = null           // { question, text }: the typed prompt the dialog holds
-let resubmit = null         // the text Submit sent again, to enter as the user's
 
 function coldQuestion(st) {
   const ctx = typeof st.tokens === 'number' ? ' The whole context (' + fmtTokens(st.tokens) + ' tokens) will be read again at the full price.' : ''
@@ -315,7 +317,6 @@ async function answerAsk($, submit) {
   await $.ui.close({ id: ASK_PANE })
   if (!held) return
   if (submit) {
-    resubmit = held.text
     await $.prompt.submit({ text: held.text })
   } else {
     await $.prompt.fill({ text: held.text })
@@ -324,14 +325,6 @@ async function answerAsk($, submit) {
 }
 
 async function coldGate($, e, next) {
-  // Submit in the mod's dialog: the user's prompt, entered as theirs (an answer without the
-  // plugin origin is read as the user's own).
-  if (e.origin.kind === 'plugin' && resubmit !== null && e.text === resubmit) {
-    resubmit = null
-    const r = await next(e)
-    if (r && !r.drop) { const { origin, ...rest } = r; return rest }
-    return r
-  }
   if (e.turnId || (e.origin.kind !== 'composer' && e.origin.kind !== 'bridge') || /^\s*\//.test(e.text)) return next(e)
   const st = await cacheState($)
   if (st.phase !== 'cold') return next(e)

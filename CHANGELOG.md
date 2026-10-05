@@ -28,7 +28,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
   terminal, and is removed. The cache-cold note is shown once, when the cache of an idle
   session goes cold. Typing `/opsci-note` shows the last note again.
 - The cold-cache question for a typed prompt is the mod's own dialog in the terminal, with
-  exactly two answers (Submit, Do not submit; Esc does not submit). Claude Code's question
+  exactly two answers (Submit, Do not submit; Esc does not submit). On Submit the prompt
+  arrives labelled as a message from the plugin: Claude Code labels every prompt a plugin
+  sends that way, and no hook can make it the user's (checked live; the code that tried is
+  removed). Claude Code's question
   dialog, which adds free-text answers and was left open in the Remote Control app after an
   answer in the terminal, is kept only for prompts from Remote Control and prompts with
   attachments.

@@ -222,8 +222,9 @@ not woken until you answer:
 - **Typed in the terminal:** the prompt is not sent, and a dialog opens with the question (`⚠
   The cache is cold (75 min since the last request). The whole context (180.2k tokens) will be
   read again at the full price. Are you sure you want to submit this prompt?`) and two buttons.
-  **Submit** (or `1`) sends it as you typed it; **Do not submit** (or `2`, or Esc) puts it back
-  in the prompt box.
+  **Submit** (or `1`) sends it as you typed it, shown in the conversation as a message from the
+  plugin (Claude Code labels every prompt a plugin sends that way, and no plugin can change
+  it); **Do not submit** (or `2`, or Esc) puts it back in the prompt box.
 - **From Remote Control:** the app shows Claude Code's question with the same text and the
   answers **Submit** and **Do not submit**. The app adds its own free-text answers; anything but
   **Submit** leaves the prompt unsent. A typed prompt with an image attached gets the same
