@@ -1,6 +1,6 @@
 {
   "name": "open-science-context",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Context management: restart the Codex session and resume from the context files (session jumps), context-file registration, and subagent checkpoints. Jumps need tmux; registration works without it. Needs a project made with open-science-project.",
   "skills": "./skills/",
   "hooks": "./hooks/codex.json"
