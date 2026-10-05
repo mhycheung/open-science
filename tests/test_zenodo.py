@@ -118,6 +118,11 @@ def test_reproducible_tar_one_byte_changes_checksum(proj):
     assert sha_of_tar(proj, ["data/t01"]) != a
 
 
+def site_config(proj, **cfg):
+    (proj / "config").mkdir(exist_ok=True)
+    (proj / "config" / "site.local.yaml").write_text(yaml.safe_dump(cfg))
+
+
 def test_tar_follows_symlinked_group_root(tmp_path, proj):
     # data/<task> may be a symlink to scratch; the tar holds the content, not the link
     scratch = tmp_path / "scratch" / "t01"
@@ -125,7 +130,88 @@ def test_tar_follows_symlinked_group_root(tmp_path, proj):
     a = sha_of_tar(proj, ["data/t01"])
     shutil.rmtree(proj / "data" / "t01")
     (proj / "data" / "t01").symlink_to(scratch)
+    # refused while the target is under no allowed root
+    with pytest.raises(Z.ZenodoError, match="not under the project, the site's scratch"):
+        sha_of_tar(proj, ["data/t01"])
+    site_config(proj, scratch=str(tmp_path / "scratch"))
     assert sha_of_tar(proj, ["data/t01"]) == a
+    site_config(proj, scratch="<path to your scratch>", data_roots=[str(tmp_path / "scratch" / "t01")])
+    assert sha_of_tar(proj, ["data/t01"]) == a
+
+
+@pytest.fixture
+def fake_home(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    (home / ".ssh").mkdir(parents=True)
+    (home / ".ssh" / "id_rsa").write_text("not a real key\n")
+    (home / ".aws").mkdir()
+    (home / "runs" / "t09").mkdir(parents=True)
+    (home / "runs" / "t09" / "x.txt").write_text("x\n")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    return home
+
+
+@pytest.mark.parametrize("target", [".ssh", ".aws", ".config/opsci", ".config", "", "runs/../.ssh"])
+def test_symlinked_group_root_into_hidden_home_dir_refused(proj, fake_home, target):
+    # Even with the whole home directory allowed as a data root, a link to ~/.ssh, the
+    # token directory, or the home directory itself (which holds ~/.ssh) is refused.
+    (fake_home / ".config" / "opsci").mkdir(parents=True, exist_ok=True)
+    site_config(proj, data_roots=[str(fake_home)])
+    (proj / "data" / "t03").symlink_to(fake_home / target if target else fake_home)
+    with pytest.raises(Z.ZenodoError, match="not archived, it"):
+        sha_of_tar(proj, ["data/t03"])
+    plan = Z.make_plan(proj, "sandbox", Z.SANDBOX_API, build_dir=None)
+    assert any("data/t03 resolves to" in e for e in plan.errors) and not plan.files
+
+
+def test_symlinked_group_root_into_xdg_config_refused(proj, tmp_path, fake_home, monkeypatch):
+    cfg = tmp_path / "xdg"
+    (cfg / "opsci").mkdir(parents=True)
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(cfg))
+    site_config(proj, data_roots=[str(tmp_path)])
+    (proj / "data" / "t03").symlink_to(cfg / "opsci")
+    with pytest.raises(Z.ZenodoError, match="config directory"):
+        sha_of_tar(proj, ["data/t03"])
+
+
+def test_symlinked_group_root_into_allowed_home_dir_passes(proj, fake_home):
+    site_config(proj, data_roots=[str(fake_home / "runs")])
+    (proj / "data" / "t09").symlink_to(fake_home / "runs" / "t09")
+    assert sha_of_tar(proj, ["data/t09"])
+
+
+def tar_members(proj, paths):
+    import io
+    import tarfile
+    buf = io.BytesIO()
+    Z.write_tar(proj, paths, buf)
+    buf.seek(0)
+    with tarfile.open(fileobj=buf) as t:
+        return {m.name: m for m in t.getmembers()}
+
+
+def test_inner_absolute_symlink_refused(proj, fake_home):
+    # the audit's case: data/t02/inner -> ~/.ssh/id_rsa would be stored with its absolute target
+    (proj / "data" / "t02" / "inner").symlink_to(fake_home / ".ssh" / "id_rsa")
+    with pytest.raises(Z.ZenodoError, match="symlink to an absolute path"):
+        sha_of_tar(proj, ["data/t02"])
+    plan = Z.make_plan(proj, "sandbox", Z.SANDBOX_API, build_dir=None)
+    assert any("data/t02/inner is a symlink to an absolute path" in e for e in plan.errors)
+
+
+def test_inner_relative_symlink_leaving_the_group_refused(proj):
+    (proj / "data" / "t02" / "sub" / "up").symlink_to("../../t01/a.txt")
+    with pytest.raises(Z.ZenodoError, match="outside data/t02"):
+        sha_of_tar(proj, ["data/t02"])
+
+
+def test_inner_relative_symlink_inside_the_group_stored(proj):
+    (proj / "data" / "t02" / "sub" / "link").symlink_to("../a.txt")
+    (proj / "data" / "t02" / "dirlink").symlink_to("sub")
+    m = tar_members(proj, ["data/t02"])
+    assert m["t02/sub/link"].issym() and m["t02/sub/link"].linkname == "../a.txt"
+    assert m["t02/dirlink"].issym() and m["t02/dirlink"].linkname == "sub"
 
 
 def test_checksum_command(proj):
@@ -526,3 +612,189 @@ def test_check_token_refuses_wrong_token_and_open_mode(tmp_path, mock, token):
     Path(token).chmod(0o644)
     r = run_opsci("zenodo", "check-token", "--api-url", mock.base, "--token-file", token)
     assert r.returncode == 1 and "readable by others" in r.stderr
+
+
+# ------------------------------------------------------------------ privacy (audit finding C1, M2)
+
+def add_task(root: Path, tid: str, privacy: str | None, where="tasks"):
+    (root / where / tid).mkdir(parents=True, exist_ok=True)
+    h = dict(id=tid, title=tid, type="task", status="active", summary="S.")
+    if privacy:
+        h["privacy"] = privacy
+    (root / where / tid / "context.md").write_text(header(**h))
+
+
+def files_tsv(mock):
+    [dep] = mock.published()
+    return next(f for f in dep["files"] if f["filename"] == "FILES.tsv")["data"].decode()
+
+
+@pytest.mark.parametrize("tier", ["soft-private", "hard-private"])
+def test_private_task_data_left_out_by_default(proj, mock, token, tier):
+    add_task(proj, "t01", tier)
+    add_task(proj, "t02", "public")
+    r = release(proj, mock, token, "1.0")
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert f"data/t01 ({tier}, task t01) is private and will not be released" in r.stdout
+    [dep] = mock.published()
+    assert sorted(f["filename"] for f in dep["files"]) == ["FILES.tsv", "t02.tar.gz"]
+    listing = files_tsv(mock)
+    assert "data/t01" not in listing and "\tt01\t" not in listing  # finding M2
+    assert "t01" not in dep["metadata"]["description"]
+
+
+def test_private_task_in_explicit_group_refused_then_included(proj, mock, token):
+    add_task(proj, "t01", "soft-private")
+    m = manifest(proj)
+    m["zenodo"] = {"groups": [{"name": "all", "paths": ["data/t01", "data/t02"]}]}
+    Z.write_manifest(proj, m)
+    r = release(proj, mock, token, "1.0")
+    assert r.returncode == 1 and "data/t01 is soft-private (task t01)" in r.stdout + r.stderr
+    assert mock.requests == []
+    m = manifest(proj)
+    m["zenodo"]["include_private"] = ["t01"]
+    Z.write_manifest(proj, m)
+    r = release(proj, mock, token, "1.0")
+    assert r.returncode == 0, r.stderr + r.stdout
+    assert "data/t01/a.txt" in files_tsv(mock)
+
+
+def test_private_task_default_privacy_and_nesting(proj):
+    # no privacy field: the publish manifest's default decides; a verification task inside a
+    # soft-private task is at least soft-private; a task directory without a valid header is
+    # hard-private
+    (proj / "publish").mkdir()
+    (proj / "publish" / "manifest.yaml").write_text(
+        "policy: {default_privacy: soft-private}\nhard_private: [data/secret-*]\n")
+    add_task(proj, "t01", None)
+    add_task(proj, "t02", "soft-private")
+    add_task(proj, "v01", "public", where="tasks/t02/verifications")
+    add_task(proj, "t05", "public")
+    (proj / "tasks" / "t06").mkdir()
+    (proj / "tasks" / "t06" / "context.md").write_text("no header\n")
+    own = Z.file_owners(proj)
+    assert own.tier("data/t01/a.txt") == ("soft-private", "t01")
+    assert own.tier("data/v01") == ("soft-private", "v01")
+    assert own.tier("data/t05/x") == ("public", "")
+    assert own.tier("data/t06") == ("hard-private", "t06")
+    assert own.tier("data/secret-run/x") == ("hard-private", "hard_private")
+    assert own.tier("data/other") == ("public", "")
+
+
+# ------------------------------------------------------------------ secret and leak scans (C1)
+
+def dry_plan(proj):
+    return Z.make_plan(proj, "sandbox", Z.SANDBOX_API, build_dir=None)
+
+
+def test_secret_in_data_refused_before_any_upload(proj, mock, token):
+    tok = "ghp_" + "A1b2C3d4" * 5
+    (proj / "data" / "t02" / "notes.txt").write_text(f"token = {tok}\n")
+    r = release(proj, mock, token, "1.0")
+    out = r.stdout + r.stderr
+    assert r.returncode == 1 and "github-token" in out and "data/t02/notes.txt" in out
+    assert tok not in out  # redacted
+    assert mock.requests == []
+
+
+def test_secret_in_binary_data_refused(proj):
+    (proj / "data" / "t02" / "blob.bin").write_bytes(
+        b"\0\1\2-----BEGIN OPENSSH PRIVATE KEY-----\n" + bytes(range(256)))
+    assert any("private-key" in e for e in dry_plan(proj).errors)
+
+
+def test_leaks_refused(proj):
+    (proj / "data" / "t02" / "log.txt").write_text("written to /home/someone/run/out.h5\n")
+    assert any("absolute-path" in e and "data/t02/log.txt" in e for e in dry_plan(proj).errors)
+    (proj / "data" / "t02" / "log.txt").unlink()
+    # a site identifier inside binary data, and in a file name
+    site_config(proj, identifiers=["clustername-xyz"])
+    (proj / "data" / "t02" / "h.bin").write_bytes(b"\0\0attr=clustername-xyz\0" + bytes(range(256)))
+    assert any("site-identifier" in e and "data/t02/h.bin" in e for e in dry_plan(proj).errors)
+    (proj / "data" / "t02" / "h.bin").unlink()
+    (proj / "data" / "t02" / "clustername-xyz.txt").write_text("x\n")
+    assert any("[filename]" in e for e in dry_plan(proj).errors)
+    (proj / "data" / "t02" / "clustername-xyz.txt").unlink()
+    assert dry_plan(proj).errors == []
+
+
+def test_absolute_path_chance_match_in_binary_not_refused(proj):
+    # '/a/b' occurs by chance in compressed data; binary content is not scanned for it
+    (proj / "data" / "t02" / "c.bin").write_bytes(b"\0\x9f/ab/cd/ef\x01" + bytes(range(256)))
+    assert dry_plan(proj).errors == []
+
+
+def test_large_file_scanned_in_chunks(proj, monkeypatch):
+    monkeypatch.setattr(Z, "SCAN_CHUNK", 1024)
+    monkeypatch.setattr(Z, "SCAN_OVERLAP", 64)
+    tok = "ghp_" + "A1b2C3d4" * 5
+    # the secret straddles a chunk boundary
+    (proj / "data" / "t02" / "big.txt").write_text("a" * 1000 + f" {tok} " + "b" * 3000 + "\n")
+    errs = dry_plan(proj).errors
+    assert any("github-token" in e for e in errs) and not any(tok in e for e in errs)
+
+
+def test_slurm_job_id_needs_an_override(proj, mock, token):
+    (proj / "data" / "t02" / "run.txt").write_text("SLURM job jobid=1234567 finished\n")
+    assert any("slurm-job-id" in e for e in dry_plan(proj).errors)
+    m = manifest(proj)
+    m["zenodo"] = {"overrides": [{"check": "leak", "kind": "slurm-job-id", "paths": ["data/t02"],
+                                  "reason": "Job numbers name no person.", "date": "2026-10-05"}]}
+    Z.write_manifest(proj, m)
+    plan = dry_plan(proj)
+    assert plan.errors == [] and len(plan.overridden) == 1
+    assert "accepted by zenodo.overrides: data/t02/run.txt slurm-job-id" in Z.format_plan(plan, "1.0")
+    r = release(proj, mock, token, "1.0")
+    assert r.returncode == 0, r.stderr + r.stdout
+
+
+@pytest.mark.parametrize("kind", [("secret", "github-token"), ("leak", "absolute-path"),
+                                  ("leak", "email")])
+def test_override_of_other_kinds_refused(proj, kind):
+    m = manifest(proj)
+    m["zenodo"] = {"overrides": [{"check": kind[0], "kind": kind[1], "reason": "r", "date": "2026-10-05"}]}
+    Z.write_manifest(proj, m)
+    with pytest.raises(Z.ZenodoError, match="cannot be overridden"):
+        dry_plan(proj)
+
+
+# ------------------------------------------------------------------ where the token goes (Low)
+
+@pytest.mark.parametrize("url", ["http://zenodo.example.org/api", "ftp://127.0.0.1/api",
+                                 "http://10.0.0.5/api", "https:///api"])
+def test_api_url_without_tls_refused(url):
+    with pytest.raises(Z.ZenodoError, match="must be an https URL"):
+        Z.resolve_server(False, url)
+
+
+@pytest.mark.parametrize("url", ["http://127.0.0.1:8000/api", "http://localhost:1/api",
+                                 "https://zenodo.example.org/api"])
+def test_api_url_https_or_loopback_accepted(url):
+    assert Z.resolve_server(False, url) == ("custom", url)
+
+
+@pytest.mark.parametrize("url", ["https://evil.example/api/deposit/depositions/1",
+                                 "http://sandbox.zenodo.org/api/files/x",
+                                 "https://sandbox.zenodo.org:8443/api/files/x"])
+def test_token_not_sent_to_other_hosts(monkeypatch, url):
+    sent = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, **k: sent.append(req))
+    api = Z.API(Z.SANDBOX_API, "tok-secret")
+    with pytest.raises(Z.ZenodoError, match="token is sent only to the configured API host"):
+        api._call("GET", url)
+    assert sent == []
+
+
+def test_new_version_link_to_other_host_refused(proj, mock, token):
+    assert release(proj, mock, token, "1.0").returncode == 0
+    (proj / "data" / "t01" / "a.txt").write_text("changed\n")
+    real = mock.route
+
+    def route(method, path, body):
+        code, obj = real(method, path, body)
+        if path.endswith("actions/newversion") and isinstance(obj, dict):
+            obj["links"]["latest_draft"] = obj["links"]["latest_draft"].replace("127.0.0.1", "localhost")
+        return code, obj
+    mock.route = route
+    r = release(proj, mock, token, "1.1")
+    assert r.returncode == 1 and "only to the configured API host" in r.stderr

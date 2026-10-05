@@ -47,7 +47,10 @@ mkdir -p ~/.config/opsci
 (`$XDG_CONFIG_HOME` replaces `~/.config` if it is set.) The tool refuses a token file that
 group or others can read. It never takes the token from the command line or from an
 environment variable, and never prints it. The token is sent only in the `Authorization`
-header.
+header, and only to the host of the API URL: a link in a server response (the new-version
+draft, the upload bucket) that points to another host, port or scheme is refused. An
+`--api-url` must use https; plain http is accepted only for a loopback test server
+(`127.0.0.1`, `localhost`, `::1`).
 
 ## What a release does
 
@@ -67,6 +70,8 @@ header.
 
    Groups may not overlap. Entries of `data/` that no group covers are reported and not
    released.
+   Data of private tasks is left out; see [Private data](#private-data). Before any tar is
+   built, every file to be released is scanned for secrets and leaks; see [Scans](#scans).
 2. **File list.** `FILES.tsv` is uploaded next to the tars. It lists every file, one per line,
    in six tab-separated columns: `path`, `size`, `sha256`, `tar` (the tar that holds it),
    `task` (the task id when the file lies under `data/<id>/` and `<id>` is a task of the
@@ -82,10 +87,9 @@ header.
 4. **Reproducible tars.** Members are sorted by name, with mtime 2000-01-01, owner and group 0,
    no user names, and modes normalised to 644/755 (777 for symlinks). The gzip header has no
    file name and no timestamp. The same input gives a byte-identical tar and the same checksum,
-   wherever and whenever it is built. A group root that is a symlink (for example
-   `data/<task-id>` pointing to scratch) is followed; symlinks inside it are stored as links.
-   The tars are built with Python's `tarfile`, so the result does not depend on the installed
-   `tar`.
+   wherever and whenever it is built. Symlinks are handled as described under
+   [Symlinks](#symlinks). The tars are built with Python's `tarfile`, so the result does not
+   depend on the installed `tar`.
 5. **Versions.** The first release creates a deposition. Each later release asks Zenodo for a
    new version of the previous record. Zenodo copies the previous version's files into the new
    draft. The tool keeps every file whose checksum is unchanged, deletes groups that no longer
@@ -121,6 +125,90 @@ header.
    between datasets) are kept. Comments inside the `zenodo:` section are not kept: the tool
    writes that section. If a manifest cannot be edited in place (the rewrite would not read
    back as the intended data), it is written whole and only its leading comment block is kept.
+
+## Symlinks
+
+A group root (an entry `data/<name>`, or a path in `zenodo.groups`) may be a symlink, for
+example `data/<task-id>` pointing to scratch. The tool follows it and archives what it points
+to, if the target is allowed:
+
+- The target must lie inside the project, inside the site's `scratch` directory, or inside a
+  directory listed under `data_roots` in `config/site.local.yaml`:
+
+  ```yaml
+  scratch: /scratch/me
+  data_roots: [/data/shared/me]   # more directories that data/ symlinks may point into
+  ```
+
+- Whatever those settings say, the tool refuses a target that is or holds the home directory
+  or the project, one inside a hidden directory of the home directory (`~/.ssh`, `~/.config`,
+  `~/.aws`, `~/.gnupg`, ...), one that is, holds or lies inside the config directory
+  (`$XDG_CONFIG_HOME` or `~/.config`, which holds the token files in `opsci/`), and one inside
+  the project's `.git`.
+
+A symlink below a group root is stored as a symlink, not followed. It must be relative and
+point to a place inside the same group root (`sub/link -> ../a.txt` is stored; `link ->
+/home/me/file` and `link -> ../../other-task/file` are refused). Replace a refused link with a
+relative one or with the file itself.
+
+`opsci zenodo checksum` applies the same rules.
+
+## Private data
+
+Data of a task whose privacy is `soft-private` or `hard-private` is not released. The task's
+tier is its `privacy` field, else `policy.default_privacy` of `publish/manifest.yaml`; a
+verification task inside a private task is at least as private; a task directory whose
+`context.md` has no valid node header counts as hard-private, as in `opsci publish`. A path
+under `data/` that the `hard_private` list of `publish/manifest.yaml` names is hard-private
+too.
+
+- With the default groups (one per entry of `data/`), the entry of a private task is left out
+  and the plan says so.
+- A group in `zenodo.groups` that holds a private path is refused.
+
+`FILES.tsv` and the record description therefore never name a private task's files. To
+release a private task's data, the user decides it and names the task in the data manifest:
+
+```yaml
+zenodo:
+  include_private: [t05-sweep]   # private tasks whose data the user has decided to release
+```
+
+## Scans
+
+Before any tar is built, every file to be released, every name and every symlink target is
+scanned with the secret patterns of `opsci publish` (`tools/opsci/secretscan.py`) and its leak
+patterns (`tools/opsci/leakscan.py`: absolute paths, emails, IP addresses, SLURM job numbers,
+the user, host and `config/site.local.yaml` values, and the project's
+`publish/PRIVATE_POLICY.md` patterns). The generated `FILES.tsv` is scanned too. Any finding
+refuses the release, in the dry run as well, before any network call. Secrets are shown
+redacted.
+
+- Text files are scanned with every pattern. PNG images and PDFs are scanned as `opsci
+  publish` scans them (image text chunks, PDF strings).
+- Binary data is scanned with every pattern except `absolute-path`: a string such as `/ab/cd`
+  occurs by chance about once per megabyte of compressed data. A path that names this site
+  still matches the user, host and scratch patterns.
+- Big files are read in chunks, so a release of many gigabytes takes a while to scan; the
+  scan reads every byte once.
+- `gitleaks` is not run on data (it is run by `opsci publish`).
+
+The kinds that `opsci publish` lets the user accept (SLURM job numbers: `slurm-job-id`,
+`slurm-array-id`, `slurm-out-file`) may be accepted here too, in the data manifest, with the
+same fields as in `publish/manifest.yaml` (see the publish skill's `check-overrides.md`):
+
+```yaml
+zenodo:
+  overrides:
+    - check: leak
+      kind: slurm-job-id
+      paths: [data/t05-sweep/logs]   # optional
+      reason: Job numbers in run logs name no person or machine.
+      date: 2026-10-05
+```
+
+The plan lists every accepted finding. A secret, and every other leak kind, is never
+overridden: change or remove the file, or leave it out of the tar groups.
 
 ## Results pages
 

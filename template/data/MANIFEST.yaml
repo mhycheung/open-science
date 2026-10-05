@@ -17,6 +17,8 @@
 #   groups:            # tar groups; without this, each entry of data/ is its own group.
 #     - name: finished # at most 99 groups: a record holds 100 files, one is FILES.tsv
 #       paths: [data/t01-setup, data/t02-first-fit]
+#   include_private: [] # soft- or hard-private tasks whose data the user decided to release
+#   overrides: []      # SLURM job number findings the user accepts (docs/zenodo.md, Scans)
 #   metadata:          # overrides for the Zenodo metadata (default: from CITATION.cff)
 #     license: cc-by-4.0
 #   sandbox: ...       # written by the tool: concept DOI, releases, file checksums

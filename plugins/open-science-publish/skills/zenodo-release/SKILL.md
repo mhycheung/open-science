@@ -16,9 +16,10 @@ within a release the user asked for.
 ## Procedure
 
 1. **Check what would be released.** Every dataset in `data/MANIFEST.yaml` that is meant to
-   be public, and nothing else: no data from a node marked `privacy: soft-private` or
-   `hard-private`, no third-party data the project may not redistribute. Tar groups are set under
-   `zenodo.groups` in the manifest (default: one group per `data/<task-id>/`).
+   be public, and nothing else: no third-party data the project may not redistribute. Tar
+   groups are set under `zenodo.groups` in the manifest (default: one group per
+   `data/<task-id>/`). The tool leaves out the data of `soft-private` and `hard-private` tasks
+   by default and refuses an explicit group that holds it.
 
 2. **Dry run** (no network, nothing written):
 
@@ -26,8 +27,28 @@ within a release the user asked for.
    opsci zenodo release --dry-run
    ```
 
-   It prints the groups, their checksums, which groups are reused unchanged, and the
-   100-file and 50 GB checks. Fix any refusal before going on.
+   It prints the groups, their checksums, which groups are reused unchanged, the private data
+   left out, and the 100-file and 50 GB checks. It also refuses, and names:
+
+   - a `data/` symlink whose target is not under the project, the site's `scratch` or a
+     `data_roots` entry of `config/site.local.yaml`, or lies in a hidden directory of the home
+     directory or the config directory;
+   - a symlink inside the data that is absolute or leaves its group;
+   - a secret or a leak (absolute path, email, IP address, SLURM job number, user, host or
+     site name, private-policy pattern) in a file, a file name or `FILES.tsv`.
+
+   Fix any refusal before going on: change or remove the file, replace the link, or leave the
+   path out of the tar groups. Ask the user before you do any of the following; never do them on your
+   own judgement:
+
+   - add a directory to `data_roots`;
+   - release a private task's data (`zenodo.include_private: [<task-id>]` in
+     `data/MANIFEST.yaml`);
+   - accept a SLURM job number finding (`zenodo.overrides`, the same entry as in the publish
+     skill's `reference/check-overrides.md`, which says what to ask).
+
+   A secret and every other leak kind cannot be accepted. The full rules are in
+   `docs/zenodo.md` under "Symlinks", "Private data" and "Scans".
 
 3. **Sandbox release** (the default server; needs `~/.config/opsci/zenodo-sandbox.token`,
    mode 600):
@@ -57,6 +78,8 @@ within a release the user asked for.
 ## Rules
 
 - Never pass a token on the command line or print one; the tool reads it from the file.
+  The tool sends the token only over https (plain http only to a loopback test server) and
+  only to the API host; do not work around a refusal of `--api-url`.
 - If a run stops before publishing, run the same command again: the tool resumes the draft
   recorded in the manifest.
 - If nothing changed since the last version, the tool refuses a new one. That is correct.

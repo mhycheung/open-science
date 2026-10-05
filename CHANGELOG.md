@@ -72,6 +72,15 @@ Run from the project root, on a branch, with `FW` a framework checkout at this r
 4. In `config/framework.yaml`, set `layout_version: 3`.
 5. Commit: `git add .claude AGENTS.md contracts .codex config/framework.yaml && git commit -m
    "Migrate to project layout 3: narrower git permissions, outside text is data"`.
+- Zenodo releases (`opsci zenodo`) no longer archive what they should not. A `data/` symlink
+  is followed only into the project, the site's `scratch` or a new `data_roots` list in
+  `config/site.local.yaml`, and never into a hidden home directory (`~/.ssh`, `~/.config`, ...)
+  or the token directory; symlinks inside the data must be relative and stay inside their
+  group. Data of soft- and hard-private tasks is left out unless `zenodo.include_private`
+  names the task, so `FILES.tsv` lists no private task. Every released file is scanned with
+  the publish secret and leak patterns; findings refuse the release, and SLURM job numbers
+  may be accepted in `zenodo.overrides`. The token goes only over https (http only to a
+  loopback test server) and only to the configured API host. See `docs/zenodo.md`.
 
 ## 0.3.3 - 2026-10-04
 

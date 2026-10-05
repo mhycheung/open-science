@@ -11,7 +11,12 @@ Design (report section (j)):
   are replaced.
 - The sandbox is the default. Production needs ``--production``.
 - The token is read from a mode-600 file. It is never taken from argv or the environment
-  and never printed.
+  and never printed. It is sent only to the configured API host, over https (plain http
+  only to a loopback test server).
+- Nothing private is released: a group root that is a symlink must resolve under an allowed
+  root and outside the user's hidden home directories; symlinks inside a group must be
+  relative and stay inside it; data of soft- and hard-private tasks is left out unless
+  ``zenodo.include_private`` names the task; every file is scanned for secrets and leaks.
 
 The legacy deposit API is used: ``deposit/depositions`` (create, get, update metadata,
 ``actions/newversion``, ``actions/publish``), ``.../files`` (list, delete) and the bucket
@@ -21,11 +26,13 @@ link for uploads.
 from __future__ import annotations
 
 import datetime as dt
+import fnmatch
 import gzip
 import hashlib
 import io
 import json
 import os
+import posixpath
 import re
 import stat
 import tarfile
@@ -51,6 +58,10 @@ GROUP_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 MANIFEST = "data/MANIFEST.yaml"
 CITATION = "CITATION.cff"
 CITE_DESC = "Zenodo data record"  # prefix of the CITATION.cff identifiers this tool manages
+SITE_CONFIG = "config/site.local.yaml"
+# The scans read big files in chunks of this size, overlapping by SCAN_OVERLAP bytes.
+SCAN_CHUNK = 8 * 2**20
+SCAN_OVERLAP = 4096
 
 
 class ZenodoError(Exception):
@@ -91,22 +102,113 @@ class _HashingReader:
         return b
 
 
-def _members(root: Path, paths: list[str]) -> list[tuple[str, Path]]:
+def _inside(path: Path, top: Path) -> bool:
+    """Whether ``path`` is ``top`` or lies under it (both resolved)."""
+    return path == top or top in path.parents
+
+
+def _config_dir() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+
+
+def _forbidden_target(real: Path, root: Path) -> str | None:
+    """Why the resolved target ``real`` of a symlinked group root may not be archived, or None.
+
+    Refused: a target that holds the home directory or the project; one inside a hidden
+    directory of the home directory (~/.ssh, ~/.config, ~/.aws, ...); one that is, holds or
+    lies inside the config directory (where the token files are); one inside the project's
+    .git.
+    """
+    home = Path.home().resolve()
+    config = _config_dir().resolve()
+    if _inside(home, real):
+        return "it holds your home directory"
+    if _inside(root, real):
+        return "it holds the project"
+    if _inside(real, home) and any(part.startswith(".") for part in real.relative_to(home).parts):
+        return "it lies in a hidden directory of your home directory"
+    if _inside(real, config) or _inside(config, real):
+        return f"it is or holds the config directory {config} (token files)"
+    if _inside(real, root / ".git"):
+        return "it lies in the project's .git"
+    return None
+
+
+def symlink_roots(root: Path) -> list[Path]:
+    """The directories a symlinked group root may point into: the project, the site's
+    ``scratch`` and the paths in ``data_roots`` of ``config/site.local.yaml``."""
+    root = Path(root).resolve()
+    out = [root]
+    cfg = Path(root) / SITE_CONFIG
+    if cfg.is_file():
+        try:
+            data = yaml.safe_load(cfg.read_text()) or {}
+        except yaml.YAMLError as exc:
+            raise ZenodoError(f"{SITE_CONFIG}: not valid YAML: {exc}") from None
+        if not isinstance(data, dict):
+            raise ZenodoError(f"{SITE_CONFIG}: must be a mapping")
+        extra = data.get("data_roots") or []
+        if not isinstance(extra, list) or not all(isinstance(v, str) for v in extra):
+            raise ZenodoError(f"{SITE_CONFIG}: data_roots must be a list of directories")
+        for v in [data.get("scratch")] + extra:
+            if isinstance(v, str) and v.strip() and "<" not in v:
+                p = Path(os.path.expanduser(v.strip()))
+                if not p.is_absolute():
+                    raise ZenodoError(f"{SITE_CONFIG}: '{v}' must be an absolute path")
+                out.append(p.resolve())
+    return out
+
+
+def _check_link_target(rel: str, real: Path, root: Path, roots: list[Path]) -> None:
+    why = _forbidden_target(real, root)
+    if why is None and not any(_inside(real, r) for r in roots):
+        why = ("it is not under the project, the site's scratch or a data_roots entry of "
+               f"{SITE_CONFIG}")
+    if why:
+        raise ZenodoError(f"{rel} resolves to {real}: not archived, {why}")
+
+
+def _check_inner_link(rel: str, path: Path, arc_dir: str, arc_top: str) -> None:
+    """A symlink below a group root is stored as a link only if its target is relative and
+    stays inside the group root it belongs to."""
+    target = os.readlink(path)
+    if os.path.isabs(target):
+        raise ZenodoError(f"{rel} is a symlink to an absolute path; only relative links that "
+                          "stay inside the archived directory are stored. Replace it with a "
+                          "relative link or the file itself")
+    dest = posixpath.normpath(posixpath.join(arc_dir, target))
+    if not (dest == arc_top or dest.startswith(arc_top + "/")):
+        raise ZenodoError(f"{rel} is a symlink to '{target}', outside data/{arc_top}; only "
+                          "relative links that stay inside the archived directory are stored")
+
+
+def _members(root: Path, paths: list[str], roots: list[Path] | None = None) -> list[tuple[str, Path]]:
     """(arcname, filesystem path) for everything under the given project paths, sorted.
 
     Arcnames are relative to ``data/``. A path that is itself a symlink (``data/<task>`` may
-    point to scratch) is followed; symlinks below it are stored as symlinks.
+    point to scratch) is followed if its target is allowed (``symlink_roots``,
+    ``_forbidden_target``); symlinks below it are stored as symlinks if they are relative and
+    stay inside it. Anything else raises ZenodoError.
     """
+    root_r = Path(root).resolve()
+    if roots is None:
+        roots = symlink_roots(root)
     out = {}
     for rel in paths:
         top = root / rel
         arc_top = PurePosixPath(rel).relative_to("data").as_posix()
+        lexical = root_r / rel
+        real = lexical.resolve()
+        if real != lexical:
+            _check_link_target(rel, real, root_r, roots)
         if top.is_dir():
             out[arc_top] = top
             for dirpath, dirnames, filenames in os.walk(top):
                 d = Path(dirpath)
                 arc_d = PurePosixPath(arc_top, d.relative_to(top).as_posix()).as_posix()
                 for name in dirnames + filenames:
+                    if os.path.islink(d / name):
+                        _check_inner_link(f"data/{arc_d}/{name}", d / name, arc_d, arc_top)
                     out[f"{arc_d}/{name}"] = d / name
         else:
             out[arc_top] = top
@@ -347,6 +449,9 @@ class Owners:
     """The task ids and the result artifacts of a project, from its node headers."""
     tasks: set[str] = field(default_factory=set)
     artifacts: dict[str, list[str]] = field(default_factory=dict)  # result id -> artifacts
+    # task id -> privacy tier; also holds task directories without a valid header (hard-private)
+    privacy: dict[str, str] = field(default_factory=dict)
+    hard_private: list[str] = field(default_factory=list)  # publish/manifest.yaml hard_private globs
 
     def task(self, path: str) -> str:
         """The task whose data directory ``data/<id>/`` holds ``path``, or ""."""
@@ -357,17 +462,54 @@ class Owners:
         """The results whose ``artifacts`` hold ``path`` (the file, or a directory above it)."""
         return sorted(r for r, arts in self.artifacts.items() if any(_within(path, a) for a in arts))
 
+    def tier(self, path: str) -> tuple[str, str]:
+        """(privacy tier, the task id or "hard_private") of the data at project path ``path``:
+        that of the task ``data/<id>/`` belongs to, or hard-private if the publish manifest's
+        ``hard_private`` list names it or a directory above it; ("public", "") otherwise."""
+        parts = PurePosixPath(path).parts
+        if len(parts) >= 2 and parts[0] == "data" and parts[1] in self.privacy:
+            if self.privacy[parts[1]] != "public":
+                return self.privacy[parts[1]], parts[1]
+        for g in self.hard_private:
+            g = g.rstrip("/")
+            if _within(path, g) or fnmatch.fnmatchcase(path, g) or any(
+                    fnmatch.fnmatchcase("/".join(parts[:i]), g) for i in range(1, len(parts))):
+                return "hard-private", "hard_private"
+        return "public", ""
+
 
 def file_owners(root: Path) -> Owners:
-    """The task ids and result artifacts of the project at ``root`` (``nodes.scan``)."""
+    """The task ids, privacy tiers and result artifacts of the project at ``root``
+    (``nodes.scan``). A task's tier is the stricter of its own and that of every task it lies
+    in; a task directory whose context has no valid header counts as hard-private, as in
+    ``opsci publish``."""
     from . import nodes
-    res = nodes.scan(Path(root))
+    root = Path(root)
+    res = nodes.scan(root)
     own = Owners()
+    default = nodes.default_privacy(root)
+    dir_tier = {}
     for n in res.nodes:
         if n.get("type") == "task" and nodes.is_task_context(n.path):
             own.tasks.add(n.id)
+            dir_tier[str(PurePosixPath(n.path).parent)] = str(n.get("privacy") or default)
         elif n.get("type") == "result":
             own.artifacts[n.id] = [str(a) for a in n.get("artifacts") or []]
+    for n in res.nodes:
+        if n.get("type") == "task" and nodes.is_task_context(n.path):
+            tiers = [dir_tier.get(d, "hard-private") for d in nodes.task_dirs(n.path)]
+            t = nodes.strictest(tiers)
+            own.privacy[n.id] = nodes.strictest([t, own.privacy[n.id]]) if n.id in own.privacy else t
+    for glob in nodes.TASK_ROOT_GLOBS:
+        for d in root.glob(f"{glob}/*/"):
+            if d.is_dir() and d.relative_to(root).as_posix() not in dir_tier and d.name not in own.privacy:
+                own.privacy[d.name] = "hard-private"
+    try:
+        pm = yaml.safe_load((root / "publish" / "manifest.yaml").read_text()) or {}
+        hp = pm.get("hard_private") if isinstance(pm, dict) else None
+        own.hard_private = [str(g) for g in hp] if isinstance(hp, list) else []
+    except (OSError, yaml.YAMLError):
+        pass
     return own
 
 
@@ -417,6 +559,147 @@ def production_location(path: str, manifest: dict | None) -> tuple[str, list[str
     return None
 
 
+# --------------------------------------------------------------------------- privacy and scans
+
+def include_private(manifest: dict) -> set[str]:
+    """The task ids in ``zenodo.include_private``: soft- or hard-private tasks whose data the
+    user has decided to release."""
+    z = manifest.get("zenodo") or {}
+    val = z.get("include_private") if isinstance(z, dict) else None
+    if val is None:
+        return set()
+    if not isinstance(val, list) or not all(isinstance(v, str) for v in val):
+        raise ZenodoError(f"{MANIFEST}: zenodo.include_private must be a list of task ids")
+    return set(val)
+
+
+@dataclass(frozen=True)
+class Override:
+    """A leak finding kind the user accepts: an entry of ``zenodo.overrides``. The same kinds
+    and fields as the publish manifest's ``overrides:`` (check-overrides.md)."""
+    kind: str
+    reason: str
+    date: str
+    paths: tuple[str, ...] = ()
+
+    def covers(self, hit) -> bool:
+        return hit.pattern == self.kind and (not self.paths or any(
+            _within(hit.path, g) or fnmatch.fnmatchcase(hit.path, g) for g in self.paths))
+
+
+def overrides(manifest: dict) -> list[Override]:
+    """``zenodo.overrides`` of the data manifest, checked. Only the leak kinds that
+    ``opsci publish`` lets the user accept (SLURM job numbers); a secret is never overridden."""
+    from . import leakscan
+    z = manifest.get("zenodo") or {}
+    val = z.get("overrides") if isinstance(z, dict) else None
+    if val is None:
+        return []
+    if not isinstance(val, list):
+        raise ZenodoError(f"{MANIFEST}: zenodo.overrides must be a list of {{check, kind, reason, date}} entries")
+    out = []
+    for i, o in enumerate(val):
+        where = f"{MANIFEST}: zenodo.overrides[{i}]"
+        if not isinstance(o, dict) or set(o) - {"check", "kind", "reason", "date", "paths"}:
+            raise ZenodoError(f"{where}: must be a mapping with check, kind, reason, date and optional paths")
+        check, kind = str(o.get("check", "")), str(o.get("kind", ""))
+        if check != "leak" or kind not in leakscan.OVERRIDABLE:
+            raise ZenodoError(f"{where}: check '{check}', kind '{kind}' cannot be overridden; the "
+                              f"overridable kinds are leak: {', '.join(sorted(leakscan.OVERRIDABLE))}")
+        reason = o.get("reason")
+        if not isinstance(reason, str) or not reason.strip():
+            raise ZenodoError(f"{where}: `reason` must say why the user accepts these findings")
+        date = o.get("date")
+        date = date.isoformat() if isinstance(date, dt.date) else date
+        if not isinstance(date, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date.strip()):
+            raise ZenodoError(f"{where}: `date` must be the date of the user's decision, YYYY-MM-DD")
+        paths = o.get("paths", [])
+        paths = [paths] if isinstance(paths, str) else paths
+        if not isinstance(paths, list) or not all(isinstance(g, str) and g.strip() for g in paths):
+            raise ZenodoError(f"{where}: `paths` must be a list of paths or globs")
+        out.append(Override(kind, " ".join(reason.split()), date.strip(), tuple(g.rstrip("/") for g in paths)))
+    return out
+
+
+def _redact(text: str, secret: str) -> str:
+    return text.replace(secret, secret[:6] + "…(redacted)")
+
+
+def scan_member(path: Path, rel: str, leak_pats, secret_pats) -> list:
+    """Leak and secret hits (``leakscan.Hit``) in one archived file or symlink.
+
+    The name is scanned with every pattern, a symlink's target as text. A PNG or PDF goes
+    through ``leakscan.scan_file`` (image text chunks, PDF strings). Other files are read in
+    chunks: text (UTF-8, no NUL byte in the first 8 kB) with every pattern, binary data with
+    the patterns meant for binary data less ``absolute-path``, which matches by chance about
+    once per megabyte of compressed data. Secrets are redacted in the hits.
+    """
+    from . import leakscan, pdf
+    pats = list(leak_pats) + list(secret_pats)
+    secret_names = {p.name for p in secret_pats}
+    hits = leakscan.scan_text(rel, rel, "filename", pats)
+    if path.is_symlink():
+        hits += leakscan.scan_text(os.readlink(path), rel, "symlink target", pats)
+    elif path.is_file():
+        with open(path, "rb") as f:
+            head = f.read(SCAN_CHUNK)
+            if head.startswith(leakscan.PNG_MAGIC) or pdf.is_pdf(head):
+                hits += [h for h in leakscan.scan_file(path, rel, pats) if h.where != "filename"]
+            else:
+                try:
+                    head[:8192].decode("utf-8")
+                    text = b"\0" not in head[:8192]
+                except UnicodeDecodeError as exc:
+                    text = exc.start > 8192 - 4 and b"\0" not in head[:8192]  # a cut character
+                use = pats if text else [p for p in pats if p.binary and p.name != "absolute-path"]
+                chunk, seen, first = head, set(), True
+                while chunk:
+                    nxt = f.read(SCAN_CHUNK)
+                    s = chunk.decode("utf-8", "replace") if text else chunk.decode("latin-1")
+                    for h in leakscan.scan_text(s, rel, "content", use):
+                        key = (h.pattern, h.match, h.line)
+                        if key not in seen:
+                            seen.add(key)
+                            single = first and not nxt
+                            hits.append(leakscan.Hit(h.path, h.where, h.pattern,
+                                                     h.line_number if single else None, h.line, h.match))
+                    chunk = (chunk[-SCAN_OVERLAP:] + nxt) if nxt else b""
+                    first = False
+    return [leakscan.Hit(h.path, h.where, h.pattern, h.line_number, _redact(h.line, h.match),
+                         _redact(h.match, h.match)) if h.pattern in secret_names else h for h in hits]
+
+
+def scan_release(root: Path, members: list[tuple[str, Path]], extra: dict[str, str] | None = None):
+    """(hits, overridden hits) of the secret and leak scans over the archived ``members``
+    (arcname, path) and the generated texts in ``extra`` (name -> text, e.g. FILES.tsv)."""
+    from . import leakscan, secretscan
+    try:
+        leak_pats = leakscan.patterns_for(Path(root))
+    except leakscan.LeakScanError as exc:
+        raise ZenodoError(f"leak scan: {exc}") from None
+    secret_pats = secretscan.SECRET_PATTERNS
+    hits = []
+    for arc, path in members:
+        hits += scan_member(path, f"data/{arc}", leak_pats, secret_pats)
+    for name, text in (extra or {}).items():
+        hits += leakscan.scan_text(text, name, "content", list(leak_pats) + list(secret_pats))
+    ovs = overrides(read_manifest(root))
+    failed, overridden = [], []
+    for h in hits:
+        o = next((o for o in ovs if o.covers(h)), None)
+        (failed if o is None else overridden).append(h)
+    return failed, overridden
+
+
+def _scan_errors(hits, max_shown: int = 20) -> list[str]:
+    if not hits:
+        return []
+    shown = "; ".join(f"{h.path} [{h.where}] {h.pattern}: {h.match!r}" for h in hits[:max_shown])
+    more = f"; and {len(hits) - max_shown} more" if len(hits) > max_shown else ""
+    return [f"secret and leak scan: {len(hits)} finding(s): {shown}{more}. Remove or fix the "
+            "files (or leave them out of the tar groups); see docs/zenodo.md, 'Scans'"]
+
+
 # --------------------------------------------------------------------------- plan
 
 @dataclass
@@ -440,6 +723,8 @@ class Plan:
     previous: dict | None = None
     errors: list[str] = field(default_factory=list)
     owners: Owners | None = None  # tasks and results of the files, for FILES.tsv and the metadata
+    private: list[str] = field(default_factory=list)  # data/ entries left out: private tasks
+    overridden: list = field(default_factory=list)  # scan hits the user accepted (zenodo.overrides)
 
     @property
     def total_bytes(self) -> int:
@@ -486,21 +771,56 @@ def make_plan(root: Path, server: str, api_url: str, build_dir: Path | None) -> 
     root = Path(root)
     manifest = read_manifest(root)
     groups, uncovered = groups_from_manifest(root, manifest)
-    plan = Plan(server, api_url, groups, uncovered=uncovered)
+    explicit = isinstance((manifest.get("zenodo") or {}).get("groups"), list)
+    owners = file_owners(root)
+    allowed = include_private(manifest)
+    # Data of soft- and hard-private tasks is not released unless zenodo.include_private names
+    # the task: a default group is left out with a note, an explicit group is refused.
+    kept, skipped, refused = [], [], []
+    for g in groups:
+        priv = [(p, *owners.tier(p)) for p in g.paths]
+        priv = [(p, t, "hard_private in publish/manifest.yaml" if who == "hard_private" else f"task {who}")
+                for p, t, who in priv if t != "public" and who not in allowed]
+        if not priv:
+            kept.append(g)
+        elif explicit:
+            refused += [f"group '{g.name}': {p} is {t} ({src}); leave it out of the group, or name "
+                        f"the task in zenodo.include_private if the user decides to release it"
+                        for p, t, src in priv]
+        else:
+            skipped += [f"{p} ({t}, {src})" for p, t, src in priv]
+    groups = kept
+    plan = Plan(server, api_url, groups, uncovered=uncovered, errors=refused, owners=owners,
+                private=skipped)
     sec = section(manifest, server)
     plan.previous = sec["releases"][-1] if sec["releases"] else None
     prev_files = (plan.previous or {}).get("files") or {}
     if not groups:
-        plan.errors.append("no tar groups: data/ is empty and zenodo.groups is not set")
+        if not plan.errors:
+            plan.errors.append("no tar groups: data/ is empty, holds only private data, "
+                               "or zenodo.groups is not set")
         return plan
     # The file-count limit needs no tar: refuse before building anything.
     plan.errors += check_limits({g.filename: 0 for g in groups} | {FILE_LIST: 0})
     if plan.errors:
         return plan
+    # What may be archived (symlinks), then the secret and leak scans, before any tar is built.
+    roots = symlink_roots(root)
+    members = []
+    for g in groups:
+        try:
+            members += _members(root, g.paths, roots)
+        except ZenodoError as exc:
+            plan.errors.append(str(exc))
+    if plan.errors:
+        return plan
+    hits, plan.overridden = scan_release(root, members)
+    plan.errors += _scan_errors(hits)
+    if plan.errors:
+        return plan
     if build_dir is not None:
         build_dir.mkdir(parents=True, exist_ok=True)
     listing = []
-    owners = plan.owners = file_owners(root)
     for g in groups:
         local = None
         if build_dir is None:
@@ -518,6 +838,9 @@ def make_plan(root: Path, server: str, api_url: str, build_dir: Path | None) -> 
     text = "# path\tsize\tsha256\ttar\ttask\tresults\n" + "".join(
         f"{p}\t{s}\t{h}\t{t}\t{owners.task(p)}\t{','.join(owners.results(p))}\n"
         for p, s, h, t in sorted(listing))
+    hits, over = scan_release(root, [], {FILE_LIST: text})
+    plan.overridden += over
+    plan.errors += _scan_errors(hits)
     blob = text.encode()
     local = None
     if build_dir is not None:
@@ -563,6 +886,10 @@ def format_plan(plan: Plan, version: str | None) -> str:
                f"{_human(plan.total_bytes)} (limit {_human(MAX_BYTES)})")
     for u in plan.uncovered:
         out.append(f"note: {u} is in no tar group and will not be released")
+    for u in plan.private:
+        out.append(f"note: {u} is private and will not be released (zenodo.include_private)")
+    for h in plan.overridden:
+        out.append(f"note: accepted by zenodo.overrides: {h.path} {h.pattern}: {h.match!r}")
     if plan.files and not plan.changed and plan.previous:
         out.append("note: nothing changed since the previous release")
     for e in plan.errors:
@@ -575,7 +902,13 @@ def format_plan(plan: Plan, version: str | None) -> str:
 def resolve_server(production: bool, api_url: str | None) -> tuple[str, str]:
     """(server kind, API base URL). Kinds: sandbox, production, custom (a local test server)."""
     if api_url:
-        host = (urllib.parse.urlparse(api_url).hostname or "").lower()
+        from .notify import _loopback_http
+        u = urllib.parse.urlparse(api_url)
+        host = (u.hostname or "").lower()
+        if not (u.scheme == "https" and host) and not _loopback_http(api_url):
+            raise ZenodoError(f"--api-url {api_url}: must be an https URL (plain http only for a "
+                              "loopback test server: 127.0.0.1, localhost, ::1); the token "
+                              "must not travel unencrypted")
         kind = ("production" if host in PRODUCTION_HOSTS else
                 "sandbox" if host in SANDBOX_HOSTS else "custom")
         base = api_url.rstrip("/")
@@ -631,9 +964,18 @@ class API:
     def __repr__(self):
         return f"API({self.base!r})"
 
+    def _origin(self, url: str) -> tuple[str, str]:
+        u = urllib.parse.urlsplit(url)
+        return u.scheme.lower(), u.netloc.lower()
+
     def _call(self, method, url, body=None, json_body=None, length=None):
         if not url.startswith(("http://", "https://")):
             url = self.base + "/" + url.lstrip("/")
+        elif self._origin(url) != self._origin(self.base):
+            # A URL from a server response (latest_draft, bucket): the token goes only to the
+            # configured API host, with the same scheme.
+            raise ZenodoError(f"{method} {url}: the server pointed to another host than "
+                              f"{self.base}; the token is sent only to the configured API host")
         headers = {"Authorization": f"Bearer {self._token}", "Accept": "application/json"}
         data = body
         if json_body is not None:
