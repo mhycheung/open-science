@@ -26,11 +26,14 @@ the map and the node headers.
    `privacy: public`; a node whose header says `soft-private` or `hard-private` stays
    private (see [Privacy tiers](project-template.md#privacy-tiers)). Some paths are never
    exported whatever the manifest says: `publish/`, `lit_cache/`, `data/`, `messages/`,
-   `.opsci/`, `.env`, `config/site.local.yaml`, and `citations/consulted.md` (the works read
-   but not used, soft-private).
+   `.opsci/`, `config/site.local.yaml`, `citations/consulted.md` (the works read but not
+   used, soft-private), and environment files in any directory (`.env`, `.env.*`, `*.env`,
+   and a `.env/` directory).
 2. **The export is a snapshot of one commit.** `opsci publish export` takes the committed
    tree of one commit (default `HEAD`), so uncommitted changes and the working tree never
-   leak. It copies the allowed files and computes an **export id**, a hash of every exported
+   leak. It reads the files as git stores them, not with `git archive`: no `.gitattributes`
+   setting changes them (`export-subst` would otherwise write branch names and commit
+   messages of the private history into a file). It copies the allowed files and computes an **export id**, a hash of every exported
    path and its content, and of your overrides (see [Overriding a finding](#overriding-a-finding)). It refuses a symbolic link among the exported files. It replaces
    each redaction marker with `[redacted (<reason>)]` (see [Redaction](#redaction)), and
    drops each omission span (see [Omission](#omission)). It
@@ -45,20 +48,26 @@ the map and the node headers.
    and writes its findings into the report. The review never blocks the publish by itself;
    you decide.
 5. **Your approval.** You approve this export id: by running the push with it, or, with the
-   skill, in the conversation. An earlier general "go ahead" does not count.
+   skill, in the conversation. An earlier general "go ahead" does not count. The code does
+   not enforce this approval; the publish skill's instructions to the agent do. `push` needs
+   only the export id, which `check` and `export` print, so an agent can push without any
+   step by you. Let only agents you trust run `push`, and review the report.
 6. **The push.** `opsci publish push --export-id <id> --message "<summary>"` copies the
    export into the public repository as a new commit, pushes it, and records the publish.
    The commit message is the summary (what this publish adds, written for readers of the
    public repository; with the skill, the agent proposes it and you approve it with the
-   export), then the files added, changed and removed, and the private commit.
+   export), then the files added, changed and removed, and the private commit (its
+   abbreviated hash, which names no file or content of the private repository). The push
+   runs the `leak` and `secret` scans on the summary and refuses it on any finding; no
+   override applies to the message.
 
 ## The checks
 
 | check | refuses |
 |---|---|
 | `policy` | `policy.collaborators_agreed` in the manifest is not `true`: confirm that co-authors agree to publishing shared work (or that there are none), then set it |
-| `leak` | internal information in a file's name, its content (for a PNG, its text chunks; for a PDF, its dictionaries and strings): absolute paths, email addresses, IP addresses (not package versions such as `alsa-lib-1.2.16.1`), SLURM job identifiers, your user name, this machine's host name and domain (neither on a GitHub Actions runner), the values in `config/site.local.yaml` (scratch path, account, partition, `identifiers`), and the patterns in `publish/PRIVATE_POLICY.md` |
-| `secret` | private keys; Slack, GitHub, AWS, Google, Anthropic and OpenAI tokens and keys; a token, password or key assigned to a variable; a password inside a URL. If `gitleaks` is installed, its findings are added |
+| `leak` | internal information in a file's name, its content (for a PNG, its text chunks; for a JPEG, its EXIF and XMP metadata; for a PDF, its dictionaries, strings and page text; UTF-16 text is decoded; the members of zip and tar archives and of `.gz`, `.bz2` and `.xz` files, see [Archives and binary files](#archives-and-binary-files)): absolute paths, email addresses, IP addresses (not package versions such as `alsa-lib-1.2.16.1`), SLURM job identifiers, your user name, this machine's host name and domain (neither on a GitHub Actions runner), the values in `config/site.local.yaml` (scratch path, account, partition, `identifiers`), and the patterns in `publish/PRIVATE_POLICY.md` |
+| `secret` | private keys; Slack, GitHub, AWS, Google, Anthropic, OpenAI and Notion tokens and keys; an AWS secret key next to its key id or the words "aws" and "secret"; a Zenodo token next to the word "zenodo"; a line holding only a 56-64 character token of mixed case and digits; a token, password or key assigned to a variable; a password inside a URL. If `gitleaks` is installed, its findings are added |
 | `citation` | a citation key (`[@key]` in markdown, `\cite{key}` in LaTeX) that is not in an exported `.bib` file |
 | `map` | node header errors, and a `map/graph.md` or `map/dead_ends.md` that is out of date |
 | `status` | an exported markdown file with no `status:` in a front-matter header, or a status that is not allowed, unless it is in `status_exempt` |
@@ -79,6 +88,22 @@ A failed check is fixed at its source, never by removing the check or widening t
 without your decision. A few kinds of finding are often legitimate; you may accept those
 instead (next section). For every other finding, if a legitimate string matches, change the
 string.
+
+### Archives and binary files
+
+The scans open archives and scan each member as a file: zip files (including `.npz`,
+`.docx`, `.xlsx`), tar files, compressed or not, and single `.gz`, `.bz2` and `.xz` files,
+up to three archives deep and 1 GiB uncompressed per archive. They refuse, as the leak
+finding `unscanned-archive`, what they cannot read: a 7z or RAR archive, an encrypted zip
+member, a damaged archive, or one over the limits. Publish the files themselves, or a zip or
+tar archive, instead.
+
+In other binary files (HDF5, pickles, `.npy`), absolute paths, identifiers, the private
+patterns and secrets are matched in all the bytes; email and IP addresses, which random bytes
+match by chance, only in runs of 16 or more printable characters. The scans do not
+decompress data inside such files (an HDF5 dataset with a compression filter), and in a PDF
+they read the page text only of fonts with one byte per character: text in a font with
+two-byte glyph ids is not read. Check such files yourself before you approve.
 
 ## Overriding a finding
 
@@ -288,6 +313,7 @@ It refuses when:
 - the export of the commit has a different id from the one you approved (the export changed
   since the report; check and review again);
 - any check fails (an overridden finding does not fail);
+- the commit message carries a leak or a secret;
 - the public repository has changes the private one lacks (drift);
 - no public repository is set: set `public_repo:` in `publish/manifest.yaml` or pass
   `--public-repo <URL or path>`;
@@ -376,6 +402,24 @@ checkout with MkDocs and the Material theme:
 `opsci site preview` builds the site of the export of `HEAD` into `_site/` without a public
 repository or a push, so you can look at it before publishing. It uses the manifest's
 `site_banner` (or `--banner TEXT`). `opsci publish check` runs the same build, as its `site` check.
+
+## Public history
+
+The public repository keeps its history. A file published once stays in the public history
+after a later publish removes it, for example when you make its task private or add it to
+`never`: anyone can read it in an earlier commit. To remove it, rewrite the public
+repository's history (with `git filter-repo`, then a force push) outside `opsci`, and ask
+GitHub support to purge cached views if the file was sensitive. A secret that was public must
+be revoked as well. After a rewrite, `publish/LAST_PUBLISHED` names a public commit that no
+longer exists: set its `public:` to the new head of the public `main`.
+
+## Raw HTML in pages
+
+Markdown files may hold raw HTML, and the site build passes it to the pages unchanged:
+a `<script>` element or an `onclick` attribute in an exported file runs in every visitor's
+browser. No check removes it. The review rubric flags added raw HTML of this kind (scripts,
+frames, forms, event attributes, `javascript:` URLs); read those findings before you approve.
+Page titles are escaped.
 
 ## Before the first publish
 

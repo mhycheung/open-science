@@ -1,8 +1,10 @@
 """The leak scan: refuse to publish anything that carries internal information.
 
 Generalised from a working project's site leak gate. It scans every file of a tree: the
-file's path, its bytes, the text chunks of PNG images (not their compressed pixels), and
-the dictionaries and strings of PDFs. Any hit the user has not overridden refuses the
+file's path, its bytes (UTF-16 text decoded), the text chunks of PNG images (not their
+compressed pixels), the EXIF and XMP metadata of JPEG images, the dictionaries, strings and
+page text of PDFs, and the members of zip and tar archives and of .gz, .bz2 and .xz files.
+An archive it cannot read refuses the publish. Any hit the user has not overridden refuses the
 publish, names the file and prints the matching line.
 
 There is no override flag here. A few patterns flag information that is often harmless
@@ -22,12 +24,18 @@ Pattern sources:
 
 from __future__ import annotations
 
+import bz2
 import getpass
+import gzip
 import html
+import io
+import lzma
 import os
 import re
 import socket
 import struct
+import tarfile
+import zipfile
 import zlib
 from dataclasses import dataclass
 from pathlib import Path
@@ -233,7 +241,8 @@ def patterns_for(root: Path | None) -> list[Pattern]:
 
 
 def _png_text(data: bytes) -> str:
-    """Text of a PNG's tEXt, zTXt and iTXt chunks (where plotting tools put metadata)."""
+    """Text of a PNG's tEXt, zTXt, iTXt and eXIf chunks (where plotting tools and cameras put
+    metadata)."""
     out, pos = [], len(PNG_MAGIC)
     while pos + 8 <= len(data):
         (length,), ctype = struct.unpack(">I", data[pos:pos + 4]), data[pos + 4:pos + 8]
@@ -252,6 +261,8 @@ def _png_text(data: bytes) -> str:
                 _tkey, _, text = rest.partition(b"\0")
                 text = zlib.decompress(text) if flag else text
                 out.append(key.decode("latin-1") + "=" + text.decode("utf-8", "replace"))
+            elif ctype == b"eXIf":
+                out += [m.group().decode("latin-1") for m in META_STRINGS_RE.finditer(body)]
         except (zlib.error, IndexError, UnicodeDecodeError):
             out.append("<unreadable PNG text chunk>")
         if ctype == b"IEND":
@@ -259,7 +270,7 @@ def _png_text(data: bytes) -> str:
     return "\n".join(out)
 
 
-def scan_text(text: str, rel: str, where: str, patterns) -> list[Hit]:
+def scan_text(text: str, rel: str, where: str, patterns, line_numbers: bool = True) -> list[Hit]:
     hits = []
     lines = text.splitlines() or [text]
     exempt_paths = Path(rel).name in ABS_PATH_EXEMPT_FILES
@@ -272,8 +283,207 @@ def scan_text(text: str, rel: str, where: str, patterns) -> list[Hit]:
                     continue
                 if pat.allowed is not None and pat.allowed.match(m.group(0)):
                     continue
-                hits.append(Hit(rel, where, pat.name, n if where != "filename" else None, line,
-                                m.group(0)))
+                number = n if line_numbers and not where.startswith("filename") else None
+                hits.append(Hit(rel, where, pat.name, number, line, m.group(0)))
+    return hits
+
+
+def _utf16(data: bytes) -> str | None:
+    """The text of UTF-16 data (with a byte order mark, or ASCII text with every other byte
+    NUL), or None. Decoded as latin-1, its NUL bytes would split every word."""
+    if len(data) < 4:
+        return None
+    if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        codec = "utf-16"
+    else:
+        sample = data[:4096]
+        even, odd = sample[0::2], sample[1::2]
+        if odd.count(0) >= 0.9 * len(odd) and even.count(0) <= 0.1 * len(even):
+            codec = "utf-16-le"
+        elif even.count(0) >= 0.9 * len(even) and odd.count(0) <= 0.1 * len(odd):
+            codec = "utf-16-be"
+        else:
+            return None
+    try:
+        text = data.decode(codec)
+    except UnicodeDecodeError:
+        return None
+    # Random bytes after a chance byte order mark decode to unassigned and private-use characters.
+    shown = sum(1 for c in text if c.isprintable() or c in "\t\n\r")
+    return text if shown >= 0.95 * len(text) else None
+
+
+# Runs of printable ASCII in binary data, like `strings`. Long enough that random bytes (a
+# compressed stream, pixels) almost never produce one (about once per 10^7 bytes), so the
+# patterns kept off binary data (emails, IP addresses) can run on these runs.
+STRINGS_RE = re.compile(rb"[\x20-\x7e]{16,}")
+# Shorter runs in image metadata (EXIF and XMP), which holds text by design.
+META_STRINGS_RE = re.compile(rb"[\x20-\x7e\t\n\r]{4,}")
+JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+def _jpeg_meta(data: bytes) -> str:
+    """Printable text of a JPEG's APPn (EXIF, XMP, ICC) and comment segments."""
+    out, pos = [], 2
+    while pos + 4 <= len(data) and data[pos] == 0xFF:
+        marker = data[pos + 1]
+        if marker == 0xFF:  # fill byte
+            pos += 1
+            continue
+        if marker in (0xD8, 0x01) or 0xD0 <= marker <= 0xD7:
+            pos += 2
+            continue
+        if marker in (0xDA, 0xD9):  # start of scan: the compressed pixels follow
+            break
+        (length,) = struct.unpack(">H", data[pos + 2:pos + 4])
+        if 0xE0 <= marker <= 0xEF or marker == 0xFE:
+            out += [m.group().decode("latin-1") for m in META_STRINGS_RE.finditer(data[pos + 4:pos + 2 + length])]
+        pos += 2 + length
+    return "\n".join(out)
+
+
+# Archives are opened and their members scanned like files (a .zip, and .npz, .docx, .xlsx,
+# which are zip files; a .tar, compressed or not; a .gz, .bz2 or .xz file). Formats the
+# standard library cannot read are refused. Limits keep a decompression bomb out of memory.
+ARCHIVE_MAX_BYTES = 1 << 30  # uncompressed bytes read from one archive, members included
+ARCHIVE_MAX_DEPTH = 3  # archives inside archives
+UNREADABLE_MAGIC = {b"7z\xbc\xaf\x27\x1c": "a 7z archive", b"Rar!\x1a\x07": "a RAR archive"}
+UNSCANNED = "unscanned-archive"
+
+
+def _unscanned(rel: str, member: str, why: str) -> Hit:
+    return Hit(rel, _where("content", member), UNSCANNED, None,
+               f"{why}: its content cannot be scanned; publish the files themselves, or a zip or "
+               "tar archive", why)
+
+
+def _where(kind: str, member: str) -> str:
+    return f"{kind} of member {member}" if member else kind
+
+
+def _decompress(data: bytes, kind: str, limit: int) -> bytes | None:
+    """The decompressed bytes, or None if they exceed ``limit``."""
+    if kind == "gz":
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:
+            out = f.read(limit + 1)
+    else:
+        d = bz2.BZ2Decompressor() if kind == "bz2" else lzma.LZMADecompressor()
+        out = d.decompress(data, max_length=limit + 1)
+    return None if len(out) > limit else out
+
+
+def _is_tar(data: bytes) -> bool:
+    return len(data) > 262 and data[257:262] == b"ustar"
+
+
+def _members(data: bytes, rel: str, member: str):
+    """[(member name, bytes or None, problem Hit or None)] for the files of an archive, or None
+    if ``data`` is not an archive. A compressed single file is one member with an empty name.
+    What cannot be read gives a problem Hit, which refuses the publish."""
+    for magic, what in UNREADABLE_MAGIC.items():
+        if data.startswith(magic):
+            return [("", None, _unscanned(rel, member, what))]
+    too_big = f"more than {ARCHIVE_MAX_BYTES} bytes uncompressed"
+    if data.startswith((b"PK\x03\x04", b"PK\x05\x06")):
+        out, budget = [], ARCHIVE_MAX_BYTES
+        try:
+            with zipfile.ZipFile(io.BytesIO(data)) as z:
+                for info in z.infolist():
+                    if info.is_dir():
+                        continue
+                    if info.flag_bits & 0x1:
+                        out.append((info.filename, None, _unscanned(rel, member, f"{info.filename}: encrypted")))
+                        continue
+                    with z.open(info) as f:
+                        body = f.read(budget + 1)
+                    if len(body) > budget:
+                        out.append((info.filename, None, _unscanned(rel, member, too_big)))
+                        break
+                    budget -= len(body)
+                    out.append((info.filename, body, None))
+        except (zipfile.BadZipFile, NotImplementedError, RuntimeError, OSError, EOFError, zlib.error) as exc:
+            out.append(("", None, _unscanned(rel, member, f"an unreadable zip file ({exc})")))
+        return out
+    kind = ("gz" if data.startswith(b"\x1f\x8b") else "bz2" if data.startswith(b"BZh")
+            else "xz" if data.startswith(b"\xfd7zXZ\x00") else None)
+    if kind is None and not _is_tar(data):
+        return None
+    raw = data
+    if kind is not None:
+        try:
+            raw = _decompress(data, kind, ARCHIVE_MAX_BYTES)
+        except (OSError, EOFError, ValueError, lzma.LZMAError) as exc:
+            return [("", None, _unscanned(rel, member, f"unreadable {kind} data ({exc})"))]
+        if raw is None:
+            return [("", None, _unscanned(rel, member, too_big))]
+        if not _is_tar(raw):
+            return [("", raw, None)]
+    out = []
+    try:
+        with tarfile.open(fileobj=io.BytesIO(raw)) as tar:
+            for m in tar:
+                if m.isfile():
+                    out.append((m.name, tar.extractfile(m).read(), None))
+    except (tarfile.TarError, OSError, EOFError) as exc:
+        out.append(("", None, _unscanned(rel, member, f"an unreadable tar file ({exc})")))
+    return out
+
+
+def scan_bytes(data: bytes, rel: str, patterns, member: str = "", depth: int = 0) -> list[Hit]:
+    """Scan the content of file ``rel``, or of its archive member ``member`` (a path such as
+    ``inner.tar!a/b.txt``, members of nested archives joined by '!')."""
+    members = _members(data, rel, member)
+    if members is not None:
+        if depth >= ARCHIVE_MAX_DEPTH:
+            return [_unscanned(rel, member, f"archives nested more than {ARCHIVE_MAX_DEPTH} deep")]
+        hits = []
+        for name, body, problem in members:
+            if problem is not None:
+                hits.append(problem)
+                continue
+            inner = f"{member}!{name}" if member and name else (name or member or "(decompressed)")
+            if name:
+                hits += scan_text(name, rel, _where("filename", inner), patterns)
+            hits += scan_bytes(body, rel, patterns, inner, depth + 1)
+        return hits
+    name = member.rsplit("!", 1)[-1] if member else rel
+    content, meta_where = _where("content", member), _where("image-metadata", member)
+    if data.startswith(PNG_MAGIC):
+        # Text chunks only: the pixel data is compressed, and random bytes match short patterns.
+        meta = _png_text(data)
+        return scan_text(meta, rel, meta_where, patterns) if meta else []
+    if pdf.is_pdf(data):
+        # Dictionaries, strings and page text only: compressed streams are random bytes, and runs
+        # of PDF names look like paths. With those gone, every pattern applies.
+        return scan_text(pdf.scan_text(data), rel, content, patterns)
+    binary_pats = [p for p in patterns if p.binary]
+    text16 = _utf16(data)
+    text = text16
+    if text is None:
+        try:
+            text = data.decode("utf-8")
+        except UnicodeDecodeError:
+            pass
+    if text is not None:
+        if name.endswith((".html", ".htm", ".xml", ".json")):
+            # Markup escapes '<' and '>' as entities, whose ';' would otherwise start an absolute path.
+            text = html.unescape(text)
+        hits = scan_text(text, rel, content, patterns)
+        if text16 is not None:  # the byte order mark may be chance: scan the bytes as binary data too
+            hits += scan_text(data.decode("latin-1"), rel, content, binary_pats)
+        return hits
+    # Binary data: the patterns that do not match by chance run on all of it; the others run on
+    # its long printable runs, and on all the text of a JPEG's metadata.
+    hits = scan_text(data.decode("latin-1"), rel, content, binary_pats)
+    chance = [p for p in patterns if not p.binary]
+    if chance:
+        if data.startswith(JPEG_MAGIC):
+            meta = _jpeg_meta(data)
+            if meta:
+                hits += scan_text(meta, rel, meta_where, chance)
+        runs = "\n".join(m.group().decode("ascii") for m in STRINGS_RE.finditer(data))
+        if runs:
+            hits += scan_text(runs, rel, content + " (printable runs)", chance, line_numbers=False)
     return hits
 
 
@@ -281,25 +491,7 @@ def scan_file(path: Path, rel: str, patterns) -> list[Hit]:
     hits = scan_text(rel, rel, "filename", patterns)
     if path.is_symlink() or not path.is_file():
         return hits
-    data = path.read_bytes()
-    if data.startswith(PNG_MAGIC):
-        # Text chunks only: the pixel data is compressed, and random bytes match short patterns.
-        meta = _png_text(data)
-        return hits + (scan_text(meta, rel, "image-metadata", patterns) if meta else [])
-    if pdf.is_pdf(data):
-        # Dictionaries and strings only: compressed streams are random bytes, and runs of PDF
-        # names look like paths. With those gone, every pattern applies.
-        return hits + scan_text(pdf.scan_text(data), rel, "content", patterns)
-    try:
-        text = data.decode("utf-8")
-        binary = False
-    except UnicodeDecodeError:
-        text = data.decode("latin-1")
-        binary = True
-    if not binary and rel.endswith((".html", ".htm", ".xml", ".json")):
-        # Markup escapes '<' and '>' as entities, whose ';' would otherwise start an absolute path.
-        text = html.unescape(text)
-    return hits + scan_text(text, rel, "content", [p for p in patterns if p.binary] if binary else patterns)
+    return hits + scan_bytes(path.read_bytes(), rel, patterns)
 
 
 def scan_tree(root: Path, patterns, files=None, honour_planted_marker: bool = False) -> list[Hit]:

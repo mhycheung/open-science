@@ -208,6 +208,13 @@ SECRETS = [
     ("ZENODO_TOKEN = 'q8Zr" + "T4mW9xLk2PvB7nYc3D'", "assigned-secret"),
     ("password: hunter2" + "hunter2hunter2", "assigned-secret"),
     ("git clone https://bob:s3cr" + "etpw@git.example.org/r.git", "url-credentials"),
+    # bare tokens, with no `KEY=` in front
+    ("notion " + "ntn_" + "41582390817" + "aBcDeFgHiJkLmNoPqRsTuVwXyZ01234567", "notion-token"),
+    ("legacy " + "secret_" + "Ab3" * 14 + "q", "notion-token"),
+    ("AK" + "IAIOSFODNN7EXAMPLQ," + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKQZ", "aws-secret-key"),
+    ("aws secret: " + "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKQZ", "aws-secret-key"),
+    ("zenodo sandbox " + "Q7wErTy9Ui" * 6, "zenodo-token"),
+    ("Q7wErTy9Ui" * 6, "bare-token"),
 ]
 
 
@@ -228,6 +235,11 @@ PLACEHOLDERS = [
     "password = changeme",
     "api_key: xxxxxxxxxxxxxxxxxxxx",
     "the token is read from a private file (mode 600)",
+    # hashes are hex, one case only: not tokens
+    "aws secret key rotated in commit " + "0123456789abcdef" * 2 + "01234567",
+    "zenodo record checksum " + "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+    "9F86D081884C7D659A2FEAA0C55AD015A3BF4F1B2B0B822CD15D6C15B0F00A08",
+    "secret_key_for_the_session_is_read_from_the_environment_at_start",
 ]
 
 
@@ -269,3 +281,149 @@ def test_github_runner_account_is_not_a_site_identifier(tmp_path, site, monkeypa
     assert leak_names(tmp_path, "the chunk runner") == ["site-identifier (user name)"]
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
     assert leak_names(tmp_path, "the chunk runner") == []
+
+
+# ------------------------------------------------------------------ encodings and formats
+
+
+def scan_names(tmp_path, name, data):
+    (tmp_path / name).write_bytes(data)
+    return {h.pattern for h in leakscan.scan_tree(tmp_path, leakscan.patterns_for(None))}
+
+
+@pytest.mark.parametrize("codec", ["utf-16", "utf-16-le", "utf-16-be"])
+def test_utf16_text_is_decoded(tmp_path, site, codec):
+    text = "mail real.person@univ.edu, output in /scratch/grp/run1, host 10.12.0.5\n"
+    assert scan_names(tmp_path, "notes.txt", text.encode(codec)) == {"email", "absolute-path", "ipv4"}
+
+
+def test_utf16_secret_is_found(tmp_path):
+    (tmp_path / "f.txt").write_bytes(("token " + "gh" + "p_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8").encode("utf-16"))
+    assert {h.pattern for h in secretscan.scan(tmp_path)[0]} == {"github-token"}
+
+
+def test_binary_file_printable_runs_are_scanned(tmp_path, site):
+    # an HDF5 attribute or a pickle: a long printable string inside binary data
+    data = b"\x89HDF\r\n\x1a\n\x00\xff\x00" + b"author=real.person@univ.edu host=10.12.0.5" + b"\x00\xfe" * 8
+    assert scan_names(tmp_path, "run.h5", data) == {"email", "ipv4"}
+
+
+def _jpeg(exif: bytes) -> bytes:
+    app1 = b"Exif\x00\x00II*\x00\x08\x00\x00\x00" + exif
+    return (b"\xff\xd8" + b"\xff\xe1" + struct.pack(">H", len(app1) + 2) + app1
+            + b"\xff\xda\x00\x02" + b"\x93@\x01.\x02\xe0\xff\x00" + b"\xff\xd9")
+
+
+def test_jpeg_exif_is_scanned(tmp_path, site):
+    # short fields between binary bytes: below the printable-run length of other binary data
+    assert scan_names(tmp_path, "photo.jpg", _jpeg(b"\x01\x00a@univ.edu\x00\x02\x0010.2.3.4\x00")) == {"email", "ipv4"}
+
+
+def test_png_exif_chunk_is_scanned(tmp_path, site):
+    body = b"II*\x00\x01a@univ.edu\x00"
+    chunk = struct.pack(">I", len(body)) + b"eXIf" + body + struct.pack(">I", zlib.crc32(b"eXIf" + body))
+    png = _png_with_text(b"Software", b"matplotlib", False)
+    assert scan_names(tmp_path, "fig.png", png[:-12] + chunk + png[-12:]) == {"email"}
+
+
+def _content_pdf(content: bytes, info: bytes = b"(fig)") -> bytes:
+    body = zlib.compress(content)
+    objs = [b"<< /Type /Catalog /Pages 2 0 R >>", b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>",
+            b"<< /Length " + str(len(body)).encode() + b" /Filter /FlateDecode >>\nstream\n" + body + b"\nendstream",
+            b"<< /Title " + info + b" >>"]
+    return (b"%PDF-1.5\n" + b"".join(b"%d 0 obj\n" % i + o + b"\nendobj\n" for i, o in enumerate(objs, 1))
+            + b"%%EOF\n")
+
+
+def test_pdf_page_text_is_scanned(tmp_path, site):
+    from opsci import pdf
+    # Tj with literal strings split at a font change, TJ with a hex string and kerning
+    content = (b"BT /F1 12 Tf 72 700 Td (Mail real.per) Tj /F2 12 Tf (son@univ.edu) Tj ET\n"
+               b"BT 72 680 Td [<2f736372> -20 (atch/grp/run1) -400 (done)] TJ ET\n"
+               b"BT 72 660 Td (" + USER.encode() + b" was here) ' ET\n")
+    data = _content_pdf(content)
+    assert "Mail real.person@univ.edu" in pdf.page_text(data)
+    assert scan_names(tmp_path, "notes.pdf", data) == {"email", "absolute-path", "site-identifier (user name)"}
+    assert pdf.page_count(data) == 1
+
+
+def test_pdf_page_text_secret_is_found(tmp_path):
+    token = "gh" + "p_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+    (tmp_path / "slides.pdf").write_bytes(_content_pdf(b"BT (" + token.encode() + b") Tj ET"))
+    assert {h.pattern for h in secretscan.scan(tmp_path)[0]} == {"github-token"}
+
+
+@pytest.mark.parametrize("info", [
+    b"<FEFF" + "jdoe42".encode("utf-16-be").hex().upper().encode() + b">",
+    b"(\\376\\377" + b"".join(b"\\000" + bytes([c]) for c in b"jdoe42") + b")",
+    b"(\xfe\xff" + "jdoe42".encode("utf-16-be") + b")",
+])
+def test_pdf_utf16_metadata_is_decoded(tmp_path, site, info):
+    assert scan_names(tmp_path, "fig.pdf", _content_pdf(b"", info=info)) == {"site-identifier (user name)"}
+
+
+def _zip(members: dict) -> bytes:
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for name, data in members.items():
+            z.writestr(name, data)
+    return buf.getvalue()
+
+
+def _tar(members: dict, mode: str = "w") -> bytes:
+    import io
+    import tarfile
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode=mode) as t:
+        for name, data in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            t.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("name,make", [
+    ("bundle.zip", lambda m: _zip(m)),
+    ("arrays.npz", lambda m: _zip(m)),
+    ("report.docx", lambda m: _zip(m)),
+    ("bundle.tar", lambda m: _tar(m)),
+    ("bundle.tar.gz", lambda m: _tar(m, "w:gz")),
+    ("bundle.tar.xz", lambda m: _tar(m, "w:xz")),
+    ("nested.zip", lambda m: _zip({"inner.tar.bz2": _tar(m, "w:bz2")})),
+])
+def test_archive_members_are_scanned(tmp_path, site, name, make):
+    data = make({"notes/run.txt": b"output in /scratch/grp/run1 by real.person@univ.edu\n",
+                 f"{USER}-log.txt": b"clean\n"})
+    (tmp_path / name).write_bytes(data)
+    hits = leakscan.scan_tree(tmp_path, leakscan.patterns_for(None))
+    assert {h.pattern for h in hits} == {"absolute-path", "email", "site-identifier (user name)"}
+    assert {h.path for h in hits} == {name}
+    assert any("member" in h.where and "notes/run.txt" in h.where for h in hits)
+
+
+def test_gzip_file_is_scanned(tmp_path, site):
+    import gzip
+    assert scan_names(tmp_path, "log.txt.gz", gzip.compress(b"see /scratch/grp/run1\n")) == {"absolute-path"}
+
+
+def test_archive_secret_is_found(tmp_path):
+    token = "gh" + "p_" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8"
+    (tmp_path / "a.zip").write_bytes(_zip({"cfg.ini": f"x {token}\n".encode()}))
+    assert {h.pattern for h in secretscan.scan(tmp_path)[0]} == {"github-token"}
+
+
+def test_unreadable_archives_are_refused(tmp_path, site):
+    assert scan_names(tmp_path, "a.7z", b"7z\xbc\xaf\x27\x1c" + b"\x00" * 40) == {leakscan.UNSCANNED}
+    data = bytearray(_zip({"a.txt": b"hello"}))
+    data[6] |= 1  # the encrypted flag of the member's local header ...
+    cd = data.find(b"PK\x01\x02")
+    data[cd + 8] |= 1  # ... and of its central directory entry
+    (tmp_path / "a.7z").unlink()
+    assert scan_names(tmp_path, "b.zip", bytes(data)) == {leakscan.UNSCANNED}
+
+
+def test_clean_archive_passes(tmp_path, site):
+    assert scan_names(tmp_path, "ok.zip", _zip({"a.txt": b"nothing to see\n", "b.npy": bytes(range(256)) * 4})) == set()
