@@ -137,7 +137,7 @@ cmd_register() {
   prune_stale
   local sock="${TMUX%%,*}"
   if ! rr_sock_ok "$sock"; then
-    echo "refusing: the tmux socket $sock is in a directory other users can reach; start tmux with a private socket (the default /tmp/tmux-\$UID is one) and register from there." >&2
+    echo "refusing: the tmux socket $sock is in a directory other users can reach; start tmux with a private socket (the default tmux-\$UID directory in /tmp is one) and register from there." >&2
     return 1
   fi
   [[ ${#sessions[@]} -gt 0 ]] || sessions=("$(current_session "$sock")")

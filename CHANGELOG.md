@@ -128,7 +128,7 @@ Run from the project root, on a branch, with `FW` a framework checkout at this r
     have no per-pane mode, so their panes resume in the registered mode if you chose one
     explicitly, else without a mode flag.
   - tmux sockets: a socket whose directory is not a real directory owned by you with no
-    group or other permissions (another user can create `/tmp/tmux-<uid>` first on a fresh
+    group or other permissions (another user can create the `tmux-<uid>` directory in `/tmp` first on a fresh
     node) is not used; the session is rebuilt on a new private socket and the notice gives
     its attach command. The coordinator, snapshot and delivery skip such sockets, and
     `register` refuses them.

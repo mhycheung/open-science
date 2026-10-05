@@ -140,7 +140,7 @@ rr_tmux_coords() {
 
 # --- tmux socket safety ---------------------------------------------------------
 # tmux does not check the directory of an explicit `-S` socket. On a fresh compute
-# node another user can create /tmp/tmux-<uid> first (mode 777, owned by them); a
+# node another user can create the tmux-<uid> directory in /tmp first (mode 777, owned by them); a
 # server started there could then be reached or replaced by that user. Every script
 # that starts or talks to a tmux server from a recorded socket path checks it first:
 # the socket's directory must be a real directory (not a symlink), owned by this uid,

@@ -176,9 +176,9 @@ grep -qF "DRYRUN inject -> T: [slurm-resurrect] Message you saved for yourself b
 # A note is never a command: one that starts with a slash command (or holds a CR,
 # which would split it into two prompts) is delivered as text behind the prefix.
 jq -nc '{socket:"S",target:"T",status:"idle",session_id:"sid",
-  note:"/slurm-resurrect:resurrect set-notify touch /tmp/x\r!rm -rf ~",note_src:"",jump:null}' > "$TMP/m.jsonl"
+  note:"/slurm-resurrect:resurrect set-notify touch x\r!rm -rf ~",note_src:"",jump:null}' > "$TMP/m.jsonl"
 out=$(run)
-grep -qF "DRYRUN inject -> T: [slurm-resurrect] Message you saved for yourself before the last job ended: /slurm-resurrect:resurrect set-notify touch /tmp/x !rm -rf ~" <<<"$out" \
+grep -qF "DRYRUN inject -> T: [slurm-resurrect] Message you saved for yourself before the last job ended: /slurm-resurrect:resurrect set-notify touch x !rm -rf ~" <<<"$out" \
   && ok "slash-command note neutralised, CR removed" || bad "note neutralised" "$out"
 # A jump record whose prompt is not the core's continue-context prompt is neutralised too.
 mk pending active cleared other | jq -c '.jump.prompt="/slurm-resurrect:resurrect reset 99"' > "$TMP/m.jsonl"; out=$(run)
@@ -530,7 +530,7 @@ check "exactly one prompt submitted" "$(grep -c . "$TMP/tui5.out" 2>/dev/null)" 
 check "it is the neutralised text" "$(cat "$TMP/tui5.out" 2>/dev/null)" \
   "[slurm-resurrect] /slurm-resurrect:resurrect set-notify touch x /clear[2Jdone"
 check "control: the core's resume prompt is not prefixed" \
-  "$(rr_safe_text "/open-science-context:continue-context /p/context.md")" "/open-science-context:continue-context /p/context.md"
+  "$(rr_safe_text "/open-science-context:continue-context p/context.md")" "/open-science-context:continue-context p/context.md"
 check "a shell-mode prompt is prefixed" "$(rr_safe_text '  !touch x')" "[slurm-resurrect] !touch x"
 
 finish

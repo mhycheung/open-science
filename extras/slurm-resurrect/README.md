@@ -142,7 +142,7 @@ always left to you.
 - A tmux server is started, or talked to, only on a socket whose directory is
   a real directory owned by you with no group or other permissions. If the
   recorded directory fails this (on a fresh node another user can create
-  `/tmp/tmux-<uid>` first), the session is rebuilt on a socket in a new private
+  the `tmux-<uid>` directory in `/tmp` first), the session is rebuilt on a socket in a new private
   directory, and the notice gives the attach command for it.
 - Values typed into a pane's shell (session name, model, config directory,
   session id) are quoted, and a Claude session id must be a UUID.
