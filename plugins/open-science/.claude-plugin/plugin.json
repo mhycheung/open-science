@@ -1,7 +1,7 @@
 {
   "name": "open-science",
   "version": "0.3.3",
-  "description": "Onboarding for the open-science framework: asks which components you want, checks your machine, and sets up tokens safely. Install this first.",
+  "description": "Onboarding for the open-science framework: asks which components you want, checks your machine, and sets up tokens safely. Install this first. Also dispatch: start an agent in a new tmux window when you ask.",
   "license": "MIT",
   "author": {
     "name": "open-science contributors"

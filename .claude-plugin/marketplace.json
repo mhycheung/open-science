@@ -10,7 +10,7 @@
     {
       "name": "open-science",
       "source": "./plugins/open-science",
-      "description": "Install first: the onboard skill, which asks which components you want and sets them up."
+      "description": "Install first: the onboard skill, which asks which components you want and sets them up; and the dispatch skill, which starts an agent in a new tmux window when you ask."
     },
     {
       "name": "open-science-project",

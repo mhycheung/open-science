@@ -109,6 +109,21 @@ and branches, just as for two human collaborators. Merge research records delibe
 and rebuild generated maps. Do not turn off the project's shared `context_management`
 setting merely because one runtime lacks a particular session control.
 
+## Dispatching an agent
+
+On request, `open-science:dispatch` starts another agent session in a new window of the
+current tmux session, in a directory you name, and with Remote Control on, so you can follow
+it in the Claude app. The directory does not need to be an open-science project ("dispatch an
+agent to clean up my home directory"). The agent gets a first prompt only if you say what it
+should do. An agent dispatches only when you ask it to.
+
+Claude Code: the open-science plugin's mod submits that prompt as your own when the new
+session starts; where mods do not run, the skill pastes it into the new window's prompt box.
+If you start Claude Code with your own command or shell function, set
+`OPSCI_DISPATCH_CMD` to it (for example `export OPSCI_DISPATCH_CMD=claude-personal` in your
+shell profile). Codex: the prompt is passed as `codex`'s argument (`OPSCI_DISPATCH_CODEX_CMD`
+overrides the command); Codex has no per-session Remote Control.
+
 ## Existing projects and updates
 
 Use `open-science-project:update-from-template` to add the Codex instructions and role
