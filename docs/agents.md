@@ -113,9 +113,10 @@ setting merely because one runtime lacks a particular session control.
 
 On request, `open-science:dispatch` starts another agent session in a new window of the
 current tmux session, in a directory you name, and with Remote Control on, so you can follow
-it in the Claude app. The directory does not need to be an open-science project ("dispatch an
-agent to clean up my home directory"). The agent gets a first prompt only if you say what it
-should do. An agent dispatches only when you ask it to.
+it in the Claude app. The session is named after the project: `<project>`, or `<project>-2`,
+`-3`, ..., the lowest number no live session holds. The directory does not need to be an
+open-science project ("dispatch an agent to clean up my home directory"). The agent gets a
+first prompt only if you say what it should do. An agent dispatches only when you ask it to.
 
 Claude Code: the open-science plugin's mod submits that prompt as your own when the new
 session starts; where mods do not run, the skill pastes it into the new window's prompt box.

@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 # Start an agent in a new window of the current tmux session (open-science:dispatch).
 #
-#   dispatch.sh launch --dir <dir> [--agent claude|codex] [--name <window name>]
+#   dispatch.sh launch --dir <dir> [--agent claude|codex] [--name <name>]
 #                      [--prompt-file <file>]
+#   dispatch.sh name <dir>               print the name a session dispatched to <dir> gets
 #   dispatch.sh claim <prompt file>      (the mod) print the prompt and remove it, once
 #
 # launch opens a window (in the background: the user's window stays current) in <dir>,
 # types the launch command into its shell, so that the user's shell functions and aliases
-# apply, and with --prompt-file hands the new session that prompt:
-#   claude  Remote Control on (`--remote-control`). The prompt is copied to the state
+# apply, and with --prompt-file hands the new session that prompt. The window and the session
+# are named after the project: <project>, or <project>-2, -3, ... (the lowest number free)
+# when live sessions of this account already hold the name. <project> is the basename of the
+# git top level of <dir> (else of <dir>), lower case, anything but [a-z0-9] turned into '-':
+# the names open-science-context gives sessions. A name just given to a dispatched session is
+# held for OPSCI_DISPATCH_HOLD seconds (default 120), until that session has recorded it.
+# --name gives the name instead.
+#   claude  Remote Control on (`--name <name> --remote-control <name>`). The prompt is copied to the state
 #           directory and named in OPSCI_DISPATCH_PROMPT, set for the window only; the
 #           open-science mod (hooks/dispatch_mod.js) submits it as the user's prompt when
 #           the session starts. When no mod claims it, by the time the prompt box has shown
@@ -19,14 +26,17 @@
 #           per-session Remote Control.
 # The launch command is $OPSCI_DISPATCH_CMD (claude) or $OPSCI_DISPATCH_CODEX_CMD (codex),
 # default `claude` and `codex`: set it when the plain command is not how the user starts
-# the agent (a wrapper function). It prints key=value lines: window, pane, dir, command,
-# prompt (none | mod | typed | argument | pending).
+# the agent (a wrapper function). It prints key=value lines: window, pane, dir, name,
+# command, prompt (none | mod | typed | argument | pending).
 set -uo pipefail
 
 STATE="${OPSCI_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/open-science}"
 QUEUE="$STATE/dispatch"
 GRACE="${OPSCI_DISPATCH_GRACE:-15}"
 MAXWAIT="${OPSCI_DISPATCH_MAXWAIT:-180}"
+HOLD="${OPSCI_DISPATCH_HOLD:-120}"
+SDIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/sessions"
+SEP=' · '
 
 die() { echo "dispatch: $*" >&2; exit 1; }
 
@@ -42,6 +52,45 @@ claim() {  # <file>: print it and remove it; exit 1 when already claimed or not 
   cat "$mine"
   rm -f "$mine"
 }
+
+slug() { printf '%s' "$1" | tr 'A-Z' 'a-z' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//'; }
+
+project_of() {  # <dir>
+  local top s
+  top=$(git -C "$1" rev-parse --show-toplevel 2>/dev/null) || top="$1"
+  s=$(slug "$(basename "$top")")
+  printf '%s' "${s:-session}"
+}
+
+# Names in use, one per line: the part before SEP of every live Claude Code session's name in
+# this config dir (live: its pid runs with the recorded start time), and the names held for
+# sessions dispatched in the last HOLD seconds.
+taken() {
+  local f rec pid ps name now
+  for f in "$SDIR"/*.json; do
+    [ -f "$f" ] || continue
+    rec=$(jq -r '[.pid, .procStart // "", .name // ""] | @tsv' "$f" 2>/dev/null) || continue
+    IFS=$'\t' read -r pid ps name <<<"$rec"
+    [ -n "$name" ] && [ -r "/proc/$pid/stat" ] || continue
+    [ "$(awk '{print $22}' "/proc/$pid/stat" 2>/dev/null)" = "$ps" ] || continue
+    printf '%s\n' "${name%%"$SEP"*}"
+  done
+  now=$(date +%s)
+  for f in "$QUEUE"/names/*; do
+    [ -f "$f" ] || continue
+    if [ $((now - $(stat -c %Y "$f"))) -lt "$HOLD" ]; then basename "$f"; else rm -f "$f"; fi
+  done
+}
+
+pick() {  # <dir> -> <project>, else <project>-2, -3, ...: the first not taken
+  local base cand n=2 used
+  base=$(project_of "$1"); cand=$base
+  used=$(taken)
+  while grep -qxF -- "$cand" <<<"$used"; do cand="$base-$n"; n=$((n + 1)); done
+  printf '%s' "$cand"
+}
+
+hold() { mkdir -p "$QUEUE/names" 2>/dev/null && : > "$QUEUE/names/$1"; }
 
 # The Claude Code prompt box is drawn and nothing runs: a `❯` line, and no busy marker or
 # folder-trust question on the screen.
@@ -67,14 +116,15 @@ launch() {
   dir=$(cd "$dir" && pwd -P)
   case "$agent" in claude|codex) ;; *) die "--agent must be claude or codex" ;; esac
   [ -z "$pfile" ] || [ -s "$pfile" ] || die "prompt file missing or empty: $pfile"
-  [ -n "$name" ] || name=$(basename "$dir")
+  [ -n "$name" ] || name=$(pick "$dir")
+  hold "$name"
 
   local sess
   sess=$(tmux display-message -p ${TMUX_PANE:+-t "$TMUX_PANE"} '#{session_id}') || die "cannot read the current tmux session"
 
   local base cmd queued="" envs=()
   if [ "$agent" = claude ]; then
-    base="${OPSCI_DISPATCH_CMD:-claude} --remote-control"; cmd=$base
+    base="${OPSCI_DISPATCH_CMD:-claude} --name $(printf '%q' "$name") --remote-control $(printf '%q' "$name")"; cmd=$base
     if [ -n "$pfile" ]; then
       mkdir -p "$QUEUE" && chmod 700 "$QUEUE" || die "cannot create $QUEUE"
       queued="$QUEUE/$(date +%Y%m%d-%H%M%S)-$$.prompt"
@@ -121,7 +171,7 @@ launch() {
       sleep 1; t=$((t + 1))
     done
   fi
-  printf 'window=%s\npane=%s\ndir=%s\ncommand=%s\nprompt=%s\n' "$win" "$pane" "$dir" "$base" "$how"
+  printf 'window=%s\npane=%s\ndir=%s\nname=%s\ncommand=%s\nprompt=%s\n' "$win" "$pane" "$dir" "$name" "$base" "$how"
   [ "$how" = pending ] && echo "queued=$queued"
   return 0
 }
@@ -129,5 +179,6 @@ launch() {
 case "${1:-}" in
   launch) shift; launch "$@" ;;
   claim) claim "${2:-}" ;;
-  *) echo "usage: dispatch.sh launch --dir <dir> [--agent claude|codex] [--name <name>] [--prompt-file <file>] | claim <file>" >&2; exit 2 ;;
+  name) [ -d "${2:-}" ] || die "no such directory: ${2:-(none given)}"; pick "$2"; echo ;;
+  *) echo "usage: dispatch.sh launch --dir <dir> [--agent claude|codex] [--name <name>] [--prompt-file <file>] | claim <file> | name <dir>" >&2; exit 2 ;;
 esac

@@ -33,15 +33,18 @@ ask.
 
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/dispatch.sh" launch --agent claude --dir <dir> \
-       [--name <window name>] [--prompt-file <file>]
+       [--name <name>] [--prompt-file <file>]
    ```
 
-   `--name` only when the user named the window or agent; the default is the directory's
-   name. The script opens the window in the background (the user's window stays current),
-   types `${OPSCI_DISPATCH_CMD:-claude} --remote-control` into its shell, and with a prompt
-   waits until the prompt is delivered (up to 3 minutes). Remove the temporary file after.
-4. **Report** in two or three lines, from the script's `key=value` output: the window
-   (`window`), the directory, and the prompt:
+   `--name` only when the user named the agent. Otherwise the script names the window and
+   the session after the project: `<project>` (the git top level's directory name, else the
+   directory's), or `<project>-2`, `-3`, ..., the lowest number that no live session of
+   this account holds. It opens the window in the background (the user's window stays
+   current), types `${OPSCI_DISPATCH_CMD:-claude} --name <name> --remote-control <name>`
+   into its shell, and with a prompt waits until the prompt is delivered (up to 3
+   minutes). Remove the temporary file after.
+4. **Report** in two or three lines, from the script's `key=value` output: the session's
+   name (`name`), the window (`window`), the directory, and the prompt:
    - `none`: started without a prompt.
    - `mod`: the open-science mod submitted it as the user's prompt.
    - `typed`: no mod claimed it, so it was pasted into the prompt box and sent.

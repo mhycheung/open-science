@@ -35,6 +35,7 @@ def env(tmp_path):
     e = {k: v for k, v in os.environ.items()
          if not k.startswith(("TMUX", "CLAUDE", "OPSCI", "CODEX"))}
     e.update(OPSCI_STATE_DIR=str(tmp_path / "state"), OPSCI_DISPATCH_GRACE="1",
+             CLAUDE_CONFIG_DIR=str(tmp_path / "cfg"),
              OPSCI_DISPATCH_MAXWAIT="40")
     return e
 
@@ -125,6 +126,68 @@ def test_claim_refuses_a_symlink(env, tmp_path):
     assert r.returncode == 1 and r.stdout == "" and target.exists()
 
 
+# ---- names -------------------------------------------------------------------------------
+
+def proc_start(pid):
+    return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19]
+
+
+def session(env, n, name, live=True):
+    d = Path(env["CLAUDE_CONFIG_DIR"]) / "sessions"
+    d.mkdir(parents=True, exist_ok=True)
+    pid = os.getpid()
+    (d / f"{n}.json").write_text(json.dumps({"pid": pid, "procStart": proc_start(pid) if live else "1",
+                                             "sessionId": f"s{n}", "name": name}))
+
+
+def name(env, d):
+    r = run(env, "name", d)
+    assert r.returncode == 0, r.stderr
+    return r.stdout.strip()
+
+
+def test_name_is_the_project_when_free(env, tmp_path):
+    d = tmp_path / "My Project"
+    d.mkdir()
+    assert name(env, d) == "my-project"
+
+
+def test_name_takes_the_lowest_free_number(env, tmp_path):
+    d = tmp_path / "proj"
+    d.mkdir()
+    session(env, 1, "proj · some task")
+    session(env, 2, "proj-3")
+    assert name(env, d) == "proj-2"
+    session(env, 3, "proj-2")
+    assert name(env, d) == "proj-4"
+
+
+def test_name_ignores_ended_sessions_and_other_projects(env, tmp_path):
+    d = tmp_path / "proj"
+    d.mkdir()
+    session(env, 1, "proj", live=False)
+    session(env, 2, "proj-x")
+    assert name(env, d) == "proj"
+
+
+def test_name_uses_the_git_top_level(env, tmp_path):
+    d = tmp_path / "repo" / "sub"
+    d.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(tmp_path / "repo")], check=True)
+    assert name(env, d) == "repo"
+
+
+def test_a_dispatched_name_is_held_until_its_session_records_it(env, tmp_path):
+    d = tmp_path / "proj"
+    d.mkdir()
+    held = tmp_path / "state" / "dispatch" / "names"
+    held.mkdir(parents=True)
+    (held / "proj").touch()
+    assert name(env, d) == "proj-2"
+    os.utime(held / "proj", (time.time() - 600, time.time() - 600))   # past OPSCI_DISPATCH_HOLD
+    assert name(env, d) == "proj"
+
+
 # ---- launch -------------------------------------------------------------------------------
 
 def test_launch_outside_tmux_is_refused(env, tmp_path):
@@ -148,11 +211,12 @@ def test_launch_without_a_prompt_starts_the_agent_and_sends_nothing(env, tm, tmp
     assert r.returncode == 0, r.stderr
     o = kv(r.stdout)
     assert o["prompt"] == "none" and o["dir"] == str(work.resolve())
-    assert o["command"].endswith("--remote-control")
+    assert o["name"] == "home-dir"
+    assert o["command"].endswith("--name home-dir --remote-control home-dir")
     assert wait_for(lambda: "❯" in tmux(tm, "capture-pane", "-p", "-t", o["pane"]), 20)
     # A window of the same session, named after the directory, in it; not made current.
     assert tmux(tm, "display-message", "-p", "-t", o["pane"], "#{session_name}|#{window_name}|#{pane_current_path}") \
-        == f"main|home dir|{work.resolve()}"
+        == f"main|home-dir|{work.resolve()}"
     assert tmux(tm, "display-message", "-p", "-t", "main", "#{window_index}") == "0"
     time.sleep(3)
     assert tm["rec"].read_text() == ""
@@ -167,10 +231,11 @@ def test_launch_types_the_prompt_when_no_mod_claims_it(env, tm, tmp_path):
     assert r.returncode == 0, r.stderr
     o = kv(r.stdout)
     assert o["prompt"] == "typed"
+    assert o["name"] == "cleanup"
     assert tmux(tm, "display-message", "-p", "-t", o["pane"], "#{window_name}") == "cleanup"
     assert wait_for(lambda: tm["rec"].read_text().splitlines() == ["clean up the home directory"], 10), \
         tm["rec"].read_text()
-    assert list((tmp_path / "state" / "dispatch").iterdir()) == []
+    assert list((tmp_path / "state" / "dispatch").glob("*.prompt*")) == []
 
 
 @needs_tmux
