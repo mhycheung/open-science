@@ -97,7 +97,10 @@ is not where `opsci task new` would put it, or is less private than a node it ve
 The project graph and the claims graph are images beside their pages: `map/graph.svg` and
 `map/claims.svg` (for the project site and GitHub), and a PNG of each (for Notion). Graphviz
 places the cards and arrows and pdflatex typesets them, so `$...$` in a title is set as
-LaTeX (a title whose LaTeX does not compile is set as plain text). Every arrow points
+LaTeX (a title whose LaTeX does not compile is set as plain text). The math may use ordinary
+math commands only (Greek letters, `\frac`, `\mathrm`, operators, arrows, ...); math with any
+other command, such as `\input` or `\def`, is set as plain text, so a title cannot read a
+file into the image. Every arrow points
 forward: from a node to what depends on it ("used by"), from a node to the node that
 superseded it ("superseded by"), and from a node to the verification task that checked it
 ("verified by"). Task boxes have a solid grey border, brainstorm boxes a dashed orange one.

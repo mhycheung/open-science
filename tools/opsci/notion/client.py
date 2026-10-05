@@ -183,6 +183,8 @@ class Client:
         """Upload ``data`` as a file called ``name``; return the file upload id."""
         if len(data) > MAX_UPLOAD:
             raise NotionError(f"{name} is over {MAX_UPLOAD // 2**20} MiB, the upload limit")
+        # the name goes into a multipart header: no quotes, backslashes or control characters
+        name = re.sub(r'[\x00-\x1f\x7f"\\]', "", name).strip() or "file"
         ctype = mimetypes.guess_type(name)[0] or "application/octet-stream"
         fu = self.call("POST", "/file_uploads", {"filename": name, "content_type": ctype})
         boundary = uuid.uuid4().hex

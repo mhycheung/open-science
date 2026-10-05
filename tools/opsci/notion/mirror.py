@@ -53,6 +53,21 @@ def _read(p: Path) -> str:
     return p.read_text(encoding="utf-8", errors="replace")
 
 
+def _inside(root: Path, p: Path) -> bool:
+    """Whether ``p``, with every symlink resolved, lies inside the project ``root``: a symlink
+    in a project (tasks/t01/leak.png -> ~/.config/opsci/notion.env) must not carry a file
+    from outside it to Notion."""
+    try:
+        return p.resolve().is_relative_to(root.resolve())
+    except (OSError, RuntimeError):
+        return False
+
+
+def _readable(root: Path, p: Path) -> bool:
+    """Whether ``p`` is a file inside ``root`` (symlinks resolved)."""
+    return p.is_file() and _inside(root, p)
+
+
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()[:16]
 
@@ -70,7 +85,7 @@ def caption_file(plot: Path) -> Path:
 def caption_paragraphs(plot: Path) -> list[list]:
     """The caption file as a list of paragraphs, each a Notion rich text list (<= 100 items)."""
     cf = caption_file(plot)
-    if not cf.exists():
+    if not cf.is_file() or cf.is_symlink():   # a symlink could point anywhere
         return []
     text = nb.strip_generated(nb.split_front_matter(_read(cf))[1]).strip()
     out = []
@@ -109,10 +124,12 @@ def is_graph_image(p: Path) -> bool:
         return "<!-- opsci-graph " in f.read(300)
 
 
-def _plot_files(task_dir: Path):
+def _plot_files(task_dir: Path, root: Path):
     """The plot files under a task directory. Walks with os.scandir and prunes SKIP_PARTS, so a
     task holding many run outputs costs no stat per file: on a network file system a stat is
-    slow, and task directories may hold hundreds of thousands of untracked files."""
+    slow, and task directories may hold hundreds of thousands of untracked files. Symlinked
+    directories are not entered, and a symlinked file counts only if its target is inside
+    ``root``."""
     stack = [task_dir]
     while stack:
         d = stack.pop()
@@ -126,7 +143,9 @@ def _plot_files(task_dir: Path):
                     continue
                 if e.is_dir(follow_symlinks=False):
                     stack.append(Path(e.path))
-                elif Path(e.name).suffix.lower() in PLOT_EXT and e.is_file():
+                elif Path(e.name).suffix.lower() in PLOT_EXT and e.is_file(follow_symlinks=False):
+                    yield Path(e.path)
+                elif Path(e.name).suffix.lower() in PLOT_EXT and e.is_symlink() and _readable(root, Path(e.path)):
                     yield Path(e.path)
 
 
@@ -170,7 +189,9 @@ def plots_in(root: Path, task_dir: Path, cache: _HashCache | None = None) -> lis
     own = cache is None
     cache = cache or _HashCache(root)
     best = {}
-    for p in sorted(_plot_files(task_dir)):
+    if not _inside(root, task_dir):
+        return []
+    for p in sorted(_plot_files(task_dir, root)):
         if p.suffix.lower() == ".pdf" and any(p.with_suffix(e).exists() for e in (".png", ".jpg", ".svg")):
             continue                                   # the PDF twin of a PNG is the same figure
         if is_graph_image(p):
@@ -295,6 +316,10 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
     tasks and results into links to their pages."""
     pages = []
     hashes = _HashCache(root)
+
+    def ok(p: Path) -> bool:       # every file read below: a file inside the project
+        return _readable(root, p)
+
     finder = task_finder(links or {})
 
     def md(path: Path, text: str | None = None) -> list:
@@ -312,30 +337,31 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
         "Pages here are overwritten on each sync: edit the project files, not these pages. "
         "**Feed** holds the agents' messages (newest first, removed after a few days)."))]
     page("home", root.name, banner, kind="home")
-    if (root / "PROJECT.md").exists():
+    if ok(root / "PROJECT.md"):
         page("project", "Project", nb.md_to_blocks(_read(root / "PROJECT.md")), icon="🎯")
-    if (root / "context.md").exists():
+    if ok(root / "context.md"):
         page("context", "Context", nb.md_to_blocks(_read(root / "context.md")), icon="📍")
 
-    if (root / "map" / "README.md").exists():
+    if ok(root / "map" / "README.md"):
         blocks = nb.md_to_blocks(_read(root / "map" / "README.md"))
         for f in ("graph.md", "claims.md", "dead_ends.md"):
-            if (root / "map" / f).exists():
+            if ok(root / "map" / f):
                 blocks += [nb.blk("divider")] + nb.collapse(nb.demote(md(root / "map" / f)), {"Nodes"})
         page("map", "Map", blocks, icon="🗺️")
 
-    if (root / "results" / "README.md").exists():
+    if ok(root / "results" / "README.md"):
         page("results", "Milestone results", md(root / "results" / "README.md"), icon="🏆")
 
-    logs = sorted((root / "log").glob("[0-9]*.md"), reverse=True)
+    logs = sorted((p for p in (root / "log").glob("[0-9]*.md") if ok(p)), reverse=True)
     blocks = [b for p in logs for b in nb.demote(nb.md_to_blocks(_read(p)))]
     page("log", "Log", blocks or nb.md_to_blocks("No log yet."), icon="📜")
 
-    if (root / "rules" / "README.md").exists():
+    if ok(root / "rules" / "README.md"):
         page("rules", "Rules", nb.md_to_blocks(_read(root / "rules" / "README.md")), icon="📏")
-    if (root / "brainstorm" / "context.md").exists():
+    if ok(root / "brainstorm" / "context.md"):
         page("brainstorm", "Brainstorm context", nb.md_to_blocks(_read(root / "brainstorm" / "context.md")), icon="💡")
-    priv = sorted((root / "private-docs").rglob("*.md")) if (root / "private-docs").exists() else []
+    priv = sorted(p for p in (root / "private-docs").rglob("*.md") if ok(p)) \
+        if (root / "private-docs").is_dir() else []
     if priv:
         page("private", "Private docs",
              [nb.toggle(f"`{p.relative_to(root)}`", nb.demote(nb.md_to_blocks(_read(p)), 2)) for p in priv],
@@ -344,22 +370,22 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
     for tr in TASK_ROOT_GLOBS:
         for td in sorted(root.glob(f"{tr}/*/")):
             ctx = td / "context.md"
-            if not ctx.exists():
+            if not _inside(root, td) or not ok(ctx):
                 continue
             fm, body = nb.split_front_matter(_read(ctx))
             tid = fm.get("id", td.name)
             body = re.sub(r"\A\s*# .*\n", "", nb.strip_generated(body))   # the row title has it
             blocks = md(ctx, body)
             res = td / "results" / "README.md"
-            if res.exists():
+            if ok(res):
                 inner = md(res, re.sub(r"\A\s*# .*\n", "", nb.strip_generated(_read(res))))
                 blocks.append(nb.toggle("Results", nb.demote(inner, 2)))
             for name, label in (("plan.md", "Plan"), ("map.md", "Task map"), ("log.md", "Task log")):
-                if (td / name).exists():
+                if ok(td / name):
                     inner = nb.md_to_blocks(nb.split_front_matter(_read(td / name))[1])
                     blocks.append(nb.toggle(label, nb.demote(inner, 2)))
             for sc in sorted((td / "subcontext").glob("*.md")) if (td / "subcontext").exists() else []:
-                if sc.name != "README.md":
+                if sc.name != "README.md" and ok(sc):
                     blocks.append(nb.toggle(f"`subcontext/{sc.name}`", nb.demote(nb.md_to_blocks(_read(sc)), 2)))
             props = {"Name": f"{tid}: {fm.get('title', '')}".rstrip(": "), "ID": tid,
                      "Status": fm.get("status"),
@@ -373,6 +399,8 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
         if n.get("type") != "result" or Path(n.path).name == "README.md":
             continue
         f = root / n.path
+        if not ok(f):
+            continue
         body = re.sub(r"\A\s*# .*\n", "", nb.strip_generated(nb.split_front_matter(_read(f))[1]))
         parts = Path(n.path).parts          # tasks/<id>/results/<rid>.md, or results/<rid>.md
         task = parts[-3] if len(parts) >= 3 and parts[-2] == "results" else ""

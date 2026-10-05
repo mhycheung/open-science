@@ -2,6 +2,8 @@
 Graphviz, pdflatex and Poppler are installed, a real render."""
 
 import re
+import shutil
+import subprocess
 
 import pytest
 
@@ -29,6 +31,46 @@ def drawing():
 def test_tex_text_escapes_text_and_keeps_math():
     assert G.tex_text(r"50% & $S_n(f)$ #1_x") == r"50\% \& $S_n(f)$ \#1\_x"
     assert G.tex_text("costs $5") == r"costs \$5"  # a lone $ is text
+
+
+@pytest.mark.parametrize("math", [
+    r"\input{/etc/passwd}", r"\include{x}", r"\read16 to\x", r"\openin1=x", r"\immediate\write18{id}",
+    r"\catcode`\@=11", r"\def\x{1}", r"\csname input\endcsname", r"\usepackage{x}",
+    r"\IfFileExists{x}{}{}", r"^^5cinput{x}", r"\let\a\b", r"\expandafter\x", r"\scantokens{x}",
+    r"\includegraphics{x}", r"\pdffiledump{x}", r"\newcommand\x{}",
+    r"\tikz\draw plot file{x};", r"\begin{filecontents}{x}", r"\pgfimage{x}", r"\ExplSyntaxOn\file_input:n{x}"])
+def test_tex_text_sets_math_that_touches_files_or_macros_as_text(math):
+    out = G.tex_text(f"Result ${math}$")
+    assert out.startswith(r"Result \$") and out.endswith(r"\$")  # escaped as text, not kept as math
+    assert re.search(r"\\[A-Za-z]", out.replace(r"\textbackslash", "").replace(r"\textasciicircum", "")
+                     .replace(r"\textasciitilde", "")) is None
+
+
+def test_tex_text_keeps_ordinary_math():
+    for math in (r"\frac{1}{2}", r"\alpha_{\rm eff}", r"\mathcal{O}(f^2)", r"\left(\sum_i x_i\right)"):
+        assert G.tex_text(f"a ${math}$") == f"a ${math}$"
+
+
+def _pdf_text(pdf):
+    out = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
+    return re.sub(r"\s", "", out)  # math italic comes out letter-spaced
+
+
+@pytest.mark.skipif(G._tool("pdflatex") is None or shutil.which("pdftotext") is None,
+                    reason="needs pdflatex and pdftotext")
+def test_pdflatex_cannot_read_a_file_outside_its_work_dir(tmp_path):
+    canary = tmp_path / "canary.txt"
+    canary.write_text("TOPSECRETCANARY\n")
+    work = tmp_path / "work"
+    work.mkdir()
+    title = G.tex_text(rf"Result $\input{{{canary}}}$")  # the title is set as text
+    G._pdflatex(work, "a", r"\documentclass{article}\begin{document}" + title + r"\end{document}")
+    assert "Result" in _pdf_text(work / "a.pdf") and "TOPSECRETCANARY" not in _pdf_text(work / "a.pdf")
+    # pdflatex may not write outside its work dir (since TeX Live 2026 openin_any restricts no
+    # reading, so the reading side rests on tex_text alone)
+    G._pdflatex(work, "c", r"\documentclass{article}\begin{document}x\immediate\openout1=" + str(tmp_path / "w.tex")
+                + r"\immediate\write1{hi}\immediate\closeout1\end{document}")
+    assert not (tmp_path / "w.tex").exists()
 
 
 def test_transitive_reduction_drops_implied_dependencies_only():

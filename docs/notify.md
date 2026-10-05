@@ -13,8 +13,13 @@ session ends or hands over, and when something needs the user. Three back ends s
 | `notion` (recommended) | posts to the project's Feed in Notion and @mentions you | [Notion](notion.md) |
 | `slack` | posts to a Slack channel through your own Slack app | this page |
 
-Exit status: `0` sent; `2` misconfiguration or bad input (a missing attachment, an unknown
-back end, a bad config, a missing or too-open credentials file); `3` the Slack send failed.
+The file must be inside the project (or its main checkout, in a git worktree) once symlinks
+are resolved, and never under a hidden directory of your home directory (`~/.config`,
+`~/.ssh`, ...): an attachment leaves the machine, so a token file cannot be sent by mistake.
+Such a path is refused with an error and nothing is sent.
+
+Exit status: `0` sent; `2` misconfiguration or bad input (a missing or refused attachment, an
+unknown back end, a bad config, a missing or too-open credentials file); `3` the Slack send failed.
 When the selected back end is not `file` and fails, the message is also written to
 `messages/`, so it is not lost, and the command still exits non-zero.
 

@@ -81,6 +81,24 @@ Run from the project root, on a branch, with `FW` a framework checkout at this r
   the publish secret and leak patterns; findings refuse the release, and SLURM job numbers
   may be accepted in `zenodo.overrides`. The token goes only over https (http only to a
   loopback test server) and only to the configured API host. See `docs/zenodo.md`.
+- Security, map images: a title's math may use only a list of ordinary math control words
+  (Greek letters, `\frac`, `\mathrm`, operators, arrows, ...); math naming any other (such as
+  `\input`, `\def`, `\csname`, `\catcode`, `\write`, `\usepackage`) or holding a `^^` escape is
+  set as text, so a title cannot put a file's content into the map image. pdflatex runs with
+  `-no-shell-escape` and `openout_any=p`. Since TeX Live 2026 `openin_any` restricts no reading,
+  so the math check is what prevents it.
+- Security, Notion sync: only files inside the project are read. A symlinked plot, caption or
+  markdown file whose target is outside the project, and a symlinked task directory outside
+  it, are skipped (a symlink to a token file was uploaded before).
+- Security, attachments: `opsci notify FILE` and `opsci notion post --file` attach only a
+  file inside the project (symlinks resolved), never one under a hidden directory of the home
+  directory (`~/.config`, `~/.ssh`) or the opsci config directory.
+- Notion uploads: quotes, backslashes and control characters are removed from the file name
+  sent in the multipart header.
+- Update check: the release version read from the remote keeps only `[0-9A-Za-z.+-]`, so it
+  cannot add text to the notice or break its JSON.
+- Docs and onboarding: the Notion integration needs no comment capabilities; the
+  instructions no longer ask for them.
 
 ## 0.3.3 - 2026-10-04
 
