@@ -86,6 +86,31 @@ def find_roots(project_root: str | None) -> tuple[Path, Path]:
     return root, main
 
 
+def check_attachment(path: str | Path, roots) -> Path:
+    """``path`` resolved, if it may be attached to a message; raises NotifyError otherwise.
+
+    An attachment leaves the machine (Slack, Notion), so it must be a file inside one of the
+    project ``roots`` (the project and its main checkout) after every symlink is resolved, and
+    never a file under a hidden directory of the home directory (~/.config, ~/.ssh, ...) or
+    the opsci config directory, whatever the roots are."""
+    p = Path(path).expanduser()
+    try:
+        real = p.resolve(strict=True)
+    except (OSError, RuntimeError):
+        raise NotifyError(f"attachment not found: {path}")
+    if not real.is_file():
+        raise NotifyError(f"attachment is not a file: {path}")
+    home = Path.home().resolve()
+    hidden = real.is_relative_to(home) and real != home and real.relative_to(home).parts[0].startswith(".")
+    if hidden or real.is_relative_to(user_config_dir().resolve()):
+        raise NotifyError(f"refusing to attach {path}: it is in a private directory "
+                          f"({real.parent}); only files inside the project can be attached")
+    if not any(real.is_relative_to(Path(r).resolve()) for r in roots):
+        raise NotifyError(f"refusing to attach {path}: it is outside the project "
+                          f"({Path(roots[0]).resolve()}); only files inside the project can be attached")
+    return real
+
+
 def _read_yaml(path: Path) -> dict:
     try:
         data = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -403,9 +428,10 @@ def notify(text: str, attachment: str | None = None, backend: str | None = None,
     root, main = find_roots(project_root)
     att = None
     if attachment:
-        att = Path(attachment)
-        if not att.is_file():
-            print(f"opsci notify: attachment not found or not a file: {attachment}", file=err)
+        try:
+            att = check_attachment(attachment, (root, main))
+        except NotifyError as exc:
+            print(f"opsci notify: {exc}", file=err)
             return EXIT_CONFIG
     cfg: dict = {}
     name = None

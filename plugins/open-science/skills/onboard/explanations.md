@@ -309,8 +309,8 @@ later: stop here; step 8 of the procedure still records Notion as the choice.
 2. **Create the integration.** "Go to https://www.notion.so/profile/integrations and choose
    New integration. Name it after this computer or yourself, for example `research agents`;
    that name appears as the author of every message. Pick the workspace, type Internal, and
-   save. Then open Capabilities and tick: Read content, Update content, Insert content, Read
-   comments, Insert comments, and Read user information without email addresses. It can see
+   save. Then open Capabilities and tick: Read content, Update content, Insert content, and
+   Read user information without email addresses; leave the comment boxes unticked. It can see
    nothing until you share a page with it, in step 4."
 3. **Store the token.** "On the integration's page, under Internal Integration Secret, choose
    Show and copy it; it starts with `ntn_`. Do not paste it here." Then as in "Tokens"

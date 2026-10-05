@@ -25,9 +25,12 @@ ROOT="${PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/
 DATA="${PLUGIN_DATA:-${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/opsci/update-check}}"
 mkdir -p "$DATA/told" 2>/dev/null || exit 0
 
-version_of() {  # the "version" of a plugin.json on stdin
-  sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1
+version_of() {  # the "version" of a plugin.json on stdin; only [0-9A-Za-z.+-] is kept, so a
+                # remote manifest cannot put other text (or a quote that breaks the JSON) in the notice
+  sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1 | clean_version
 }
+
+clean_version() { tr -cd '0-9A-Za-z.+-' | cut -c 1-40; }
 
 repo_url() {
   if [ -n "${OPSCI_UPDATE_REPO:-}" ]; then echo "$OPSCI_UPDATE_REPO"; return; fi
@@ -71,7 +74,7 @@ case "$EVENT" in
     ;;
   Stop)
     [ -n "$SID" ] && [ ! -e "$DATA/told/$SID" ] && [ -s "$DATA/latest" ] || exit 0
-    latest=$(head -n 1 "$DATA/latest")
+    latest=$(head -n 1 "$DATA/latest" | clean_version)  # also a file an older version wrote
     installed=$(version_of < "$ROOT/.claude-plugin/plugin.json" 2>/dev/null)
     [ -n "$installed" ] || installed=$(version_of < "$ROOT/.codex-plugin/plugin.json" 2>/dev/null)
     [ -n "$installed" ] && [ "$latest" != "$installed" ] || exit 0

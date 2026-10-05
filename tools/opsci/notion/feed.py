@@ -20,6 +20,7 @@ import re
 from pathlib import Path
 
 from . import blocks as nb
+from ..notify import NotifyError, check_attachment
 from .client import NotionError
 from .mirror import caption_paragraphs
 from .project import Project
@@ -103,9 +104,10 @@ def post(proj: Project, text: str, author: str = "agent", kind: str = "note", ta
                      for rt in nb.chunks100(nb.link_rich(nb.rich(" ".join(para.split())), find))]
     attached = []
     for f in files or ():
-        f = Path(f)
-        if not f.is_file():
-            raise NotionError(f"attachment not found: {f}")
+        try:
+            f = check_attachment(f, (proj.root, proj.main))
+        except NotifyError as exc:
+            raise NotionError(str(exc))
         children += _attachment_blocks(proj, st, f)
         attached.append(str(f))
     icon, color = KINDS[kind]

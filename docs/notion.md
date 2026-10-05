@@ -63,6 +63,9 @@ updated in place, and nothing else on the page moves. A PDF with a PNG of the sa
 the same figure and is not shown twice. Files over 5 MiB are listed but not uploaded (the
 upload limit of a free Notion workspace).
 
+The sync reads only files inside the project: a symlinked directory is not entered, and a
+symlinked plot, caption or markdown file whose target is outside the project is skipped.
+
 ## The Feed
 
 Each message is a coloured box: `result` green, `status` blue, `question` orange, `blocker`
@@ -71,7 +74,9 @@ only about the first ten words, so the title is written as a short headline with
 point first; the agent skill asks for this. A line under the title names
 the kind, the author, the task and the time. The time is in the time zone of the machine
 that posts the message, or in `notify.notion.timezone` if you set it (step 4). Attached plots appear inline with their
-captions. `--mention` @mentions you, so Notion notifies you, also on your phone if you have
+captions. An attached file (`--file`) must be inside the project once symlinks are
+resolved, and never under a hidden directory of your home directory (`~/.config`, `~/.ssh`,
+...); other paths are refused. `--mention` @mentions you, so Notion notifies you, also on your phone if you have
 the app. The messages are written by your integration, not by your account; Notion does not
 notify you of your own edits.
 
@@ -102,8 +107,8 @@ messages are written to files.
 
 1. **An integration.** At <https://www.notion.so/profile/integrations>, **New integration**:
    type Internal, your workspace. Its name is shown as the author of every message.
-   Capabilities: Read, Update and Insert content; Read and Insert comments; Read user
-   information without email addresses.
+   Capabilities: Read, Update and Insert content; Read user information without email
+   addresses. No comment capabilities: opsci does not read or write comments.
 2. **The token**, the Internal Integration Secret (starts with `ntn_`), in a private file,
    written in your own terminal, never in a chat:
 

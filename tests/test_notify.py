@@ -175,7 +175,7 @@ def test_token_not_in_argv_or_env_during_send(tmp_path, mock):
     write_creds(home)
     proj = make_project(tmp_path)
     use_slack(proj)
-    att = tmp_path / "plot.txt"
+    att = proj / "plot.txt"   # an attachment must be inside the project
     att.write_text("hello")
     srv = mock(block=True)
     env = base_env(home) | {N.TEST_API_ENV: srv.api}
@@ -436,6 +436,33 @@ def test_missing_attachment_is_refused(tmp_path):
     r = run_notify(["x", tmp_path / "nope.png"], proj, base_env(home))
     assert r.returncode == N.EXIT_CONFIG and "attachment not found" in r.stderr
     assert messages(proj) == []
+
+
+def test_attachment_outside_the_project_is_refused(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    proj = make_project(tmp_path)
+    outside = tmp_path / "secret.png"
+    outside.write_text("CANARY-OUTSIDE")
+    (proj / "leak.png").symlink_to(outside)              # a symlink in the project, pointing out
+    for f in (outside, proj / "leak.png"):
+        r = run_notify(["x", f], proj, base_env(home))
+        assert r.returncode == N.EXIT_CONFIG and "outside the project" in r.stderr, r.stderr
+    assert messages(proj) == []
+
+
+def test_attachment_in_a_hidden_home_directory_is_refused(tmp_path):
+    home = make_project(tmp_path, "home")                # even when the project is the home directory
+    creds = write_creds(home)
+    (home / ".ssh").mkdir()
+    (home / ".ssh" / "id_x").write_text("CANARY-SSH")
+    for f in (creds, home / ".ssh" / "id_x"):
+        r = run_notify(["x", f], home, base_env(home))
+        assert r.returncode == N.EXIT_CONFIG and "private directory" in r.stderr, r.stderr
+    assert messages(home) == []
+    ok = home / "fig.png"                                # a control: a file in the project is sent
+    ok.write_bytes(b"png")
+    assert run_notify(["x", ok], home, base_env(home)).returncode == 0
 
 
 def test_worktree_messages_go_to_main_checkout(tmp_path):

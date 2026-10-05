@@ -127,11 +127,43 @@ def is_current(base: Path, d: dict) -> bool:
 
 # ---------------------------------------------------------------- TeX
 
+# The control words a title's math may use. A title is untrusted input (the map image is
+# mirrored to Notion and published), and TeX can read any file (since TeX Live 2026,
+# ``openin_any`` no longer restricts reading), so math that names any other control word
+# (\input, \def, \csname, \catcode, \write, \usepackage, a TikZ path that plots a file, ...) or
+# holds a ^^ escape (which can spell any of them) is set as text instead.
+_MATH_CS = frozenset("""
+alpha beta gamma delta epsilon varepsilon zeta eta theta vartheta iota kappa lambda mu nu xi pi varpi rho
+varrho sigma varsigma tau upsilon phi varphi chi psi omega Gamma Delta Theta Lambda Xi Pi Sigma Upsilon Phi
+Psi Omega
+frac dfrac tfrac sqrt binom left right big Big bigg Bigg bigl bigr Bigl Bigr middle
+mathrm mathbf mathit mathsf mathtt mathcal mathbb mathfrak boldsymbol rm bf it cal text textrm textit textbf
+operatorname
+hat widehat bar overline underline tilde widetilde vec dot ddot check breve acute grave mathring prime
+sum prod int iint oint lim limsup liminf sup inf min max arg det exp log ln lg sin cos tan cot sec csc sinh
+cosh tanh arcsin arccos arctan deg dim ker Pr gcd mod bmod pmod
+pm mp times div cdot ast star circ bullet oplus ominus otimes odot cap cup wedge vee setminus
+le leq ge geq ne neq ll gg sim simeq approx cong equiv propto doteq lesssim gtrsim prec succ preceq succeq
+subset supset subseteq supseteq in ni notin mid parallel perp
+to rightarrow leftarrow leftrightarrow Rightarrow Leftarrow Leftrightarrow longrightarrow longleftarrow
+mapsto implies iff uparrow downarrow
+infty partial nabla ell hbar emptyset varnothing forall exists neg lnot aleph Re Im wp angle triangle
+ldots cdots vdots ddots dots langle rangle lfloor rfloor lceil rceil lvert rvert lVert rVert vert Vert
+quad qquad enspace thinspace
+""".split())
+_CS = re.compile(r"\\([A-Za-z@]+)")
+
+
+def _safe_math(chunk: str) -> bool:
+    return "^^" not in chunk and all(m[1] in _MATH_CS for m in _CS.finditer(chunk))
+
+
 def tex_text(t: str) -> str:
-    """``t`` as LaTeX: text outside $...$ escaped, math kept."""
+    """``t`` as LaTeX: text outside $...$ escaped, math kept if it uses only the control
+    words in ``_MATH_CS`` (otherwise it is escaped as text too)."""
     out = []
     for i, chunk in enumerate(re.split(r"(\$[^$]+\$)", str(t or ""))):
-        if i % 2:
+        if i % 2 and _safe_math(chunk):
             out.append(chunk)
             continue
         chunk = re.sub(r"[\\{}&%#_$~^|<>]", lambda m: {
@@ -173,8 +205,14 @@ def _box_tex(b: dict, plain: bool = False) -> str:
 
 def _pdflatex(work: Path, name: str, body: str) -> subprocess.CompletedProcess:
     (work / f"{name}.tex").write_text(body, encoding="utf-8")
-    env = {**os.environ, "SOURCE_DATE_EPOCH": "0", "FORCE_SOURCE_DATE": "1"}
-    return subprocess.run([_tool("pdflatex"), "-interaction=nonstopmode", "-halt-on-error", f"{name}.tex"],
+    # No shell escape and paranoid writing (no absolute paths, no "..", no dot files),
+    # whatever the local texmf.cnf says: the text comes from task and node titles. openin_any
+    # is set too, for TeX Live before 2026; since 2026 it restricts nothing, so tex_text is
+    # what keeps a title from reading a file.
+    env = {**os.environ, "SOURCE_DATE_EPOCH": "0", "FORCE_SOURCE_DATE": "1",
+           "openin_any": "p", "openout_any": "p", "shell_escape": "f"}
+    return subprocess.run([_tool("pdflatex"), "-no-shell-escape", "-interaction=nonstopmode", "-halt-on-error",
+                           f"{name}.tex"],
                           cwd=work, capture_output=True, text=True, env=env, timeout=300)
 
 

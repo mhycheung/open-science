@@ -969,3 +969,76 @@ def test_plots_in_prunes_skipped_dirs_and_caches_hashes(tmp_path, monkeypatch):
     assert mirror.plots_in(tmp_path, td) == first and reads == []   # unchanged: hash from cache
     (td / "a.png").write_bytes(b"changed")
     assert mirror.plots_in(tmp_path, td)[0]["sha"] != first[0]["sha"]   # a control: change seen
+
+
+# ---------------------------------------------------------------- files outside the project
+
+CANARY = "OPSCI-CANARY-NOT-FOR-NOTION"
+
+
+def _mock_holds(m: MockNotion, needle: str) -> bool:
+    """Whether ``needle`` is in anything the mock received: uploads, blocks or pages."""
+    data = [u["data"] or b"" for u in m.uploads.values()] + [(u["filename"] or "").encode() for u in m.uploads.values()]
+    text = json.dumps([m.blocks, m.pages, m.databases], default=str)
+    return any(needle.encode() in d for d in data) or needle in text
+
+
+def test_sync_reads_no_file_outside_the_project_through_a_symlink(mirrored):
+    S, m = mirrored, mirrored.mock
+    out = S.tmp / "outside"
+    (out / "task").mkdir(parents=True)
+    secret = out / "notion.env"
+    secret.write_text(f"NOTION_TOKEN={CANARY}\n")
+    (out / "task" / "context.md").write_text(f"---\nid: t99\ntitle: {CANARY}\n---\n# t99\n\n{CANARY}\n")
+    (out / "task" / "p.png").write_text(CANARY)
+    td = S.td
+    (td / "leak.png").symlink_to(secret)                       # a plot that is a token file
+    (td / "fig" / "ok.png").write_bytes(b"png-ok")
+    (td / "fig" / "ok.caption.md").symlink_to(secret)          # a caption that is a token file
+    (td / "linked").symlink_to(out / "task")                   # a directory outside
+    (td / "subcontext").mkdir(exist_ok=True)
+    (td / "subcontext" / "leak.md").symlink_to(secret)
+    (S.proj / "private-docs").mkdir(exist_ok=True)
+    (S.proj / "private-docs" / "leak.md").symlink_to(secret)
+    (S.proj / "log" / "2099-01-01.md").symlink_to(secret)
+    (S.proj / "tasks" / "t99").symlink_to(out / "task")        # a task directory outside
+    (S.proj / "shared.png").write_bytes(b"png-shared")
+    (td / "alias.png").symlink_to(S.proj / "shared.png")       # a control: a symlink inside is fine
+    run(S, "notion", "sync", cwd=S.proj)
+    assert not _mock_holds(m, CANARY)
+    data = [u["data"] for u in m.uploads.values()]
+    assert b"png-shared" in data and b"png-ok" in data
+    assert "task:t99" not in state(S.proj)["pages"]
+
+
+def test_notion_post_refuses_a_file_outside_the_project(mirrored):
+    S, m = mirrored, mirrored.mock
+    secret = S.tmp / "outside.png"
+    secret.write_text(CANARY)
+    link = S.proj / "leak.png"
+    link.symlink_to(secret)
+    private = Path(S.env["HOME"]) / ".config" / "opsci" / "notion.env"
+    private.parent.mkdir(parents=True)
+    private.write_text(CANARY)
+    for f in (secret, link, private):
+        r = run(S, "notion", "post", "--file", f, "hello", cwd=S.proj, rc=None)
+        assert r.returncode != 0 and "refusing to attach" in r.stderr, r.stderr
+    assert not _mock_holds(m, CANARY)
+
+
+def test_notify_notion_backend_refuses_a_file_outside_the_project(mirrored):
+    S, m = mirrored, mirrored.mock
+    secret = S.tmp / "outside.png"
+    secret.write_text(CANARY)
+    r = run(S, "notify", "hello", secret, cwd=S.proj, rc=None)
+    assert r.returncode == 2 and "refusing to attach" in r.stderr
+    assert not _mock_holds(m, CANARY)
+
+
+def test_upload_filename_cannot_inject_multipart_headers(S):
+    from opsci.notion.client import Client
+    c = Client(TOKEN)        # the mock, through the test API override S sets
+    fid = c.upload_bytes('a"; name="x\r\nX-Evil: 1\\.png', b"data")
+    up = S.mock.uploads[fid.replace("-", "")]
+    assert up["status"] == "uploaded" and up["data"] == b"data"
+    assert up["filename"] == "a; name=xX-Evil: 1.png"   # quotes, CR/LF and backslash dropped, nothing cut
