@@ -26,10 +26,13 @@ Codex role files; it does not move research records or disable Claude session co
 The `open-science` plugin (the one with the onboarding skill) checks for a new release. At
 the start of a session it looks up, in the background and at most once a day, the version
 of the newest release in the framework repository (the remote of the marketplace the
-plugins came from). The agent is not told. If the release is newer than the installed
-plugin, the user sees one short notice when the agent finishes its first turn after the
-lookup, with the update commands; the same session does not show it again, and nothing
-asks a question. A failed lookup (no network) shows nothing. Set `OPSCI_UPDATE_CHECK=off`
+plugins came from). The agent is not told. The newest release known is the higher of that
+lookup's and the version in the local marketplace checkout, which `claude plugin update`
+brings up to date. If it is newer than the plugin the session loaded, the user sees one
+short notice when the agent finishes its first turn, with the update commands; if that
+release is already installed and only the running session is older, the notice says so and
+that a new session (in Codex, a restart) loads it. The same session does not show the
+notice again, and nothing asks a question. A failed lookup (no network) shows nothing. Set `OPSCI_UPDATE_CHECK=off`
 in the environment to turn the check off; in Claude Code, put it in the `env` block of
 `settings.json`. The check works the same in Codex once its hooks are trusted (`/hooks`).
 

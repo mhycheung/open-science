@@ -143,3 +143,82 @@ def test_both_runtimes_register_the_hook():
         for event in ("SessionStart", "Stop"):
             cmd = hooks[event][0]["hooks"][0]["command"]
             assert "scripts/update_check.sh" in cmd and var in cmd
+
+
+def marketplace(tmp_path, version):
+    """The local marketplace checkout <base>/marketplaces/open-science at `version`, with no remote."""
+    return framework_repo(tmp_path / "base/marketplaces/open-science", version)
+
+
+def install(installed, version):
+    """Another version directory of the plugin next to `installed`, as an update leaves it."""
+    root = installed.parent / version
+    shutil.copytree(installed, root)
+    for d in (".claude-plugin", ".codex-plugin"):
+        m = root / d / "plugin.json"
+        m.write_text(json.dumps({**json.loads(m.read_text()), "version": version}, indent=2) + "\n")
+    return root
+
+
+@pytest.mark.parametrize("runtime", RUNTIMES)
+def test_marketplace_checkout_newer_than_the_last_lookup(installed, tmp_path, runtime):
+    """The last lookup is stale; the local marketplace checkout knows a newer release."""
+    marketplace(tmp_path, "0.5.0")
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "latest").write_text("0.4.0\n")
+    msg = json.loads(hook(installed, data, "Stop", "s1", runtime, OPSCI_UPDATE_REPO=str(tmp_path / "none")))["systemMessage"]
+    assert "open-science 0.5.0 is available (installed: 0.3.0)" in msg
+    (data / "latest").write_text("0.6.0\n")  # the higher of the two is taken
+    assert "open-science 0.6.0 is available" in hook(installed, data, "Stop", "s2", runtime)
+    (data / "latest").unlink()  # no lookup yet: the checkout alone
+    assert "open-science 0.5.0 is available" in hook(installed, data, "Stop", "s3", runtime)
+
+
+@pytest.mark.parametrize("runtime", RUNTIMES)
+def test_installed_on_disk_asks_for_a_new_session_not_an_update(installed, tmp_path, runtime):
+    """The session loaded 0.3.0; 0.4.0 is installed on disk since (a version directory)."""
+    marketplace(tmp_path, "0.4.0")
+    install(installed, "0.4.0")
+    data = tmp_path / "data"
+    out = json.loads(hook(installed, data, "Stop", "s1", runtime))
+    msg = out["systemMessage"]
+    assert set(out) == {"systemMessage"}
+    assert "open-science 0.4.0 is installed; this session runs 0.3.0" in msg and "is available" not in msg
+    assert "plugin update" not in msg and "plugin add" not in msg
+    assert ("restarting Codex loads it" in msg) == (runtime == "codex")
+    assert ("a new session loads it" in msg) == (runtime == "claude")
+    assert hook(installed, data, "Stop", "s1", runtime) == ""  # once per session
+    assert hook(installed.parent / "0.4.0", data, "Stop", "s2", runtime) == ""  # a new session: nothing
+
+
+@pytest.mark.parametrize("runtime", RUNTIMES)
+def test_installed_but_still_behind_the_release(installed, tmp_path, runtime):
+    """0.4.0 is installed on disk but 0.5.0 is released: the update commands, with 0.4.0 as installed."""
+    marketplace(tmp_path, "0.5.0")
+    install(installed, "0.4.0")
+    msg = json.loads(hook(installed, tmp_path / "data", "Stop", "s1", runtime))["systemMessage"]
+    assert "open-science 0.5.0 is available (installed: 0.4.0)" in msg
+
+
+def test_claude_codes_record_of_installed_plugins(installed, tmp_path):
+    """The diagnosed case: the session loaded 0.3.1, the last lookup found 0.3.2, then
+    `claude plugin update` installed 0.3.3 (installed_plugins.json, marketplace at 0.3.3)."""
+    running = install(installed, "0.3.1")
+    install(installed, "0.3.2")  # an old version directory stays; the record is newer
+    marketplace(tmp_path, "0.3.3")
+    install(installed, "0.3.3")
+    entry = lambda v: [{"scope": "user", "installPath": str(installed.parent / v), "version": v}]
+    (tmp_path / "base/installed_plugins.json").write_text(json.dumps({"version": 2, "plugins": {
+        "open-science-context@open-science": entry("9.9.9"),
+        "open-science@open-science": entry("0.3.3")}}, indent=2))
+    data = tmp_path / "data"
+    data.mkdir()
+    (data / "latest").write_text("0.3.2\n")
+    msg = json.loads(hook(running, data, "Stop", "s1", "claude"))["systemMessage"]
+    assert "open-science 0.3.3 is installed; this session runs 0.3.1, and a new session loads it" in msg
+    # the record, not the directories, says what is installed
+    (tmp_path / "base/installed_plugins.json").write_text(json.dumps({"version": 2, "plugins": {
+        "open-science@open-science": entry("0.3.2")}}, indent=2))
+    msg = json.loads(hook(running, data, "Stop", "s2", "claude"))["systemMessage"]
+    assert "open-science 0.3.3 is available (installed: 0.3.2)" in msg
