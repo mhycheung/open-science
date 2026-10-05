@@ -9,7 +9,7 @@ type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent:
 
 // Stubs shared by every test. `stop` is what cm_stop.sh --mod answers; `scripts` maps a
 // script name to its answer. A /clear makes the session id change, as in Claude Code.
-function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean } = {}) {
+function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean; noStartAtClear?: boolean } = {}) {
   const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [], filled: [] }
   let sid = 'sid-old'
   const clock = mock.clock(on)
@@ -36,12 +36,22 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
     calls.order.push('append ' + e.message.type)
     return { value: { message: e.message, uuid: 'u' + calls.appended.length } }
   })
+  // A /clear starts the new session through SessionStart (source clear), as in Claude Code.
+  // Its own hook, so that the commands the SessionStart hooks run reach the one below.
+  on('command.run', { command: 'clear' }, async ($, e) => {
+    calls.commands.push('clear')
+    calls.order.push('command clear')
+    sid = 'sid-new'
+    if (!opts.noStartAtClear) await engine.classic.SessionStart({ source: 'clear' })
+    return { text: '' }
+  })
   on('command.run', ($, e) => {
     calls.commands.push((e.command + ' ' + (e.args || '')).trim())
     calls.order.push('command ' + e.command)
-    if (e.command === 'clear') sid = 'sid-new'
     return { text: '' }
   })
+  on('classic.SessionStart', () => ({}))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('prompt.submit', ($, e) => { calls.prompts.push(e.text); return { text: e.text } })
   on('session.send', ($, e) => { calls.sent.push(e.text); return { isDelivered: true } })
   on('session.start', () => ({ cwd: '/work' }))
@@ -52,7 +62,11 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
   return { calls, clock }
 }
 
+// The test's own $ (a hook's $ has no classic noun), for the stubs that raise events.
+let engine
+
 async function start($, clock) {
+  engine = $
   await $.session.start({ surface: 'terminal', isInteractive: true, cwd: '/work' })
   await clock.settle()
 }
@@ -71,37 +85,43 @@ test('an active jump clears, hands over, and runs the resume command', async ($,
   expect(calls.scripts).toContainEqual(['cm_mod.sh', 'handover', 'sid-old', 'sid-new'])
 })
 
-// What the user sees of a jump note: the stored notice, or the transcript line the mod
-// falls back to. (This build's test kit does not route a plugin's $.session.append to the
-// test's hooks, so here it is the fallback; the stored rows were checked in a live session.)
-const shownNotes = (c: Calls) => [...c.appended.filter(a => a.type === 'system').map(a => a.text), ...c.logged]
+// The note the user sees last: the output row of /opsci-note, which shows it again when
+// typed (the mod's own run of it is answered by the mod, above the test's hooks).
+const NO_NOTE = 'No open-science note in this session yet.'
+const lastNote = async $ => (await $.command.run({ command: 'opsci-note', args: '' })).text
 
-test('an active jump writes its report at the top of the new session before resuming', async ($, on) => {
+test('an active jump shows its report at the top of the new session and resumes', async ($, on) => {
   const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', prompt: '/open-science-context:continue-context /p/c.md', report: 'Fit done.\n\nActive jump: the session is cleared and resumes from c.md.', wakers: 0 } } } })
   await start($, clock)
   await endTurn($, clock)
-  expect(shownNotes(calls)).toEqual(['[open-science] Fit done.\n\nActive jump: the session is cleared and resumes from c.md.'])
-  const o = calls.order.filter(x => !x.startsWith('command rename') && x !== 'append user')
-  expect(o.indexOf('command clear')).toBe(0)
-  expect(o.slice(1)).toEqual([o[1], 'command open-science-context:continue-context'])
-  expect(['append system', 'log']).toContain(o[1])
+  expect(await lastNote($)).toBe('Fit done.\n\nActive jump: the session is cleared and resumes from c.md.')
+  expect(calls.commands.filter(c => !c.startsWith('rename') && !c.startsWith('opsci-note'))).toEqual(['clear', 'open-science-context:continue-context /p/c.md'])
+  expect(calls.appended).toEqual([])
 })
 
 test('a wait jump says the session is waiting, and starts no turn', async ($, on) => {
   const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'wait', context: '/p/c.md', prompt: '', report: 'Runs queued.', wakers: 2 } } } })
   await start($, clock)
   await endTurn($, clock)
-  const [note] = shownNotes(calls)
+  const note = await lastNote($)
   expect(note).toContain('Wait jump: this session was cleared and is waiting for 2 running background tasks')
   expect(note).toContain('Runs queued.')
   expect(calls.prompts).toEqual([])
 })
 
-test('a jump with no report writes nothing for an active jump', async ($, on) => {
-  const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', prompt: '/x' } } } })
+test('a jump with no report shows nothing for an active jump', async ($, on) => {
+  const { clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', prompt: '/x' } } } })
   await start($, clock)
   await endTurn($, clock)
-  expect(shownNotes(calls)).toEqual([])
+  expect(await lastNote($)).toBe(NO_NOTE)
+})
+
+test('a clear that fires no SessionStart still leaves the report for the agent', async ($, on) => {
+  const { calls, clock } = setup(on, { noStartAtClear: true, stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', prompt: '/x', report: 'Fit done.' } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  expect(await lastNote($)).toBe(NO_NOTE)
+  expect(calls.commands.filter(c => !c.startsWith('rename'))).toEqual(['clear', 'x'])
 })
 
 test('the stop policy gets the context size from Claude Code', async ($, on) => {
@@ -303,6 +323,29 @@ test('a subagent request does not restart the cache clock', async ($, on) => {
   await drain($.turn.step({ turnId: 't', index: 1, model: 'm', messageCount: 2, agentId: 'a1' }))
   await clock.advance(MIN)
   expect((await barOn($)).text).toContain('cache cold')
+})
+
+test('the conversation gets one note when the cache of an idle session goes cold', async ($, on) => {
+  const { clock } = setup(on)
+  on('turn.step', step(123456))
+  await start($, clock)
+  await mainRequest($)
+  await barOn($)
+  await clock.advance(58 * MIN)
+  await barOn($)
+  expect(await lastNote($)).toBe(NO_NOTE)
+  await clock.advance(MIN)
+  await barOn($)
+  expect(await lastNote($)).toBe('Cache cold: 59 min since the last request. The next prompt reads the whole context (123.5k tokens) again at the full price; /clear starts a fresh session.')
+})
+
+test('a session resumed with a cold cache gets no cold note', async ($, on) => {
+  const { clock } = setup(on, { store: { lastRequest: { 'sid-old': -90 * MIN } } })
+  await start($, clock)
+  await barOn($)
+  await clock.advance(MIN)
+  await barOn($)
+  expect(await lastNote($)).toBe(NO_NOTE)
 })
 
 test('a resumed session keeps the time of its last request', async ($, on) => {

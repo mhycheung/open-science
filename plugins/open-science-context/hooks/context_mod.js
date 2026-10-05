@@ -5,8 +5,9 @@
 // SLURM wakers, the cache-cold notice), rename the session after its task, and read the
 // context size, also each subagent's. It also shows the context size and how long the
 // prompt cache stays warm (a line above the prompt, on the terminal and in the Desktop app;
-// Remote Control shows neither a mod's drawing nor its transcript notices), and asks the user
-// before a prompt they send to a cold cache. The policy and the records stay in the plugin's
+// Remote Control shows no mod's drawing), asks the user before a prompt they send to a cold
+// cache, and shows the jump report and a cache-cold note as rows of the conversation, which
+// Remote Control shows too (/opsci-note). The policy and the records stay in the plugin's
 // shell scripts, shared with the tmux path and Codex: `cm_stop.sh --mod` decides at each
 // stop, `cm_mod.sh` keeps the records, `wait_slurm.sh --check` polls a waker,
 // `session_name.sh want` names the session.
@@ -88,10 +89,28 @@ async function rename($, always) {
   await $.command.run({ command: 'rename', args: name })
 }
 
-// The jump's report (jump.sh --report), written at the top of the cleared session: a notice
-// for the user, who otherwise sees only the clear (the model never reads a notice), and the
-// same text as a user-role row the user does not see, which the agent reads with its next
-// prompt. Neither starts a turn, so a wait jump's session stays asleep.
+// ---- notes in the conversation ---------------------------------------------------------
+// A note the user sees: the output row of the mod's /opsci-note command, the one kind of row
+// a mod adds that Remote Control shows too (a notice row shows nowhere). It starts no turn;
+// the model reads it with the next prompt, as it reads any command's output. Typed by the
+// user, /opsci-note shows the last note again.
+//
+// showNote is called from inside a hook only: a command the mod runs from a timer skips the
+// mod's own command.run hook (Claude Code 2.1.287), and Claude Code answers it instead.
+const NOTE_CMD = 'opsci-note'
+let noteText = null         // what the next /opsci-note shows
+let lastNote = ''           // the last note shown, for /opsci-note typed by the user
+let pendingJump = null      // the jump's note, shown when the clear starts the new session
+let pendingCold = null      // the cache-cold note, shown at the next draw of the bar
+
+function showNote($, text) {
+  noteText = text
+  lastNote = text
+  $.command.run({ command: NOTE_CMD, args: '' }).catch(err => log($, 'note FAILED: ' + err))
+}
+
+// The jump's report (jump.sh --report), shown at the top of the cleared session. For a wait
+// jump it first says that the session is cleared and waiting.
 function jumpNote(j) {
   const report = String(j.report || '').trim()
   if (j.kind === 'active') return report
@@ -101,31 +120,29 @@ function jumpNote(j) {
     '. It resumes by itself when that work reports back; until then it does nothing.' + (report ? '\n\n' + report : '')
 }
 
-async function writeNote($, j) {
-  const text = jumpNote(j)
-  if (!text) return
-  const append = async (type, body) => {
-    try { return await $.session.append({ message: { type, content: [{ type: 'text', text: body }] } }) } catch (err) { return { deny: String(err) } }
-  }
-  const shown = await append('system', '[open-science] ' + text)
-  // A Claude Code that refuses the notice still shows the user a transcript line.
-  if (shown.deny) $.ui.log('[open-science] ' + text)
-  const read = await append('user', '[open-science] The previous session wrote this for the user when it jumped (the user sees it above):\n\n' + text)
-  if (shown.deny || read.deny) await log($, 'jump note not stored: ' + (shown.deny || read.deny))
+// The clear did not start the new session through SessionStart, so no note was shown: the
+// agent still reads the report, as a user-role row the user does not see.
+async function jumpNoteFallback($, text) {
+  await log($, 'jump note not shown: no SessionStart after the clear; stored for the agent')
+  try {
+    await $.session.append({ message: { type: 'user', content: [{ type: 'text', text: '[open-science] The previous session wrote this when it jumped:\n\n' + text }] } })
+  } catch (err) { await log($, 'jump note FAILED: ' + err) }
 }
 
 // Clear the session with Claude Code's own /clear, hand the registration and wakers to
-// the new session, write the jump's report at its top, then run the resume prompt
-// (active) or leave it waiting (wait).
+// the new session, show the jump's report at its top (from the SessionStart the clear
+// fires), then run the resume prompt (active) or leave it waiting (wait).
 function jump($, j) {
   jumping = true
   coldTimer?.cancel(); coldTimer = null
   $.clock.after(0, async () => {
     try {
       const old = await $.session.id()
+      pendingJump = jumpNote(j) || null
       await $.command.run({ command: 'clear', args: '' })
       const now = await $.session.id()
       if (now === old) {
+        pendingJump = null
         await log($, 'jump FAILED: /clear did not start a new session (still ' + old.slice(0, 8) + ')')
         void $.prompt.submit({ text: '[open-science] session jump FAILED before anything was changed; this session keeps running: the clear did not happen.' })
         return
@@ -133,7 +150,7 @@ function jump($, j) {
       sid = now
       await sh($, 'cm_mod.sh', ['handover', old, now])
       await log($, j.kind + ' jump: cleared ' + old.slice(0, 8) + ' -> ' + now.slice(0, 8))
-      try { await writeNote($, j) } catch (err) { await log($, 'jump note FAILED: ' + err) }
+      if (pendingJump) { const text = pendingJump; pendingJump = null; await jumpNoteFallback($, text) }
       if (j.kind === 'active' && j.prompt) {
         await runPrompt($, j.prompt)
       } else {
@@ -259,9 +276,18 @@ async function refreshBar($) {
   const st = await cacheState($)
   const text = describe(st)
   if (text === barText && st.phase === barPhase) return
+  // The redraw is a hook, where the note can be shown (showNote).
+  if (barPhase === 'warm' && st.phase === 'cold') pendingCold = coldNote(st)
   barText = text
   barPhase = st.phase
   $.ui.invalidate('ui.render')
+}
+
+// Shown once, when the cache of an idle session goes cold.
+function coldNote(st) {
+  const ctx = typeof st.tokens === 'number' ? ' (' + fmtTokens(st.tokens) + ' tokens)' : ''
+  return 'Cache cold: ' + Math.floor(st.idleMin) + ' min since the last request. The next prompt reads the whole context' +
+    ctx + ' again at the full price; /clear starts a fresh session.'
 }
 
 // A prompt the user sent (typed, or from Remote Control) to an idle session whose cache
@@ -335,6 +361,7 @@ export function register(on) {
     barTimer?.cancel()
     barText = ''; barPhase = 'none'; barSid = null; lastTokens = null
     barTimer = $.clock.every(BAR_TICK_MS, () => { void refreshBar($) })
+    try { await $.command.register({ name: NOTE_CMD, description: 'Show the last open-science note again (a jump report, cache cold)' }) } catch (err) { await log($, 'note command not registered: ' + err) }
     $.clock.after(0, async () => {
       // A session left waiting by another process (resumed after a SLURM resurrection or
       // by hand) lost the background tasks that were to wake it: wake it now.
@@ -366,6 +393,7 @@ export function register(on) {
   on('turn.start', async ($, e, next) => {
     if (e.agentId) return next(e)
     busy = true
+    pendingCold = null
     coldTimer?.cancel(); coldTimer = null
     $.clock.after(0, () => { void refreshBar($) })
     const now = await $.session.id()
@@ -391,6 +419,18 @@ export function register(on) {
       $.clock.after(0, () => { void rename($) })
     }
     return next(e)
+  })
+
+  // The new session a jump's clear started: its report, at the top.
+  on('classic.SessionStart', async ($, e, next) => {
+    if (e.source === 'clear' && pendingJump) { const text = pendingJump; pendingJump = null; showNote($, text) }
+    return next(e)
+  })
+
+  on('command.run', { command: NOTE_CMD }, async () => {
+    const text = noteText || lastNote || 'No open-science note in this session yet.'
+    noteText = null
+    return { text }
   })
 
   on('session.end', async ($, e, next) => {
@@ -422,6 +462,7 @@ export function register(on) {
   // The bar: a line above the prompt on the terminal and in the Desktop app. Green while the
   // cache is warm, yellow with a warning sign once it is cold.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (pendingCold) { const text = pendingCold; pendingCold = null; if (!busy) showNote($, text) }
     if (!barText || e.props.hasSurvey) return next(e)
     return bar($, e)
   })

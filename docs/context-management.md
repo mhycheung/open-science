@@ -107,12 +107,13 @@ state, what is running and what comes next, followed by the kind of jump and the
 file. The agent does not wait for your approval. If the send fails, the jump still happens,
 and the message is kept in `messages/`.
 
-With the mod, the report is also written at the top of the cleared session, so scrolling up
-in the terminal shows what the previous session said instead of only `/clear`. Remote Control
-leaves this notice out; there the report reaches you through `opsci notify` (your Notion Feed
-or other back end). After a wait jump it begins by saying that the session was cleared and is waiting,
-and for how many running tasks. It is a notice for you: it starts no turn, so a session left
-waiting stays asleep. The agent of the new session reads the same text with its next prompt.
+With the mod, the report is also shown at the top of the cleared session, right after
+`/clear`, as the output of the mod's `/opsci-note` command, so the session shows what the
+previous session said instead of only `/clear`, in the terminal and in Remote Control. After a
+wait jump it begins by saying that the session was cleared and is waiting, and for how many
+running tasks. Showing it starts no turn, so a session left waiting stays asleep. The agent of
+the new session reads it with its next prompt, as it reads any command's output; the context
+file stays the record it resumes from. Typing `/opsci-note` shows the last note again.
 
 When the turn ends, the mod runs Claude Code's `/clear`, checks that a new session started,
 hands the registration to it, and, for an active jump, runs
@@ -204,9 +205,13 @@ subagent's requests do not count), so it calls the cache cold at 59 minutes:
 | under 59 minutes | `context 180.2k tokens · cache warm, 32 min left`, in green |
 | 59 minutes or more | `⚠ context 180.2k tokens · cache cold (75 min idle)`, in yellow |
 
-Remote Control (from claude.ai, the desktop app or the mobile app) shows neither: Claude Code
-draws a mod's interface only in the terminal and the Desktop app's Code tab, and Remote Control
-also leaves out the notices a mod writes into the transcript.
+Remote Control (from claude.ai, the desktop app or the mobile app) does not show the line:
+Claude Code draws a mod's interface only in the terminal and the Desktop app's Code tab. When
+the cache of an idle session goes cold, the mod therefore also adds one row to the
+conversation, which Remote Control shows too: the output of `/opsci-note`, `Cache cold: 59 min
+since the last request. The next prompt reads the whole context (180.2k tokens) again at the
+full price; /clear starts a fresh session.` It starts no turn; the model reads the line with
+your next prompt.
 
 The 59 minutes come from Claude Code's own transcripts: in 958 transcript files, every request sent
 less than 60 minutes after the previous response still read the cache, and none sent later did.
@@ -348,7 +353,7 @@ shells and subagents are not supported as wait-jump wakers. Recheck the schedule
 state and outputs; leaving the queue is not proof of success.
 
 `OPSCI_JUMPS=all|wait|off` retains its meaning. Codex has no cache-cold timer, no context
-bar, no cold-cache question, no jump report at the top of the new session, and no
+bar, no cold-cache question or note, no jump report at the top of the new session, and no
 Claude-style automatic session naming. Token usage is best effort from Codex's changing
 rollout format; if unreadable, no size notice is issued. By default a notice occurs at
 60% of the reported model window; `OPSCI_CODEX_JUMP_THRESHOLD` sets an explicit threshold.

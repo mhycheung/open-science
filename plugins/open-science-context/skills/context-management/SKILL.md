@@ -91,9 +91,10 @@ state, what is running (job or agent ids), and what comes next. Write it for a u
 not read the chat; use real newlines (a quoted multi-line argument), not `\n`. `jump.sh`
 posts it with `opsci notify --kind status --no-mention` (the project's Feed in Notion, or
 its configured back end) once its checks pass, and adds which jump it is and the context
-file. With the Claude Code mod, the same text is also written at the top of the cleared
-session (the user sees it there; you read it with your next prompt). It does not wait for the
-user. A failed send does not stop the jump; `jump.sh` prints a warning, and the message is
+file. With the Claude Code mod, the same text is also shown at the top of the cleared
+session, as the output of `/opsci-note` (the user sees it in the terminal and in Remote
+Control; you read it with your next prompt, as the previous session's account of the state:
+the context file stays the record). It does not wait for the user. A failed send does not stop the jump; `jump.sh` prints a warning, and the message is
 kept in `messages/`.
 
 Then run `jump.sh` as the last tool call of the turn and end the turn with one line saying

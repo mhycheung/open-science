@@ -286,8 +286,9 @@ done
 ROOT="$d"
 
 # Send the report to the user (see the header). Called once every check has passed.
-# The same text goes into the request: with the mod, it is written at the top of the cleared
-# session (seen by the user, read by the agent at its next turn; it starts no turn).
+# The same text goes into the request: with the mod, it is shown at the top of the cleared
+# session as the output of /opsci-note (seen by the user, also in Remote Control, and read by
+# the agent at its next turn; it starts no turn).
 MSG=$(printf '%s\n\n%s jump: the session is cleared and %s from %s.' "$REPORT" "${CMD^}" \
   "$([ "$CMD" = active ] && echo resumes || echo "waits for its background work, then resumes")" "${CTX#"$ROOT"/}")
 send_report() {

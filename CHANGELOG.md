@@ -19,11 +19,14 @@ layout 1) and the framework's, in order, before it applies the other template ch
   own usage (read plus written) and is shown with one decimal in thousands (`123.4k`), or as a
   plain count below 1000.
 - Remote Control shows nothing a mod draws (Claude Code's mods documentation; checked with a
-  probe) and none of the notices a mod writes into the transcript (checked with a probe of
-  every row kind), so the line stays on the terminal and the Desktop app; the pane for the
-  mobile app is removed. The same holds for the jump report at the top of a cleared session
-  (0.3.2 said it also showed in Remote Control): it shows in the terminal, and reaches Remote
-  Control users through `opsci notify` as before.
+  probe), so the line stays on the terminal and the Desktop app; the pane for the mobile app is
+  removed.
+- The jump report at the top of a cleared session, and a new cache-cold note, are rows of the
+  conversation: the output of the mod's new `/opsci-note` command, which shows in the terminal
+  and in Remote Control (checked live on both) and starts no turn; the model reads it with the
+  next prompt. The 0.3.2 notice row showed nowhere, neither in Remote Control nor in the
+  terminal, and is removed. The cache-cold note is shown once, when the cache of an idle
+  session goes cold. Typing `/opsci-note` shows the last note again.
 - The cold-cache question for a typed prompt is the mod's own dialog in the terminal, with
   exactly two answers (Submit, Do not submit; Esc does not submit). Claude Code's question
   dialog, which adds free-text answers and was left open in the Remote Control app after an
