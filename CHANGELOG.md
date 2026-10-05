@@ -9,7 +9,7 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
-## Unreleased
+## 0.3.3 - 2026-10-04
 
 - Context bar (the mod): one boundary, cold at 59 minutes after the main agent's last request
   (`OPSCI_CACHE_TTL_MIN`, default 59; the "might be cold" stage is gone); the prompt question
