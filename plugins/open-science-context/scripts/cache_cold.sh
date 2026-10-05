@@ -26,7 +26,7 @@ trap cleanup EXIT
 if [ -n "$SF" ] && [ -n "$SID" ] && [ "$(cm_sid "$SF")" != "$SID" ]; then
   cm_log "cache-cold $PANE: session changed since arming; not firing"; exit 0
 fi
-exec 9>"$(cm_lock_path "$KEY")"
+exec 9<>"$(cm_lock_path "$KEY")"
 flock -w 60 9 || { cm_log "cache-cold $PANE: pane lock busy; not firing"; exit 0; }
 if ! cm_wait_idle "$SOCK" "$PANE" "$SF" 60; then
   cm_log "cache-cold $PANE: pane not idle; not firing (the next stop re-arms)"; exit 0

@@ -579,6 +579,24 @@ def test_active_jump_clears_and_delivers_the_resume_prompt(env, tui, tmp_path):
 
 
 @needs_tmux
+def test_the_worker_types_only_the_resume_prompt_built_from_the_context_file(env, tui, tmp_path):
+    # Regression: the worker typed the request's prompt field, so whoever could write the
+    # request could type any command, escape sequences included, into the pane.
+    make_project(tmp_path)
+    ctx = tmp_path / "context.md"
+    ctx.write_text("state\n")
+    assert jump(env, "active", ctx, "--force").returncode == 0
+    req = Path(env["OPSCI_STATE_DIR"]) / "jump" / f"{tui['key']}.json"
+    d = json.loads(req.read_text())
+    d["prompt"] = "/evil-command \x1b[2J\r rm -rf ~"
+    req.write_text(json.dumps(d))
+    stop(env, payload(sid="sid-A"))
+    want = f"/open-science-context:continue-context {ctx}"
+    assert wait_for(lambda: want in lines(tui["rec"]), 60), lines(tui["rec"])
+    assert lines(tui["rec"]) == ["/clear", want]
+
+
+@needs_tmux
 def test_wait_jump_clears_and_delivers_nothing(env, tui, tmp_path):
     make_project(tmp_path)
     ctx = tmp_path / "context.md"
@@ -632,3 +650,50 @@ def test_cache_cold_does_not_fire_into_a_cleared_session(env, tui):
     tui["state"].write_text(json.dumps({"sessionId": "sid-B", "status": "idle"}))
     time.sleep(7)
     assert lines(tui["rec"]) == []
+
+
+# ---- the state directory: private, and never written through a link ------------------------
+
+LIB = SCRIPTS / "cm_lib.sh"
+
+
+def test_typed_text_loses_every_control_character():
+    r = subprocess.run(["bash", "-c", f'. {LIB}; cm_one_line "$1"', "_",
+                        "a\x1b[2Jb\rc\nd\te\x07f\x7fg\u009bh"], capture_output=True, text=True)
+    assert r.stdout == "a[2Jbc d efgh"
+
+
+def test_state_dir_and_files_are_private(env, tmp_path):
+    st = Path(env["OPSCI_STATE_DIR"])
+    st.chmod(0o755)
+    stop(env, payload(tasks=[SHELL]))
+    assert st.stat().st_mode & 0o077 == 0
+    written = [st / "timer", *(st / "timer").iterdir()]
+    assert len(written) == 2
+    for f in written:
+        assert f.stat().st_mode & 0o077 == 0, f
+
+
+def test_a_state_dir_owned_by_someone_else_is_refused(env):
+    r = subprocess.run(["bash", str(SCRIPTS / "cm_stop.sh")], input=json.dumps(payload()),
+                       capture_output=True, text=True, env=dict(env, OPSCI_STATE_DIR="/"), timeout=30)
+    assert r.returncode == 1 and "not a directory owned by you" in r.stderr
+
+
+def test_links_planted_in_the_state_dir_are_replaced_not_written_through(env, tmp_path):
+    # Regression: a lock opened with `>` truncated a symlink's target, and records written
+    # with `>` wrote through a planted link. Claude path: size record and pane lock.
+    st = Path(env["OPSCI_STATE_DIR"])
+    victim = tmp_path / "victim"
+    victim.write_text("precious\n")
+    (st / "size").mkdir()
+    (st / "size" / pane_key()).symlink_to(victim)
+    (st / "lock").mkdir()
+    (st / "lock" / f"{pane_key()}.lock").symlink_to(victim)
+    out = stop(env, payload(transcript=transcript(tmp_path, 300_000)))
+    assert out["decision"] == "block"
+    r = subprocess.run(["bash", "-c", f'. {LIB}; exec 9<>"$(cm_lock_path "$1")"; flock 9', "_", pane_key()],
+                       env=env, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert victim.read_text() == "precious\n"
+    assert not (st / "size" / pane_key()).is_symlink() and not (st / "lock" / f"{pane_key()}.lock").is_symlink()

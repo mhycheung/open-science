@@ -31,8 +31,10 @@
 #   pane_context.sh check                           can this session write the state dir?
 #                                                   exit 3 with the fix if not
 #
-# Under Codex, `set` exits 3 with the fix (cm_state_hint) when the sandbox makes the
-# state directory read-only; `get` only reads and works either way.
+# Under Codex, `set` and `clear` write to the inbox (cm_lib.sh), which the Codex hook takes
+# at its next event and turns into the records above; `get` reads this thread's inbox entry
+# first. `set` exits 3 with the fix (cm_state_hint) when the sandbox makes the inbox
+# read-only; `get` only reads and works either way.
 #
 # Nothing here may ever block real work: outside tmux, `set` warns and no-ops,
 # `get` exits 1 silently, and the callers fall through to asking the user.
@@ -62,14 +64,24 @@ cmd_set() {
 
   local rec sid rt srec
   sid=$(cm_live_sid); rt=$(cm_runtime)
-  if [ "$rt" = codex ] && ! cm_state_writable; then cm_state_hint >&2; return 3; fi
+  case "$abs" in *[[:space:]]*) echo "pane_context: the path contains whitespace: $abs -- not registering" >&2; return 1 ;; esac
+  cm_ctx_ok "$abs" || { echo "pane_context: the path contains a control character -- not registering" >&2; return 1; }
+  if [ "$rt" = codex ]; then
+    cm_state_writable || { cm_state_hint >&2; return 3; }
+    [ -n "$sid" ] || { echo "pane_context: CODEX_THREAD_ID is not set -- not registering" >&2; return 1; }
+    cm_write_json "$(cm_inbox_dir "$(cm_inbox_target "$sid")")/context.json" --arg doc "$abs" --arg sid "$sid" \
+        --arg at "$(date -Iseconds)" '{version:1, thread_id:$sid, doc_path:$doc, requested_at:$at}' \
+      || { cm_state_hint >&2; return 3; }
+    echo "pane_context: codex thread $sid now drives $abs (recorded by the Codex hook when this turn ends)"
+    return 0
+  fi
   if [ -n "$sid" ] && [ "$rt" != none ]; then
     srec=$(cm_sess_reg_path "$rt" "$sid")
     if cm_write_json "$srec" --arg doc "$abs" --arg at "$(date -Iseconds)" --arg sid "$sid" --arg rt "$rt" \
          '{version:1, runtime:$rt, session_id:$sid, doc_path:$doc, registered_at:$at}'; then
       echo "pane_context: $rt session $sid now drives $abs"
     else
-      echo "pane_context: cannot write $srec (in the Codex sandbox, add $STATE_DIR as a writable root)" >&2
+      echo "pane_context: cannot write $srec" >&2
     fi
   fi
   if ! rec=$(record_path); then
@@ -77,10 +89,9 @@ cmd_set() {
     return 0
   fi
   mkdir -p "$REG_DIR" || { echo "pane_context: cannot write $REG_DIR" >&2; return 1; }
-  jq -n --arg pane "$TMUX_PANE" --arg doc "$abs" \
+  cm_write_json "$rec" --arg pane "$TMUX_PANE" --arg doc "$abs" \
         --arg at "$(date -Iseconds)" --arg sid "$sid" \
-     '{version:1, pane_id:$pane, doc_path:$doc, registered_at:$at, session_id:$sid}' \
-     > "$rec.tmp" && mv "$rec.tmp" "$rec" || return 1
+     '{version:1, pane_id:$pane, doc_path:$doc, registered_at:$at, session_id:$sid}' || return 1
   echo "pane_context: pane $TMUX_PANE now drives $abs"
 }
 
@@ -95,19 +106,40 @@ session_doc() {
   printf '%s\n' "$doc"
 }
 
+# Under Codex: this thread's registration waiting in the inbox, if any. Prints the file
+# (exit 0), or exits 1 for a pending clear or a missing file, or 2 when there is none.
+inbox_doc() {
+  local sid f doc
+  [ "$(cm_runtime)" = codex ] || return 2
+  sid=$(cm_live_sid); [ -n "$sid" ] || return 2
+  f="$(cm_inbox_dir "$(cm_inbox_target "$sid")")/context.json"
+  [ -f "$f" ] && [ "$(jq -r '.thread_id // ""' "$f" 2>/dev/null)" = "$sid" ] || return 2
+  doc=$(jq -r '.doc_path // ""' "$f" 2>/dev/null)
+  [ -n "$doc" ] && [ -f "$doc" ] || return 1
+  printf '%s\n' "$doc"
+}
+
 cmd_get() {
+  inbox_doc; case $? in 0) return 0 ;; 1) return 1 ;; esac
   local rec; rec=$(record_path) || { session_doc; return; }
   [ -f "$rec" ] || { session_doc; return; }
   local doc; doc=$(jq -r '.doc_path // empty' "$rec" 2>/dev/null)
-  [ -n "$doc" ] || { rm -f "$rec"; session_doc; return; }
+  [ -n "$doc" ] || { rm -f "$rec" 2>/dev/null; session_doc; return; }
   # A registration pointing at a file that no longer exists is worse than none:
   # drop it so the caller falls through to search-then-ask.
-  [ -f "$doc" ] || { rm -f "$rec"; session_doc; return; }
+  [ -f "$doc" ] || { rm -f "$rec" 2>/dev/null; session_doc; return; }
   printf '%s\n' "$doc"
 }
 
 cmd_clear() {
   local sid rt; sid=$(cm_live_sid); rt=$(cm_runtime)
+  if [ "$rt" = codex ]; then
+    [ -n "$sid" ] && cm_write_json "$(cm_inbox_dir "$(cm_inbox_target "$sid")")/context.json" --arg sid "$sid" \
+        --arg at "$(date -Iseconds)" '{version:1, thread_id:$sid, doc_path:"", requested_at:$at}' \
+      || { cm_state_hint >&2; return 3; }
+    echo "pane_context: registration of codex thread $sid cleared (by the Codex hook when this turn ends)"
+    return 0
+  fi
   [ -n "$sid" ] && [ "$rt" != none ] && rm -f "$(cm_sess_reg_path "$rt" "$sid")"
   local rec; rec=$(record_path) || { echo "pane_context: not inside tmux." >&2; return 0; }
   rm -f "$rec"
@@ -116,8 +148,14 @@ cmd_clear() {
 
 # Exit 0 when this session can write the state directory, else 3 with the fix.
 cmd_check() {
-  if cm_state_writable; then echo "pane_context: $OS_STATE is writable"; return 0; fi
-  cm_state_hint >&2; return 3
+  cm_state_writable || { cm_state_hint >&2; return 3; }
+  if [ "$(cm_runtime)" = codex ]; then
+    echo "pane_context: the inbox $OS_INBOX is writable"
+    cm_state_too_open && cm_state_open_hint >&2
+  else
+    echo "pane_context: $OS_STATE is writable"
+  fi
+  return 0
 }
 
 cmd_status() {

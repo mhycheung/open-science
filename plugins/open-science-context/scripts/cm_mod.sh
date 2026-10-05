@@ -34,16 +34,15 @@ case "${1:-}" in
     src=$(cm_sess_reg_path claude "$old")
     if [ -f "$src" ]; then
       dst=$(cm_sess_reg_path claude "$new")
-      jq --arg sid "$new" --arg at "$(date -Iseconds)" '.session_id=$sid | .handed_over_at=$at' "$src" > "$dst.tmp.$$" \
-        && mv "$dst.tmp.$$" "$dst" || rm -f "$dst.tmp.$$"
+      cm_jq_into "$dst" --arg sid "$new" --arg at "$(date -Iseconds)" '.session_id=$sid | .handed_over_at=$at' "$src"
       # The pane record, when this session runs in tmux, follows too: the tmux path and
       # an optional resurrection component read it.
       if KEY=$(cm_pane_key) && [ "$(cm_registered_sid "$KEY")" = "$old" ]; then cm_reg_handover "$KEY" "$new"; fi
     fi
     if [ -d "$(waker_dir "$old")" ]; then
-      mkdir -p "$(waker_dir "$new")"
+      cm_mkdir "$(waker_dir "$new")"
       for f in "$(waker_dir "$old")"/*.json; do
-        [ -f "$f" ] && mv "$f" "$(waker_dir "$new")/"
+        cm_plain_file "$f" && mv -f -- "$f" "$(waker_dir "$new")/"
       done
       rmdir "$(waker_dir "$old")" 2>/dev/null
     fi
@@ -65,8 +64,9 @@ case "${1:-}" in
     # A queued waker survives the restart; the mod polls it again.
     ls "$(waker_dir "$sid")"/*.json >/dev/null 2>&1 && exit 0
     ctx=$(jq -r '.context // empty' "$f"); rm -f "$f"
+    cm_ctx_ok "$ctx" || ctx=""   # the resume command is built here; a bad path is not passed on
     cm_log "mod: session ${sid:0:8} was waiting in another process; waking it from ${ctx:-its registration}"
-    printf '/open-science-context:continue-context %s\n' "$ctx" ;;
+    printf '%s\n' "$(cm_claude_prompt "$ctx")" ;;
   wakers)
     [ -n "${2:-}" ] && ls "$(waker_dir "$2")"/*.json 2>/dev/null ;;
   log)

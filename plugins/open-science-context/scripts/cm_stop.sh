@@ -59,7 +59,7 @@ size_due() {  # <key> <sid> <tokens>
   local NF="$OS_STATE/size/$1" nsid ntok
   read -r nsid ntok < "$NF" 2>/dev/null || { nsid=""; ntok=0; }
   if [ "$nsid" = "$2" ] && [ "$3" -lt "$(( ${ntok:-0} + REPEAT ))" ] 2>/dev/null; then return 1; fi
-  mkdir -p "$OS_STATE/size" && printf '%s %s\n' "$2" "$3" > "$NF"
+  printf '%s %s\n' "$2" "$3" | cm_write_text "$NF"
 }
 
 SID=$(printf '%s' "$IN" | jq -r '.session_id // empty')
@@ -85,17 +85,22 @@ if [ "$MOD" = 1 ]; then
   QUEUED=$(ls "$OS_STATE/wakers/$KEY"/*.json 2>/dev/null | wc -l)
   WAKERS=$(( ${WAKERS:-0} + QUEUED ))
   if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ" 2>/dev/null)" = requested ]; then
+    RKIND=$(jq -r '.kind // ""' "$REQ" 2>/dev/null); RCTX=$(jq -r '.context // ""' "$REQ" 2>/dev/null)
     if [ "$(jq -r .old_sid "$REQ")" != "$SID" ]; then
       cm_log "stop mod ${SID:0:8}: stale jump request from sid $(jq -r .old_sid "$REQ" | cut -c1-8) dropped"
+      rm -f "$REQ"
+    elif ! cm_plain_file "$REQ" || { [ "$RKIND" != active ] && [ "$RKIND" != wait ]; } \
+         || { [ "$RKIND" = active ] && ! cm_ctx_ok "$RCTX"; }; then
+      cm_log "stop mod ${SID:0:8}: jump request refused (not a plain file, kind '$RKIND', or context not a valid file path)"
       rm -f "$REQ"
     elif [ "$(jq -r .kind "$REQ")" = wait ] && [ "$WAKERS" -eq 0 ]; then
       rm -f "$REQ"
       cm_log "stop mod ${SID:0:8}: wait jump REFUSED, nothing will wake the session"
       out "$wait_refused"
     else
-      JUMP=$(jq -c --argjson w "$WAKERS" '{kind, context, prompt, report: (.report // ""), wakers: $w}' "$REQ")
-      jq '.phase="handed_to_mod"' "$REQ" > "$REQ.tmp" && mkdir -p "$OS_STATE/jump/done" \
-        && mv "$REQ.tmp" "$OS_STATE/jump/done/$KEY-$(date +%s).json" && rm -f "$REQ"
+      # No prompt: the mod builds the resume command from the context file itself.
+      JUMP=$(jq -c --argjson w "$WAKERS" '{kind, context, report: ((.report // "") | tostring), wakers: $w}' "$REQ")
+      cm_jq_into "$OS_STATE/jump/done/$KEY-$(date +%s).json" '.phase="handed_to_mod"' "$REQ" && rm -f "$REQ"
       cm_log "stop mod ${SID:0:8}: $(jq -r .kind <<<"$JUMP") jump handed to the mod (wakers: $WAKERS)"
       out
     fi
@@ -131,7 +136,7 @@ if [ -f "$REQ" ] && [ "$(jq -r .phase "$REQ" 2>/dev/null)" = requested ]; then
     block "$wait_refused"
   else
     cm_timer_kill "$KEY"
-    jq '.phase="launched"' "$REQ" > "$REQ.tmp" && mv "$REQ.tmp" "$REQ"
+    cm_jq_into "$REQ" '.phase="launched"' "$REQ"
     setsid nohup bash "$HERE/jump.sh" --worker "$REQ" </dev/null >>"$OS_LOG" 2>&1 &
     cm_log "stop $TMUX_PANE: $(jq -r .kind "$REQ") jump worker started (wakers: ${WAKERS:-0})"
     exit 0
@@ -158,10 +163,9 @@ if [ -z "$SID" ] || [ "$REG" != "$SID" ]; then cm_timer_kill "$KEY"; exit 0; fi
 if [ "${WAKERS:-0}" -gt 0 ]; then
   cm_timer_kill "$KEY"
   SF=""; CPID=$(cm_claude_pid) && SF=$(cm_state_file "$CPID") || SF=""
-  mkdir -p "$OS_STATE/timer"
   setsid nohup bash "$HERE/cache_cold.sh" "${TMUX%%,*}" "$TMUX_PANE" "$KEY" "$SID" "$SF" \
     </dev/null >>"$OS_LOG" 2>&1 &
-  echo $! > "$(cm_timer_path "$KEY")"
+  echo $! | cm_write_text "$(cm_timer_path "$KEY")"
 else
   cm_timer_kill "$KEY"
 fi

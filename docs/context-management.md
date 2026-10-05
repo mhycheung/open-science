@@ -177,7 +177,7 @@ Onboarding asks which jumps you want and records the answer as `OPSCI_JUMPS` in 
 block of the Claude `settings.json` (`$CLAUDE_CONFIG_DIR/settings.json` or
 `~/.claude/settings.json`). Edit it there to change it; new sessions pick it up. Codex
 reads `OPSCI_JUMPS` from the environment it is started in, for example
-`OPSCI_JUMPS=wait codex --add-dir ~/.local/state/open-science`.
+`OPSCI_JUMPS=wait codex --add-dir ~/.local/state/open-science/inbox`.
 
 | `OPSCI_JUMPS` | what happens |
 |---|---|
@@ -325,21 +325,31 @@ pane, not with `exec codex`, since an automated jump needs that shell to launch 
 session. For ordinary handoff, a named context file works without tmux. Registration
 without tmux is per Codex thread, so one session cannot inherit another's task by accident.
 
-The state directory must be writable by both the hooks and sandboxed tools. The default
-is `~/.local/state/open-science`; make it first and, when using Codex's workspace-write
-sandbox, explicitly include only that directory with `--add-dir`. Keep your other model,
-sandbox and approval settings:
+The state directory (default `~/.local/state/open-science`, or `OPSCI_STATE_DIR`) holds
+records that the hooks act on outside the sandbox: they end and start Codex, type into the
+pane and run `codex queue`. Sandboxed tools must therefore not be able to write it. They
+write only its `inbox` subdirectory, and the Codex hook checks what they leave there and
+writes the records itself. When using Codex's workspace-write sandbox, make the inbox and
+nothing else writable with `--add-dir`, and keep your other model, sandbox and approval
+settings:
 
 ```bash
-mkdir -p ~/.local/state/open-science
-codex --add-dir ~/.local/state/open-science
+mkdir -p ~/.local/state/open-science/inbox
+codex --add-dir ~/.local/state/open-science/inbox
 ```
 
-Do not broaden sandbox permissions merely to make a jump work. Without writable session
-state, continue from an explicitly named context file and save changes in the project.
+or, for every start, `sandbox_workspace_write.writable_roots =
+["/home/<you>/.local/state/open-science/inbox"]` in `~/.codex/config.toml`. If you set this
+up with an earlier version, which made the whole state directory writable, replace that
+path with its `inbox`. The state directory is created private (mode 700, files 600), and
+the scripts refuse a state directory owned by another user.
+
+Do not broaden sandbox permissions merely to make a jump work. Without a writable inbox,
+continue from an explicitly named context file and save changes in the project.
 For SLURM recovery, the state directory must be on storage shared by the compute nodes.
 The context plugin's `pane_context.sh check` tests write access and explains how to fix
-it; registration or jump requests return exit 3 when the state directory is read-only.
+it, and warns when the sandbox can write the whole state directory; registration or jump
+requests return exit 3 when the inbox is read-only.
 
 An active Codex jump saves the research state, ends the old TUI after its turn, and starts
 Codex again in the pane shell with the original launch options and a handoff prompt.

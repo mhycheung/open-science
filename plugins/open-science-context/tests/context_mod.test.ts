@@ -121,7 +121,23 @@ test('a clear that fires no SessionStart still leaves the report for the agent',
   await start($, clock)
   await endTurn($, clock)
   expect(await lastNote($)).toBe(NO_NOTE)
-  expect(calls.commands.filter(c => !c.startsWith('rename'))).toEqual(['clear', 'x'])
+  expect(calls.commands.filter(c => !c.startsWith('rename'))).toEqual(['clear', 'open-science-context:continue-context /p/c.md'])
+})
+
+// Regression: the mod ran whatever `/command` the request's prompt field held.
+test('a jump runs only the resume command built from the context file, never the prompt field', async ($, on) => {
+  const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', prompt: '/evil-cmd rm -rf ~' } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  expect(calls.commands.filter(c => !c.startsWith('rename'))).toEqual(['clear', 'open-science-context:continue-context /p/c.md'])
+  expect(calls.prompts).toEqual([])
+})
+
+test('a jump with a bad context path resumes from the registration, with no path', async ($, on) => {
+  const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md\u001b[2J /etc/x' } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  expect(calls.commands.filter(c => !c.startsWith('rename'))).toEqual(['clear', 'open-science-context:continue-context'])
 })
 
 test('the stop policy gets the context size from Claude Code', async ($, on) => {
@@ -197,6 +213,15 @@ test('a session left waiting by another process is woken at load', async ($, on)
   } })
   await start($, clock)
   expect(calls.commands).toContain('open-science-context:continue-context /p/c.md')
+})
+
+test('at load, only the resume command is run, never another command from the shell', async ($, on) => {
+  const { calls, clock } = setup(on, { scripts: {
+    'cm_mod.sh resumed': { exitCode: 0, stdout: '/evil-cmd /p/c.md\n', stderr: '' },
+  } })
+  await start($, clock)
+  expect(calls.commands.filter(c => !c.startsWith('rename') && !c.startsWith('opsci-note'))).toEqual([])
+  expect(calls.prompts).toEqual([])
 })
 
 test('a /clear the user types hands the registration over', async ($, on) => {

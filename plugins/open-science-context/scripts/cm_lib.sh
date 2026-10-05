@@ -25,7 +25,85 @@ OS_LOG="$OS_STATE/cm.log"
 OS_PROMPT_RE='❯'
 OS_BUSY_RE='esc to interrupt'
 
-cm_log() { mkdir -p "$OS_STATE" 2>/dev/null; echo "[$(date -Iseconds)] $*" >> "$OS_LOG"; }
+# ---- the state directory: private, owned by the user, written without following links ----
+# The state directory holds records that the hooks and workers act on outside any sandbox
+# (they type into panes, end and start Codex, run `codex queue`). It is therefore private:
+# created 0700, files 0600 (umask 077 here; CM_UMASK0 keeps the caller's umask for what the
+# scripts write elsewhere), and a directory owned by someone else is refused outright. Every
+# write goes through a temporary file made by mktemp in the same directory and a rename,
+# which replaces a symbolic link planted at the destination instead of writing through it.
+#
+# Under Codex the agent's tool shells run in a sandbox, and they must not be able to write
+# what the hooks act on. They write only to the INBOX ($OS_STATE/inbox, the one directory
+# the user makes writable for the sandbox); the Codex hook (cx_hook.sh, outside the
+# sandbox) takes the inbox entries of its own pane and thread, checks them and writes the
+# records itself. See "the Codex inbox" below.
+CM_UMASK0=$(umask)
+umask 077
+OS_INBOX="$OS_STATE/inbox"
+if [ -e "$OS_STATE" ] || [ -L "$OS_STATE" ]; then
+  if [ ! -d "$OS_STATE" ] || [ ! -O "$OS_STATE" ]; then
+    echo "open-science: the state directory $OS_STATE is not a directory owned by you; refusing to use it. Set OPSCI_STATE_DIR to a private directory of your own." >&2
+    exit 1
+  fi
+  case "$(stat -c %a "$OS_STATE" 2>/dev/null)" in *00) ;; *) chmod go-rwx "$OS_STATE" 2>/dev/null ;; esac
+fi
+[ -L "$OS_LOG" ] && rm -f -- "$OS_LOG" 2>/dev/null
+[ -f "$OS_LOG" ] && [ -O "$OS_LOG" ] && case "$(stat -c %a "$OS_LOG" 2>/dev/null)" in *00) ;; *) chmod go-rwx "$OS_LOG" 2>/dev/null ;; esac
+
+# Make a directory (and its parents) 0700. Fails on a symbolic link or a directory that is
+# not the user's.
+cm_mkdir() {
+  [ -L "$1" ] && return 1
+  [ -d "$1" ] || mkdir -p -m 700 -- "$1" 2>/dev/null || return 1
+  [ -O "$1" ] && [ ! -L "$1" ]
+}
+
+# A temporary file next to <dest> (mktemp: created new, never through a link), for an
+# atomic write by rename.
+cm_tmp_for() { cm_mkdir "$(dirname "$1")" && mktemp "$(dirname "$1")/.tmp.XXXXXX" 2>/dev/null; }
+
+# Atomic write of stdin to <file>.
+cm_write_text() {
+  local f="$1" tmp
+  tmp=$(cm_tmp_for "$f") || return 1
+  cat > "$tmp" && mv -f -- "$tmp" "$f" || { rm -f -- "$tmp"; return 1; }
+}
+
+# Atomic write of jq's output: <file> then the jq arguments.
+cm_jq_into() {
+  local f="$1" tmp; shift
+  tmp=$(cm_tmp_for "$f") || return 1
+  jq "$@" > "$tmp" 2>/dev/null && mv -f -- "$tmp" "$f" || { rm -f -- "$tmp"; return 1; }
+}
+
+# A plain file this user owns: a regular file, not a symbolic link, one link, at most 64 KB.
+cm_plain_file() {
+  [ -f "$1" ] && [ ! -L "$1" ] && [ -O "$1" ] || return 1
+  [ "$(stat -c '%h %s' "$1" 2>/dev/null | awk '$1==1 && $2<=65536 {print "ok"}')" = ok ]
+}
+
+# A context file named in a record: an absolute path with no whitespace or control
+# character, to an existing regular file. The resume prompt is built from it, never read
+# from a record.
+cm_ctx_ok() {
+  local c="${1:-}"
+  case "$c" in /*) ;; *) return 1 ;; esac
+  case "$c" in *[[:space:]]*) return 1 ;; esac
+  [ "$(cm_one_line "$c")" = "$c" ] || return 1
+  [ -f "$c" ]
+}
+cm_claude_prompt() { printf '/open-science-context:continue-context %s' "$1"; }   # <context file>
+
+# A tmux socket this user owns, and a pane id (%N): checked before anything is typed.
+cm_sock_ok() { [ -S "${1:-}" ] && [ -O "$1" ] && [[ "${2:-}" =~ ^%[0-9]+$ ]]; }
+
+cm_log() {
+  cm_mkdir "$OS_STATE" || return 0
+  [ -L "$OS_LOG" ] && rm -f -- "$OS_LOG" 2>/dev/null
+  { echo "[$(date -Iseconds)] $*" >> "$OS_LOG"; } 2>/dev/null
+  return 0
+}
 
 # Which jumps the user allows: all (default), wait (wait and cache-cold jumps only) or off.
 # Set as OPSCI_JUMPS in the "env" block of the Claude settings.json (onboarding asks).
@@ -63,7 +141,12 @@ cm_pane_key() {  # [sock] [pane] -> key, or return 1 outside tmux
 cm_request_path() { printf '%s/jump/%s.json' "$OS_STATE" "$1"; }   # <pane key>
 cm_reg_path()     { printf '%s/pane_context/%s.json' "$OS_STATE" "$1"; }   # <pane key>; pane_context.sh's record
 cm_timer_path()   { printf '%s/timer/%s.pid' "$OS_STATE" "$1"; }   # <pane key>
-cm_lock_path()    { mkdir -p "$OS_STATE/lock" 2>/dev/null; printf '%s/lock/%s.lock' "$OS_STATE" "$1"; }
+# Open it with `exec 9<>` (no truncation); a symbolic link there is removed first.
+cm_lock_path()    {
+  local f="$OS_STATE/lock/$1.lock"
+  cm_mkdir "$OS_STATE/lock"; [ -L "$f" ] && rm -f -- "$f"
+  printf '%s' "$f"
+}
 
 # The claude process that owns this shell: walk up the process tree.
 cm_claude_pid() {
@@ -109,9 +192,9 @@ cm_registered_sid() {  # <pane key>
 
 # Hand the pane's registration to the session a jump created. No record, no change.
 cm_reg_handover() {  # <pane key> <new sid>
-  local f tmp; f=$(cm_reg_path "$1"); tmp="$f.tmp.$$"
+  local f; f=$(cm_reg_path "$1")
   [ -f "$f" ] || return 0
-  jq --arg sid "$2" '.session_id=$sid' "$f" > "$tmp" 2>/dev/null && mv "$tmp" "$f" || rm -f "$tmp"
+  cm_jq_into "$f" --arg sid "$2" '.session_id=$sid' "$f"
 }
 
 # ---- pane reading ------------------------------------------------------------
@@ -181,12 +264,20 @@ cm_wait_idle() {  # <sock> <pane> <state file or empty> <timeout s>
   return 1
 }
 
+# One line of text to type: newlines and tabs become spaces, and every other control
+# character (C0 including ESC and CR, DEL, and C1 in UTF-8) is removed, so typed text can
+# never be read by the terminal or the TUI as a key or an escape sequence.
+cm_one_line() {
+  printf '%s' "$1" | tr '\n\t' '  ' | LC_ALL=C tr -d '\000-\037\177' | LC_ALL=C sed 's/\xc2[\x80-\x9f]//g'
+}
+
 # Type one line and confirm it was submitted. 0 = submitted, 1 = not.
 # Uses the paste buffer (one write) and checks the END of the payload, which the
 # input box always keeps on screen even when a long line scrolls its head away.
 cm_deliver() {  # <sock> <pane> <text> [attempts]
   local sock="$1" pane="$2" text attempts="${4:-3}" i w box want payload buf="osdeliver$$"
-  text=$(printf '%s' "$3" | tr '\n' ' ')
+  cm_sock_ok "$sock" "$pane" || { cm_log "deliver: $sock $pane is not a tmux socket of this user and a pane id; nothing typed"; return 1; }
+  text=$(cm_one_line "$3")
   [ -n "$text" ] || return 1
   want=$(printf '%s' "$text" | rev | cut -c1-24 | rev | cm_strip)
   payload=$(printf '%s' "$text" | cm_strip)
@@ -278,11 +369,7 @@ cm_cx_pane_path()   { printf '%s/codex/panes/%s.json' "$OS_STATE" "$1"; }   # <p
 cm_sess_reg_path() { printf '%s/session_context/%s__%s.json' "$OS_STATE" "$1" "$(cm_key "$2")"; }  # <runtime> <sid>
 
 # Atomic JSON write: <file> then the jq arguments that build it with -n.
-cm_write_json() {
-  local f="$1" tmp; shift; tmp="$f.tmp.$$"
-  mkdir -p "$(dirname "$f")" 2>/dev/null || return 1
-  jq -n "$@" > "$tmp" 2>/dev/null && mv "$tmp" "$f" || { rm -f "$tmp"; return 1; }
-}
+cm_write_json() { local f="$1"; shift; cm_jq_into "$f" -n "$@"; }
 
 # The resume prompt for a Codex session. Codex has no /open-science-context:...
 # slash command; the prompt names the skill in words. $OPSCI_CODEX_RESUME_PROMPT
@@ -292,8 +379,22 @@ cm_codex_prompt() {  # <context file>
   printf '%s' "${t//\{ctx\}/$1}"
 }
 
-# Is <pid> a live codex process?
-cm_is_codex() { [ -n "${1:-}" ] && [ "$(ps -o comm= -p "$1" 2>/dev/null)" = codex ]; }
+# Is <pid> a live codex process of this user?
+cm_is_codex() {
+  [ -n "${1:-}" ] && [ "$(ps -o comm= -p "$1" 2>/dev/null)" = codex ] \
+    && [ "$(ps -o uid= -p "$1" 2>/dev/null | tr -d ' ')" = "$(id -u)" ]
+}
+
+# The CODEX_HOME to run `codex queue` with for thread <tid>: the one its hook recorded, but
+# only when it is this process's own $CODEX_HOME or ~/.codex (a forged record must not make
+# codex load another config). Prints nothing for the default.
+cm_cx_home() {  # <thread id>
+  local h
+  h=$(jq -r '.codex_home // ""' "$(cm_cx_thread_path "$1")" 2>/dev/null)
+  [ -n "$h" ] || return 0
+  if [ "$h" = "${CODEX_HOME:-}" ] || [ "$h" = "$HOME/.codex" ]; then printf '%s' "$h"; return 0; fi
+  cm_log "codex_home '$h' in the record of thread ${1:0:8} is neither \$CODEX_HOME nor ~/.codex; ignored"
+}
 
 # Is <pid> a descendant of (or equal to) <ancestor>?
 cm_descends() {  # <pid> <ancestor>
@@ -372,36 +473,81 @@ cm_is_codex_proc() {  # <pid> [start]
   [ -z "${2:-}" ] || [ "$(cm_proc_start "$1")" = "$2" ]
 }
 
-# ---- the state directory under the Codex sandbox -----------------------------------
+# ---- the state directory under the Codex sandbox: the inbox ------------------------------
 # Codex's workspace-write and read-only sandboxes make everything outside the workspace,
 # /tmp and the added directories read-only (measured with `codex sandbox`, codex-cli
 # 0.159.3), so a Codex tool shell cannot write the default $OS_STATE under ~/.local/state.
-# The state directory is not moved for Codex: the hooks, the jump worker and the SLURM
-# plugin must all find the same records. The fix is to make that one directory writable,
-# narrowly, when Codex starts (verified live: `--add-dir` makes it writable):
-#   mkdir -p <state dir> && codex --add-dir <state dir> ...
-# or, for every start, `sandbox_workspace_write.writable_roots = ["<state dir>"]` in
+# It must not: the hooks and workers act on those records outside the sandbox. The user
+# makes ONE subdirectory writable for it, the inbox (verified live: `--add-dir` makes a
+# directory writable):
+#   mkdir -p <state dir>/inbox && codex --add-dir <state dir>/inbox ...
+# or, for every start, `sandbox_workspace_write.writable_roots = ["<state dir>/inbox"]` in
 # ~/.codex/config.toml. Nothing here widens a sandbox by itself.
+#
+# A Codex tool shell writes, under inbox/<target>/ (<target>: the pane key in tmux, else
+# thread__<thread id>):
+#   context.json        {thread_id, doc_path}   pane_context.sh set ("" for clear)
+#   jump.json           {thread_id, kind, context}   jump.sh active|wait
+#   wakers/<name>.json  {thread_id, jobs}       wait_slurm.sh --notify
+# The Codex hook takes the whole inbox/<target> directory of its own pane and thread (a
+# rename into a private staging directory, so nothing in it can change or be swapped for a
+# link afterwards), accepts only plain files of its own thread with valid values, writes
+# the records itself, and deletes the rest. Nothing a tool shell writes is ever executed,
+# typed or used as a path to write to.
+cm_inbox_target() {  # [thread id] -> this shell's inbox target
+  local k; k=$(cm_pane_key) && { printf '%s' "$k"; return 0; }
+  printf 'thread__%s' "$(cm_key "${1:-${CODEX_THREAD_ID:-}}")"
+}
+cm_inbox_dir() { printf '%s/%s' "$OS_INBOX" "$1"; }   # <target>
+
+# For the hook: move inbox/<target> into a new private staging directory and print the
+# path it has there, or return 1 when there is nothing (or not a real directory) to take.
+cm_inbox_take() {  # <target>
+  local src="$OS_INBOX/$1" stage
+  [ -e "$src" ] || [ -L "$src" ] || return 1
+  cm_mkdir "$OS_STATE/staging" || return 1
+  stage=$(mktemp -d "$OS_STATE/staging/XXXXXX" 2>/dev/null) || return 1
+  if ! mv -f -- "$src" "$stage/in" 2>/dev/null; then rmdir "$stage"; return 1; fi
+  if [ -L "$stage/in" ] || [ ! -d "$stage/in" ] || [ ! -O "$stage/in" ]; then
+    cm_log "inbox: $1 is not a directory of this user; removed"
+    rm -rf -- "$stage"; return 1
+  fi
+  printf '%s/in' "$stage"
+}
+
+# Can this shell write what it must? Under Codex: the inbox; otherwise the state directory.
 cm_state_writable() {
-  local t
-  mkdir -p "$OS_STATE" 2>/dev/null || return 1
-  t="$OS_STATE/.write_test.$$"
+  local d t
+  if [ "$(cm_runtime)" = codex ]; then d="$OS_INBOX"; else d="$OS_STATE"; fi
+  mkdir -p "$d" 2>/dev/null || return 1
+  t="$d/.write_test.$$"
+  ( : > "$t" ) 2>/dev/null || return 1
+  rm -f "$t"
+}
+# Under Codex: can this shell write the hooks' part of the state directory? It should not.
+cm_state_too_open() {
+  local t="$OS_STATE/.write_test.$$"
+  [ "$(cm_runtime)" = codex ] || return 1
   ( : > "$t" ) 2>/dev/null || return 1
   rm -f "$t"
 }
 cm_state_hint() {
-  printf 'open-science: the state directory %s is not writable here (under Codex: the sandbox). Context registration, jumps and wakers need it. Start Codex with it as an extra writable directory:\n  mkdir -p %q && codex --add-dir %q\nor add it to sandbox_workspace_write.writable_roots in ~/.codex/config.toml. A context file named explicitly still works without it (continue-context <file>).\n' \
-    "$OS_STATE" "$OS_STATE" "$OS_STATE"
+  printf 'open-science: the open-science inbox %s is not writable here (under Codex: the sandbox). Context registration, jumps and wakers need it. Start Codex with it as an extra writable directory:\n  mkdir -p %q && codex --add-dir %q\nor add it to sandbox_workspace_write.writable_roots in ~/.codex/config.toml. Make only the inbox writable, not the whole state directory %s. A context file named explicitly still works without it (continue-context <file>).\n' \
+    "$OS_INBOX" "$OS_INBOX" "$OS_INBOX" "$OS_STATE"
+}
+cm_state_open_hint() {
+  printf 'open-science: WARNING: this Codex session can write the whole state directory %s, so the sandbox can forge the records that the hooks act on outside it. Make only the inbox writable: replace %s with %s in --add-dir or in sandbox_workspace_write.writable_roots (~/.codex/config.toml). (Without a sandbox this warning does not apply.)\n' \
+    "$OS_STATE" "$OS_STATE" "$OS_INBOX"
 }
 
-# Update a JSON record under its lock (<file>.lock): <file> <jq filter> [jq args...].
-# Returns 1 (and leaves the file alone) if the file is gone or jq fails.
+# Update a JSON record under its directory's lock: <file> <jq filter> [jq args...].
+# The lock is flock on the directory itself (opened read-only: nothing is created or
+# truncated). Returns 1 (and leaves the file alone) if the file is gone or jq fails.
 cm_json_update() {
-  local f="$1" flt="$2" tmp; shift 2
+  local f="$1" flt="$2"; shift 2
   (
-    exec 8>"$f.lock"; flock -w 30 8 || exit 1
-    [ -f "$f" ] || exit 1
-    tmp="$f.tmp.$$"
-    jq "$@" "$flt" "$f" > "$tmp" 2>/dev/null && mv "$tmp" "$f" || { rm -f "$tmp"; exit 1; }
+    exec 8<"$(dirname "$f")" && flock -w 30 8 || exit 1
+    cm_plain_file "$f" || exit 1
+    cm_jq_into "$f" "$@" "$flt" "$f" || exit 1
   )
 }

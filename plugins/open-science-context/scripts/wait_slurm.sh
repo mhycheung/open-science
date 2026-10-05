@@ -5,7 +5,8 @@
 #
 #   wait_slurm.sh --notify <jobid> [<jobid>...]
 #
-# which only writes a request (<state>/wakers/<key>/...json) and returns. Under Claude Code
+# which only writes a request (<state>/wakers/<key>/...json; under Codex in the inbox, which
+# the Codex hook takes, see cm_lib.sh) and returns. Under Claude Code
 # the mod polls it (`wait_slurm.sh --check <request>`, every $OPSCI_WAIT_POLL seconds) and,
 # when the jobs have left the queue, sends their states to the session, which starts a
 # turn. The request is keyed by session id, so it survives a jump (the mod moves it to the
@@ -45,9 +46,10 @@ check_ids() {
 # was handed over to it), so it often queues the same jobs again; each request would send
 # its own report. An array task <id>_<n> is covered by a request for the whole array <id>.
 NEW=()
-unqueued() {
-  local dir="$1" j have; shift
-  have=$(cat "$dir"/*.json 2>/dev/null | jq -r '.jobs[]?' 2>/dev/null)
+unqueued() {  # <dir> [<dir2>] -- <jobid>...
+  local dirs=() j have
+  while [ "$1" != -- ]; do dirs+=("$1"); shift; done; shift
+  have=$(for d in "${dirs[@]}"; do cat "$d"/*.json 2>/dev/null; done | jq -r '.jobs[]?' 2>/dev/null)
   for j in "$@"; do
     grep -qxF -e "$j" -e "${j%%_*}" <<<"$have" || { NEW+=("$j"); have+=$'\n'"$j"; }
   done
@@ -81,7 +83,7 @@ case "${1:-}" in
     if cm_mod_active; then
       SID=$(cm_live_sid); [ -n "$SID" ] || { echo "no Claude session id found" >&2; exit 2; }
       D="$OS_STATE/wakers/$(cm_sess_key "$SID")"
-      unqueued "$D" "$@"
+      unqueued "$D" -- "$@"
       [ ${#NEW[@]} -gt 0 ] || { echo "A waker is already queued for jobs $*: nothing to add (it was queued before a jump, if not in this session)."; exit 0; }
       set -- "${NEW[@]}"
       F="$D/$(date +%s)-$$.json"
@@ -95,18 +97,15 @@ case "${1:-}" in
     [ "$(cm_runtime)" = codex ] || { echo "the open-science mod is not loaded, so --notify cannot wake this Claude Code session; run 'wait_slurm.sh <jobid>...' as a background Bash task instead" >&2; exit 4; }
     TID="${CODEX_THREAD_ID:-}"; [ -n "$TID" ] || { echo "CODEX_THREAD_ID is not set" >&2; exit 2; }
     cm_state_writable || { cm_state_hint >&2; exit 3; }
-    KEY=$(cm_pane_key) || KEY=""
-    TARGET="${KEY:-thread__$(cm_key "$TID")}"
-    unqueued "$OS_STATE/wakers/$TARGET" "$@"
+    # The request goes to the inbox (cm_lib.sh); the Codex hook takes it when the turn ends.
+    TARGET=$(cm_inbox_target "$TID")
+    unqueued "$OS_STATE/wakers/$TARGET" "$(cm_inbox_dir "$TARGET")/wakers" -- "$@"
     [ ${#NEW[@]} -gt 0 ] || { echo "A waker is already queued for jobs $*: nothing to add."; exit 0; }
     set -- "${NEW[@]}"
-    F="$OS_STATE/wakers/$TARGET/$(date +%s)-$$.json"
-    T="${TMUX:-}"
-    cm_write_json "$F" --args --arg tid "$TID" --arg key "$KEY" --arg sock "${T%%,*}" --arg pane "${TMUX_PANE:-}" \
-        --arg at "$(date -Iseconds)" \
-        '{version:1, runtime:"codex", jobs:$ARGS.positional, thread_id:$tid, key:$key, sock:$sock,
-          pane:$pane, requested_at:$at, state:"requested"}' "$@" \
-      || { echo "cannot write $F (in the Codex sandbox, add $OS_STATE as a writable root)" >&2; exit 1; }
+    F="$(cm_inbox_dir "$TARGET")/wakers/$(date +%s)-$$.json"
+    cm_write_json "$F" --args --arg tid "$TID" --arg at "$(date -Iseconds)" \
+        '{version:1, thread_id:$tid, jobs:$ARGS.positional, requested_at:$at}' "$@" \
+      || { cm_state_hint >&2; exit 3; }
     echo "Waker queued for jobs $*: it starts when this turn ends and, when the jobs leave the queue,"
     echo "sends their states to the Codex thread then running in ${TMUX_PANE:-this session} (codex queue)."
     exit 0 ;;
@@ -117,18 +116,19 @@ case "${1:-}" in
     F="${2:-}"; [ -f "$F" ] || { echo "no waker request: $F" >&2; exit 2; }
     # shellcheck source=cm_lib.sh
     . "$HERE/cm_lib.sh"
+    cm_plain_file "$F" || { echo "not a plain file of this user: $F" >&2; exit 2; }
     mapfile -t JOBS < <(jq -r '.jobs[]' "$F")
     check_ids "${JOBS[@]}"
     queued "${JOBS[@]}" && exit 10
     report "${JOBS[@]}"; rc=$?
-    mkdir -p "$OS_STATE/wakers/done"
-    jq --arg at "$(date -Iseconds)" '.state="done" | .finished_at=$at' "$F" \
-      > "$OS_STATE/wakers/done/$(basename "$(dirname "$F")")-$(basename "$F")" && rm -f "$F"
+    cm_jq_into "$OS_STATE/wakers/done/$(cm_key "$(basename "$(dirname "$F")")")-$(cm_key "$(basename "$F")")" \
+        --arg at "$(date -Iseconds)" '.state="done" | .finished_at=$at' "$F" && rm -f "$F"
     exit "$rc" ;;
   --run-waker)
     F="${2:-}"; [ -f "$F" ] || { echo "no waker request: $F" >&2; exit 2; }
     # shellcheck source=cm_lib.sh
     . "$HERE/cm_lib.sh"
+    cm_plain_file "$F" || { echo "not a plain file of this user: $F" >&2; exit 2; }
     cm_json_update "$F" '.pid=($p|tonumber) | .pid_start=$s' --arg p "$$" --arg s "$(cm_proc_start $$)" || true
     mapfile -t JOBS < <(jq -r '.jobs[]' "$F")
     check_ids "${JOBS[@]}"
@@ -149,20 +149,19 @@ case "${1:-}" in
         && [ -n "$cur" ] && TID="$cur"
       [ "$TID" = "$cur" ] || cm_log "waker $(basename "$F"): no live Codex TUI in pane ${KEY}; queueing to thread ${TID:0:8} (delivered when it is resumed)"
     fi
-    home=$(jq -r '.codex_home // ""' "$(cm_cx_thread_path "$TID")" 2>/dev/null)
+    home=$(cm_cx_home "$TID")
     msg="[open-science] $(printf '%s' "$report" | tr '\n' ' ')"
     if ${home:+env CODEX_HOME="$home"} timeout 120 codex queue --thread "$TID" --message "$msg" >>"$OS_LOG" 2>&1; then
       state=done; cm_log "waker $(basename "$F"): queued the job report to thread ${TID:0:8}"
     else
       state=failed; cm_log "waker $(basename "$F"): codex queue to thread ${TID:0:8} FAILED; report: $msg"
     fi
-    mkdir -p "$OS_STATE/wakers/done"
     (
-      exec 8>"$F.lock"; flock -w 30 8
-      jq --arg s "$state" --arg t "$TID" --arg at "$(date -Iseconds)" '.state=$s | .notified_thread=$t | .finished_at=$at' "$F" \
-        > "$OS_STATE/wakers/done/$(basename "$(dirname "$F")")-$(basename "$F")" && rm -f "$F"
+      exec 8<"$(dirname "$F")" && flock -w 30 8
+      cm_jq_into "$OS_STATE/wakers/done/$(cm_key "$(basename "$(dirname "$F")")")-$(cm_key "$(basename "$F")")" \
+          --arg s "$state" --arg t "$TID" --arg at "$(date -Iseconds)" '.state=$s | .notified_thread=$t | .finished_at=$at' "$F" \
+        && rm -f "$F"
     )
-    rm -f "$F.lock"
     exit "$rc" ;;
 esac
 
