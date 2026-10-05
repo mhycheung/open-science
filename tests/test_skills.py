@@ -11,7 +11,7 @@ import yaml
 from conftest import REPO, run_opsci
 
 PLUGINS = {
-    "open-science": ("onboard",),
+    "open-science": ("onboard", "dispatch"),
     "open-science-publish": ("publish", "zenodo-release"),
     "open-science-project": ("new-project", "new-task", "context-files", "migrate-project",
                              "update-from-template", "private-investigation", "notion"),

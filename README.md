@@ -61,7 +61,7 @@ If you are not using agents, install the `opsci` command
 The framework has three components. Use any combination; each works without the others,
 except context management, which needs project management. Project management and
 publishing are used through `opsci` and plain files; their Claude Code and Codex plugins
-are optional. One more plugin, `open-science`, holds the onboarding skill.
+are optional. One more plugin, `open-science`, holds the onboarding skill and the dispatch skill.
 
 | # | component | what it does | needs | pages |
 |---|---|---|---|---|
@@ -82,7 +82,7 @@ Also part of the framework:
 | part | what it does | pages |
 |---|---|---|
 | `opsci` command | the command-line tool behind every step, run by you or by the skills: map build, tasks, context caps, publish, site, Zenodo, notifications, Notion | [The opsci command](https://mhycheung.github.io/open-science/cli/), [Notifications](https://mhycheung.github.io/open-science/notify/), [Notion mirror and Feed](https://mhycheung.github.io/open-science/notion/) |
-| `open-science` plugin | the onboarding skill `open-science:onboard` | [Install](#install) |
+| `open-science` plugin | the onboarding skill `open-science:onboard`; `open-science:dispatch`, which starts an agent in a new tmux window when you ask | [Install](#install), [Dispatching an agent](https://mhycheung.github.io/open-science/agents/#dispatching-an-agent) |
 
 ## Optional extras
 

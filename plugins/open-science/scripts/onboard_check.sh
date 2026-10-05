@@ -104,7 +104,7 @@ done
 # personal skills with the same name as a framework skill (they win over the plugin's).
 # The plugins are cached apart once installed, so the names are listed here;
 # tests/test_onboard.py checks the list against the skill directories of the plugins.
-SKILL_NAMES="onboard publish zenodo-release new-project new-task context-files migrate-project
+SKILL_NAMES="onboard dispatch publish zenodo-release new-project new-task context-files migrate-project
 update-from-template private-investigation notion context-management continue-context advise-with-context"
 same=""
 for n in $SKILL_NAMES; do

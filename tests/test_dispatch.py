@@ -1,0 +1,245 @@
+"""open-science:dispatch (plugins/open-science/scripts/dispatch.sh and hooks/dispatch_mod.js).
+
+dispatch.sh opens a window in the current tmux session, types the agent's launch command into
+its shell, and hands the new session its prompt: through the mod (OPSCI_DISPATCH_PROMPT and
+`dispatch.sh claim`), by pasting it into the pane when no mod claims it, or, for Codex, as the
+command's argument. These tests run it in a private tmux server, with the launch command
+replaced by the fake Claude TUI (tests/fixtures/fake_claude/fake_tui.sh) or a script that
+records its arguments, so no real agent and no user tmux server is touched. The mod's own code
+is tested with Claude Code's mod test kit (plugins/open-science/tests/dispatch_mod.test.ts),
+run here when a Claude Code with `claude plugin test` is found. Every check has a case it
+must refuse.
+"""
+import json
+import os
+import shutil
+import subprocess
+import time
+import uuid
+from pathlib import Path
+
+import pytest
+
+from conftest import REPO
+
+PLUGIN = REPO / "plugins" / "open-science"
+DISPATCH = PLUGIN / "scripts" / "dispatch.sh"
+FAKE_TUI = REPO / "tests" / "fixtures" / "fake_claude" / "fake_tui.sh"
+
+needs_tmux = pytest.mark.skipif(shutil.which("tmux") is None or shutil.which("jq") is None,
+                                reason="tmux or jq not installed")
+
+
+@pytest.fixture
+def env(tmp_path):
+    e = {k: v for k, v in os.environ.items()
+         if not k.startswith(("TMUX", "CLAUDE", "OPSCI", "CODEX"))}
+    e.update(OPSCI_STATE_DIR=str(tmp_path / "state"), OPSCI_DISPATCH_GRACE="1",
+             OPSCI_DISPATCH_MAXWAIT="40")
+    return e
+
+
+def run(env, *args):
+    return subprocess.run(["bash", str(DISPATCH), *map(str, args)], env=env,
+                          capture_output=True, text=True, timeout=120)
+
+
+def kv(out):
+    return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
+
+
+@pytest.fixture
+def tm(env, tmp_path):
+    """A private tmux server whose windows start a plain bash; the env looks like a pane in it."""
+    sockdir = Path("/tmp") / f"os-test-{uuid.uuid4().hex[:8]}"
+    sockdir.mkdir()
+    sock = str(sockdir / "s")
+    base = ["tmux", "-S", sock, "-f", "/dev/null"]
+    subprocess.run([*base, "new-session", "-d", "-s", "main", "-x", "150", "-y", "40",
+                    "bash --norc --noprofile"], check=True)
+    subprocess.run([*base, "set", "-g", "default-command", "bash --norc --noprofile"], check=True)
+    pane = subprocess.run([*base, "display-message", "-p", "-t", "main:0", "#{pane_id}"],
+                          capture_output=True, text=True, check=True).stdout.strip()
+    env.update(TMUX=f"{sock},1,0", TMUX_PANE=pane)
+    st = tmp_path / "tui_state.json"
+    st.write_text(json.dumps({"sessionId": "sid-A", "status": "idle"}))
+    rec = tmp_path / "received.log"
+    rec.touch()
+    yield {"tm": base, "pane": pane, "state": st, "rec": rec}
+    subprocess.run([*base, "kill-server"], capture_output=True)
+    shutil.rmtree(sockdir, ignore_errors=True)
+
+
+def tmux(t, *args):
+    return subprocess.run([*t["tm"], *args], capture_output=True, text=True).stdout.strip()
+
+
+def wait_for(pred, timeout):
+    end = time.time() + timeout
+    while time.time() < end:
+        if pred():
+            return True
+        time.sleep(0.5)
+    return False
+
+
+def fake_claude(env, t):
+    env["OPSCI_DISPATCH_CMD"] = f"FAKE_BUSY=1 bash {FAKE_TUI} {t['state']} {t['rec']}"
+
+
+# ---- claim --------------------------------------------------------------------------------
+
+def test_claim_prints_the_prompt_once(env, tmp_path):
+    q = tmp_path / "state" / "dispatch"
+    q.mkdir(parents=True)
+    f = q / "a.prompt"
+    f.write_text("tidy up\n")
+    r = run(env, "claim", f)
+    assert r.returncode == 0 and r.stdout == "tidy up\n"
+    assert not f.exists()
+    assert run(env, "claim", f).returncode == 1          # a second claim gets nothing
+
+
+def test_claim_refuses_a_file_outside_a_dispatch_directory(env, tmp_path):
+    f = tmp_path / "other.prompt"
+    f.write_text("secret\n")
+    r = run(env, "claim", f)
+    assert r.returncode == 1 and r.stdout == "" and f.exists()
+
+
+def test_claim_refuses_a_file_that_is_not_a_prompt(env, tmp_path):
+    q = tmp_path / "state" / "dispatch"
+    q.mkdir(parents=True)
+    f = q / "notes.txt"
+    f.write_text("x\n")
+    assert run(env, "claim", f).returncode == 1 and f.exists()
+
+
+def test_claim_refuses_a_symlink(env, tmp_path):
+    q = tmp_path / "state" / "dispatch"
+    q.mkdir(parents=True)
+    target = tmp_path / "secret.txt"
+    target.write_text("secret\n")
+    (q / "a.prompt").symlink_to(target)
+    r = run(env, "claim", q / "a.prompt")
+    assert r.returncode == 1 and r.stdout == "" and target.exists()
+
+
+# ---- launch -------------------------------------------------------------------------------
+
+def test_launch_outside_tmux_is_refused(env, tmp_path):
+    r = run(env, "launch", "--dir", tmp_path)
+    assert r.returncode == 1 and "not inside tmux" in r.stderr
+
+
+@needs_tmux
+def test_launch_refuses_a_missing_directory(env, tm, tmp_path):
+    r = run(env, "launch", "--dir", tmp_path / "nope")
+    assert r.returncode == 1 and "no such directory" in r.stderr
+    assert tmux(tm, "list-windows", "-t", "main", "-F", "#{window_index}") == "0"
+
+
+@needs_tmux
+def test_launch_without_a_prompt_starts_the_agent_and_sends_nothing(env, tm, tmp_path):
+    work = tmp_path / "home dir"
+    work.mkdir()
+    fake_claude(env, tm)
+    r = run(env, "launch", "--dir", work)
+    assert r.returncode == 0, r.stderr
+    o = kv(r.stdout)
+    assert o["prompt"] == "none" and o["dir"] == str(work.resolve())
+    assert o["command"].endswith("--remote-control")
+    assert wait_for(lambda: "❯" in tmux(tm, "capture-pane", "-p", "-t", o["pane"]), 20)
+    # A window of the same session, named after the directory, in it; not made current.
+    assert tmux(tm, "display-message", "-p", "-t", o["pane"], "#{session_name}|#{window_name}|#{pane_current_path}") \
+        == f"main|home dir|{work.resolve()}"
+    assert tmux(tm, "display-message", "-p", "-t", "main", "#{window_index}") == "0"
+    time.sleep(3)
+    assert tm["rec"].read_text() == ""
+
+
+@needs_tmux
+def test_launch_types_the_prompt_when_no_mod_claims_it(env, tm, tmp_path):
+    fake_claude(env, tm)
+    p = tmp_path / "prompt.txt"
+    p.write_text("clean up the home directory\n")
+    r = run(env, "launch", "--dir", tmp_path, "--name", "cleanup", "--prompt-file", p)
+    assert r.returncode == 0, r.stderr
+    o = kv(r.stdout)
+    assert o["prompt"] == "typed"
+    assert tmux(tm, "display-message", "-p", "-t", o["pane"], "#{window_name}") == "cleanup"
+    assert wait_for(lambda: tm["rec"].read_text().splitlines() == ["clean up the home directory"], 10), \
+        tm["rec"].read_text()
+    assert list((tmp_path / "state" / "dispatch").iterdir()) == []
+
+
+@needs_tmux
+def test_launch_leaves_the_prompt_to_the_mod_when_it_claims_it(env, tm, tmp_path):
+    # Stands in for Claude Code with the mod: the session's start claims the prompt named in
+    # OPSCI_DISPATCH_PROMPT (in the window's environment) and records it, then the TUI runs.
+    got = tmp_path / "mod_got.txt"
+    env["OPSCI_DISPATCH_CMD"] = (f'bash {DISPATCH} claim "$OPSCI_DISPATCH_PROMPT" > {got}; '
+                                 f"bash {FAKE_TUI} {tm['state']} {tm['rec']}")
+    p = tmp_path / "prompt.txt"
+    p.write_text("line one\nline two\n")
+    r = run(env, "launch", "--dir", tmp_path, "--prompt-file", p)
+    assert r.returncode == 0, r.stderr
+    assert kv(r.stdout)["prompt"] == "mod"
+    assert got.read_text() == "line one\nline two\n"
+    time.sleep(3)
+    assert tm["rec"].read_text() == ""                   # not typed as well
+
+
+@needs_tmux
+def test_launch_does_not_type_into_a_folder_trust_question(env, tm, tmp_path):
+    env.update(OPSCI_DISPATCH_MAXWAIT="6",
+               OPSCI_DISPATCH_CMD="printf 'Do you trust the files in this folder?\\n❯ 1. Yes\\n'; cat > /dev/null")
+    p = tmp_path / "prompt.txt"
+    p.write_text("hello\n")
+    r = run(env, "launch", "--dir", tmp_path, "--prompt-file", p)
+    o = kv(r.stdout)
+    assert r.returncode == 0 and o["prompt"] == "pending"
+    assert Path(o["queued"]).read_text() == "hello\n"    # left for the mod once the user answers
+
+
+@needs_tmux
+def test_codex_gets_the_prompt_as_one_argument(env, tm, tmp_path):
+    rec = tmp_path / "args.json"
+    rec_script = tmp_path / "fake_codex.sh"
+    rec_script.write_text(f'#!/bin/bash\npython3 -c \'import json,sys; json.dump(sys.argv[1:], open("{rec}","w"))\' "$@"\n')
+    env["OPSCI_DISPATCH_CODEX_CMD"] = f"bash {rec_script}"
+    p = tmp_path / "prompt.txt"
+    text = "it's \"quoted\" $HOME `x` \\ and\nsecond line"
+    p.write_text(text)
+    r = run(env, "launch", "--agent", "codex", "--dir", tmp_path, "--prompt-file", p)
+    assert r.returncode == 0, r.stderr
+    o = kv(r.stdout)
+    assert o["prompt"] == "argument" and "--remote-control" not in o["command"]
+    assert wait_for(rec.exists, 20)
+    assert json.loads(rec.read_text()) == [text]
+
+
+# ---- the mod ------------------------------------------------------------------------------
+
+def test_hooks_json_lists_the_mod_and_keeps_the_update_check():
+    d = json.loads((PLUGIN / "hooks" / "hooks.json").read_text())
+    assert d["modules"] == ["./dispatch_mod.js"] and (PLUGIN / "hooks" / "dispatch_mod.js").exists()
+    assert set(d["hooks"]) == {"SessionStart", "Stop"}
+
+
+def test_codex_hooks_do_not_load_the_mod():
+    assert "modules" not in json.loads((PLUGIN / "hooks" / "codex.json").read_text())
+
+
+def test_mod_tests_pass(tmp_path):
+    c = os.environ.get("OPSCI_TEST_CLAUDE") or shutil.which("claude")
+    if not c:
+        pytest.skip("no claude binary (set OPSCI_TEST_CLAUDE)")
+    # A copy without scripts/mod_probe, whose own test passes only as its own plugin.
+    mod = tmp_path / "open-science"
+    shutil.copytree(PLUGIN, mod, ignore=shutil.ignore_patterns("mod_probe"))
+    r = subprocess.run([c, "plugin", "test", str(mod)], capture_output=True, text=True, timeout=300)
+    out = r.stdout + r.stderr
+    if "hooks modules are turned off" in out or "unknown command" in out.lower():
+        pytest.skip("this Claude Code runs no mods: " + out.strip().splitlines()[0][:200])
+    assert r.returncode == 0 and " 3 pass" in out and " 0 fail" in out, out

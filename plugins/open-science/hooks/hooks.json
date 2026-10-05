@@ -1,4 +1,8 @@
 {
+  "description": "Update check at session start and stop (shell hooks); the dispatch mod (dispatch_mod.js) submits the prompt of a session open-science:dispatch started.",
+  "modules": [
+    "./dispatch_mod.js"
+  ],
   "hooks": {
     "SessionStart": [
       {
