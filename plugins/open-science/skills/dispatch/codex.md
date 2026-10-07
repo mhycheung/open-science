@@ -9,7 +9,10 @@ mechanics differ.
   the window, with the prompt as the command's argument (Codex has no mods, so nothing is
   pasted). Codex sessions have no names: the name is the window's only. If the user asked
   for a Claude Code agent, pass `--agent claude` as in `SKILL.md`.
-- Step 4: the prompt is `argument` (given on the command line) or `none`. Codex has no
+- Step 4: Codex's question reads "Trust this folder?". Ask the same question with "Codex"
+  in place of "Claude Code"; on yes, run `trust` with `--agent codex` and no `--queued`. It
+  selects "Trust and continue". Codex saves the answer in the user's Codex config.
+- Step 5: the prompt is `argument` (given on the command line) or `none`. Codex has no
   per-session Remote Control flag: say that the session can be followed remotely only if
   the user runs Codex's remote-control daemon (`codex remote-control start`), and do not
   start it yourself.
