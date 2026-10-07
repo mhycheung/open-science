@@ -117,6 +117,8 @@ it in the Claude app. The session is named after the project: `<project>`, or `<
 `-3`, ..., the lowest number no live session holds. The directory does not need to be an
 open-science project ("dispatch an agent to clean up my home directory"). The agent gets a
 first prompt only if you say what it should do. An agent dispatches only when you ask it to.
+If the new session asks whether to trust its folder, the dispatching agent asks you, and
+answers yes in that window only if you say yes.
 
 Claude Code: the open-science plugin's mod submits that prompt as your own when the new
 session starts; where mods do not run, the skill pastes it into the new window's prompt box.

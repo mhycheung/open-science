@@ -42,14 +42,36 @@ ask.
    this account holds. It opens the window in the background (the user's window stays
    current), types `${OPSCI_DISPATCH_CMD:-claude} --name <name> --remote-control <name>`
    into its shell, and with a prompt waits until the prompt is delivered (up to 3
-   minutes). Remove the temporary file after.
-4. **Report** in two or three lines, from the script's `key=value` output: the session's
-   name (`name`), the window (`window`), the directory, and the prompt:
+   minutes) or the session asks whether to trust the folder. Remove the temporary file
+   after the script returns; the prompt is kept in its own `queued` file.
+4. **Folder trust.** If the output has `trust=asked`, the new session waits at Claude Code's
+   question whether to trust the folder. Ask the user, with your question tool where you
+   have one:
+
+   > The new session in `<dir>` asks whether to trust this folder. Trusting it lets Claude
+   > Code read, edit and run files there and lets the folder's own settings (hooks, MCP
+   > servers) run. Answer yes for you?
+
+   Options: **Yes, trust the folder** and **No, I'll answer it in the window**. On yes run
+
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/dispatch.sh" trust --pane <pane> --agent claude \
+       [--queued <queued>]
+   ```
+
+   with `--queued` when the output had a `queued` line. It selects "Yes, I trust this
+   folder" and presses Enter, or, if it cannot select that line, presses nothing and
+   fails; then it delivers the prompt and prints `prompt=` as in step 3. On no, or if
+   `trust` fails, leave the question to the user in that window: the mod sends a queued
+   prompt when the session starts. Never answer the question without the user's yes.
+5. **Report** in two or three lines, from the script's `key=value` output: the session's
+   name (`name`), the window (`window`), the directory, whether the folder was trusted
+   (when it was asked), and the prompt:
    - `none`: started without a prompt.
    - `mod`: the open-science mod submitted it as the user's prompt.
    - `typed`: no mod claimed it, so it was pasted into the prompt box and sent.
-   - `pending`: not delivered yet; the window shows a question first (for example whether
-     to trust the folder). Ask the user to answer it in that window; the mod sends the
+   - `pending`: not delivered yet; the window shows a question first (the folder-trust
+     question, or another). Ask the user to answer it in that window; the mod sends the
      prompt when the session starts. The prompt waits in the `queued` file.
 
    Say that the session can be followed in the Claude app through Remote Control.

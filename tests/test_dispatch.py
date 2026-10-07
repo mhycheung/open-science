@@ -255,16 +255,93 @@ def test_launch_leaves_the_prompt_to_the_mod_when_it_claims_it(env, tm, tmp_path
     assert tm["rec"].read_text() == ""                   # not typed as well
 
 
+FAKE_TRUST = REPO / "tests" / "fixtures" / "fake_claude" / "fake_trust.sh"
+
+
+def trust_dialog(env, t, tmp_path, kind="claude", then="cat"):
+    """The launch command shows a fake folder-trust question; its answers go to answers.log."""
+    log = tmp_path / "answers.log"
+    log.touch()
+    var = "OPSCI_DISPATCH_CODEX_CMD" if kind == "codex" else "OPSCI_DISPATCH_CMD"
+    env[var] = f"bash {FAKE_TRUST} {kind} {log} {then}"
+    return log
+
+
 @needs_tmux
-def test_launch_does_not_type_into_a_folder_trust_question(env, tm, tmp_path):
-    env.update(OPSCI_DISPATCH_MAXWAIT="6",
-               OPSCI_DISPATCH_CMD="printf 'Do you trust the files in this folder?\\n❯ 1. Yes\\n'; cat > /dev/null")
+def test_launch_stops_at_a_folder_trust_question_and_answers_nothing(env, tm, tmp_path):
+    env["OPSCI_DISPATCH_MAXWAIT"] = "60"
+    log = trust_dialog(env, tm, tmp_path)
     p = tmp_path / "prompt.txt"
     p.write_text("hello\n")
+    t0 = time.time()
     r = run(env, "launch", "--dir", tmp_path, "--prompt-file", p)
     o = kv(r.stdout)
-    assert r.returncode == 0 and o["prompt"] == "pending"
-    assert Path(o["queued"]).read_text() == "hello\n"    # left for the mod once the user answers
+    assert r.returncode == 0 and o["prompt"] == "pending" and o["trust"] == "asked"
+    assert time.time() - t0 < 30                         # reported at once, not after MAXWAIT
+    assert Path(o["queued"]).read_text() == "hello\n"    # left for the mod once answered
+    time.sleep(2)
+    assert log.read_text() == ""                         # no answer given
+    assert "Yes, I trust this folder" in tmux(tm, "capture-pane", "-p", "-t", o["pane"])
+
+
+@needs_tmux
+def test_launch_without_a_prompt_reports_the_trust_question(env, tm, tmp_path):
+    log = trust_dialog(env, tm, tmp_path)
+    o = kv(run(env, "launch", "--dir", tmp_path).stdout)
+    assert o["prompt"] == "none" and o["trust"] == "asked" and log.read_text() == ""
+
+
+@needs_tmux
+def test_launch_reports_no_trust_question_when_there_is_none(env, tm, tmp_path):
+    fake_claude(env, tm)
+    o = kv(run(env, "launch", "--dir", tmp_path).stdout)
+    assert o["trust"] == "none"
+
+
+@needs_tmux
+def test_trust_selects_yes_and_then_delivers_the_prompt(env, tm, tmp_path):
+    log = trust_dialog(env, tm, tmp_path, then=f"bash {FAKE_TUI} {tm['state']} {tm['rec']}")
+    p = tmp_path / "prompt.txt"
+    p.write_text("do the thing\n")
+    o = kv(run(env, "launch", "--dir", tmp_path, "--prompt-file", p).stdout)
+    assert o["trust"] == "asked"
+    r = run(env, "trust", "--pane", o["pane"], "--queued", o["queued"])
+    assert r.returncode == 0, r.stderr
+    t = kv(r.stdout)
+    assert t["trust"] == "accepted" and t["prompt"] == "typed"
+    assert log.read_text() == "yes\n"                   # the cursor was moved off "No, exit"
+    assert wait_for(lambda: "do the thing" in tm["rec"].read_text(), 10)
+
+
+@needs_tmux
+def test_trust_answers_the_codex_question(env, tm, tmp_path):
+    ran = tmp_path / "ran"
+    log = trust_dialog(env, tm, tmp_path, kind="codex", then=f"touch {ran}")
+    o = kv(run(env, "launch", "--agent", "codex", "--dir", tmp_path).stdout)
+    assert o["trust"] == "asked"
+    r = run(env, "trust", "--pane", o["pane"], "--agent", "codex")
+    assert r.returncode == 0 and kv(r.stdout)["trust"] == "accepted", r.stderr
+    assert log.read_text() == "yes\n" and wait_for(ran.exists, 10)
+
+
+@needs_tmux
+def test_trust_presses_nothing_when_yes_cannot_be_selected(env, tm, tmp_path):
+    log = trust_dialog(env, tm, tmp_path, kind="stuck")
+    o = kv(run(env, "launch", "--dir", tmp_path).stdout)
+    r = run(env, "trust", "--pane", o["pane"])
+    assert r.returncode == 1 and "pressed nothing" in r.stderr
+    time.sleep(1)
+    assert log.read_text() == ""                         # Enter never sent on "No, exit"
+
+
+@needs_tmux
+def test_trust_refuses_a_pane_without_a_trust_question(env, tm, tmp_path):
+    fake_claude(env, tm)
+    o = kv(run(env, "launch", "--dir", tmp_path).stdout)
+    r = run(env, "trust", "--pane", o["pane"])
+    assert r.returncode == 1 and "no folder-trust question" in r.stderr
+    time.sleep(1)
+    assert tm["rec"].read_text() == ""                   # nothing typed into the session
 
 
 @needs_tmux
