@@ -9,6 +9,16 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
+## 0.3.5 - 2026-10-10
+
+- Dispatch: a prompt that is a slash command (`/quota-cleanup`) is run as that command. Before,
+  Claude Code refused the mod's submission of text beginning with `/`, the prompt was lost,
+  and `dispatch.sh` still reported `prompt=mod`. A prompt that begins with `/` but names no
+  command (a path) is pasted into the new window instead. New `dispatch.sh peek`.
+- Dispatch: when the new session asks whether to trust its folder, `launch` reports
+  `trust=asked`; the dispatching agent asks the user and, only on their yes, answers with the
+  new `dispatch.sh trust`, which then delivers a queued prompt.
+
 ## 0.3.4 - 2026-10-05
 
 - New skill `open-science:dispatch`: on request, starts another agent session (Claude Code or
