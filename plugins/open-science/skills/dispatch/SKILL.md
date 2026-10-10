@@ -68,7 +68,8 @@ ask.
    name (`name`), the window (`window`), the directory, whether the folder was trusted
    (when it was asked), and the prompt:
    - `none`: started without a prompt.
-   - `mod`: the open-science mod submitted it as the user's prompt.
+   - `mod`: the open-science mod took it and sent it as the user's prompt, or, for a slash
+     command (`/quota-cleanup`), ran that command.
    - `typed`: no mod claimed it, so it was pasted into the prompt box and sent.
    - `pending`: not delivered yet; the window shows a question first (the folder-trust
      question, or another). Ask the user to answer it in that window; the mod sends the

@@ -8,6 +8,7 @@
 #                                        answer the folder-trust question with yes; only
 #                                        after the user said yes
 #   dispatch.sh claim <prompt file>      (the mod) print the prompt and remove it, once
+#   dispatch.sh peek <prompt file>       (the mod) print the prompt and leave it
 #
 # launch opens a window (in the background: the user's window stays current) in <dir>,
 # types the launch command into its shell, so that the user's shell functions and aliases
@@ -51,11 +52,20 @@ die() { echo "dispatch: $*" >&2; exit 1; }
 
 # Only a launch's own file: a *.prompt file of this user in a `dispatch` directory. (The
 # session's state directory may differ from the dispatcher's, so the path is not compared.)
-claim() {  # <file>: print it and remove it; exit 1 when already claimed or not ours
+ours() {
   local f="${1:-}"
   [ -n "$f" ] && [ -f "$f" ] && [ ! -L "$f" ] && [ -O "$f" ] || return 1
   [ "$(basename "$(dirname "$f")")" = dispatch ] || return 1
   case "$(basename "$f")" in *.prompt) ;; *) return 1 ;; esac
+}
+
+peek() {  # <file>: print it and leave it; exit 1 when already claimed or not ours
+  ours "${1:-}" && cat "$1"
+}
+
+claim() {  # <file>: print it and remove it; exit 1 when already claimed or not ours
+  local f="${1:-}"
+  ours "$f" || return 1
   local mine="$f.claimed.$$"
   mv "$f" "$mine" 2>/dev/null || return 1
   cat "$mine"
@@ -257,7 +267,8 @@ trust() {
 case "${1:-}" in
   launch) shift; launch "$@" ;;
   claim) claim "${2:-}" ;;
+  peek) peek "${2:-}" ;;
   trust) shift; trust "$@" ;;
   name) [ -d "${2:-}" ] || die "no such directory: ${2:-(none given)}"; pick "$2"; echo ;;
-  *) echo "usage: dispatch.sh launch --dir <dir> [--agent claude|codex] [--name <name>] [--prompt-file <file>] | claim <file> | name <dir> | trust --pane <pane> [--agent claude|codex] [--queued <file>]" >&2; exit 2 ;;
+  *) echo "usage: dispatch.sh launch --dir <dir> [--agent claude|codex] [--name <name>] [--prompt-file <file>] | claim <file> | peek <file> | name <dir> | trust --pane <pane> [--agent claude|codex] [--queued <file>]" >&2; exit 2 ;;
 esac
