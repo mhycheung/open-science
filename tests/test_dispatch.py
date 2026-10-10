@@ -101,6 +101,24 @@ def test_claim_prints_the_prompt_once(env, tmp_path):
     assert run(env, "claim", f).returncode == 1          # a second claim gets nothing
 
 
+def test_peek_prints_the_prompt_and_leaves_it(env, tmp_path):
+    q = tmp_path / "state" / "dispatch"
+    q.mkdir(parents=True)
+    f = q / "a.prompt"
+    f.write_text("/quota-cleanup\n")
+    r = run(env, "peek", f)
+    assert r.returncode == 0 and r.stdout == "/quota-cleanup\n" and f.exists()
+    assert run(env, "claim", f).stdout == "/quota-cleanup\n"
+    assert run(env, "peek", f).returncode == 1           # nothing to peek once claimed
+
+
+def test_peek_refuses_what_claim_refuses(env, tmp_path):
+    f = tmp_path / "other.prompt"
+    f.write_text("secret\n")
+    r = run(env, "peek", f)
+    assert r.returncode == 1 and r.stdout == ""
+
+
 def test_claim_refuses_a_file_outside_a_dispatch_directory(env, tmp_path):
     f = tmp_path / "other.prompt"
     f.write_text("secret\n")
@@ -384,4 +402,4 @@ def test_mod_tests_pass(tmp_path):
     out = r.stdout + r.stderr
     if "hooks modules are turned off" in out or "unknown command" in out.lower():
         pytest.skip("this Claude Code runs no mods: " + out.strip().splitlines()[0][:200])
-    assert r.returncode == 0 and " 3 pass" in out and " 0 fail" in out, out
+    assert r.returncode == 0 and " 6 pass" in out and " 0 fail" in out, out

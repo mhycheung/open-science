@@ -121,7 +121,9 @@ If the new session asks whether to trust its folder, the dispatching agent asks 
 answers yes in that window only if you say yes.
 
 Claude Code: the open-science plugin's mod submits that prompt as your own when the new
-session starts; where mods do not run, the skill pastes it into the new window's prompt box.
+session starts, and runs a prompt that is a slash command (`/quota-cleanup`) as that command;
+where mods do not run, or the prompt begins with `/` but names no command (a path), the skill
+pastes it into the new window's prompt box.
 If you start Claude Code with your own command or shell function, set
 `OPSCI_DISPATCH_CMD` to it (for example `export OPSCI_DISPATCH_CMD=claude-personal` in your
 shell profile). Codex: the prompt is passed as `codex`'s argument (`OPSCI_DISPATCH_CODEX_CMD`
