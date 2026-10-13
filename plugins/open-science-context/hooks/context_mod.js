@@ -299,7 +299,11 @@ function coldNote(st) {
 // is cold is held, the model not woken, until they confirm it. A slash command passes:
 // /clear is the usual answer to a cold cache.
 //
-// A typed prompt gets the mod's own dialog in the terminal, with exactly two answers. A hook
+// Three answers: Submit; Do not submit, which puts a typed prompt back in the prompt box;
+// Clear and submit, which runs /clear and then sends the prompt to the new session (no cache
+// to lose).
+//
+// A typed prompt gets the mod's own dialog in the terminal, with exactly these answers. A hook
 // may not wait on its own code for more than 10 s, so the prompt is dropped at once and the
 // dialog sends it again on Submit. Claude Code shows it as a prompt the plugin sent, and no
 // hook can make it the user's (2.1.287: the mod's own hooks are skipped for a prompt sent from
@@ -307,7 +311,8 @@ function coldNote(st) {
 // as the plugin's, and next() refuses another origin). The mod's own prompt.submit hook does
 // not see it, so it is not asked about again. Claude Code's question dialog is used where the
 // mod's cannot be: a prompt from Remote Control (the app draws only that dialog, and adds its
-// own Other answers), or one with attachments, which sending it again would lose.
+// own Other answers), or one with attachments, which sending it again would lose (so it is
+// not offered Clear and submit).
 const ASK_PANE = 'opsci-cold-ask'
 let asking = null           // { question, text }: the typed prompt the dialog holds
 
@@ -316,13 +321,45 @@ function coldQuestion(st) {
   return 'The cache is cold (' + Math.floor(st.idleMin) + ' min since the last request).' + ctx + ' Are you sure you want to submit this prompt?'
 }
 
-async function answerAsk($, submit) {
+// Clear the session as a /clear the user types would (the registration and wakers go to
+// the new session, as in a jump), then send the prompt there. Run from a timer, as a jump's
+// clear is, not from inside the hook that holds the prompt. If the clear starts no new
+// session, nothing is sent and the prompt goes back to the prompt box.
+function clearAndSubmit($, text) {
+  jumping = true
+  coldTimer?.cancel(); coldTimer = null
+  $.clock.after(0, async () => {
+    try {
+      const old = await $.session.id()
+      await $.command.run({ command: 'clear', args: '' })
+      const now = await $.session.id()
+      if (now === old) {
+        await log($, 'clear and submit FAILED: /clear did not start a new session (still ' + old.slice(0, 8) + ')')
+        await $.prompt.fill({ text })
+        return
+      }
+      sid = now
+      await sh($, 'cm_mod.sh', ['handover', old, now])
+      await log($, 'cold-cache prompt: cleared ' + old.slice(0, 8) + ' -> ' + now.slice(0, 8) + ', then sent')
+      await $.prompt.submit({ text })
+    } catch (err) {
+      await log($, 'clear and submit FAILED: ' + err)
+    } finally {
+      jumping = false
+    }
+  })
+}
+
+// answer: submit | clear | cancel
+async function answerAsk($, answer) {
   const held = asking
   asking = null
   await $.ui.close({ id: ASK_PANE })
   if (!held) return
-  if (submit) {
+  if (answer === 'submit') {
     await $.prompt.submit({ text: held.text })
+  } else if (answer === 'clear') {
+    clearAndSubmit($, held.text)
   } else {
     await $.prompt.fill({ text: held.text })
     await log($, 'cold-cache prompt held back')
@@ -340,9 +377,14 @@ async function coldGate($, e, next) {
     if (opened.isPlaced) return { drop: 'Not sent yet: the cache is cold. Answer below.' }
     asking = null
   }
+  const canClear = !(e.attachments && e.attachments.length)
   let answer = ''
-  try { answer = await $.ui.ask(q, { header: 'Cache cold', options: ['Submit', 'Do not submit'] }) } catch { answer = '' }
+  try { answer = await $.ui.ask(q, { header: 'Cache cold', options: canClear ? ['Submit', 'Do not submit', 'Clear and submit'] : ['Submit', 'Do not submit'] }) } catch { answer = '' }
   if (answer === 'Submit') return next(e)
+  if (answer === 'Clear and submit' && canClear) {
+    clearAndSubmit($, e.text)
+    return { drop: 'Not sent to this session: the cache is cold. Clearing the session, then sending the prompt.' }
+  }
   if (e.origin.kind === 'composer') await $.prompt.fill({ text: e.text })
   await log($, 'cold-cache prompt held back (' + Math.floor(st.idleMin) + ' min idle)')
   return { drop: 'Not submitted: the cache is cold.' +
@@ -443,8 +485,9 @@ export function register(on) {
     return h(Box, { flexDirection: 'column' },
       h(Text, { color: 'yellow' }, '⚠ ' + (asking ? asking.question : 'The cache is cold.')),
       h(Box, { flexDirection: 'row', gap: 2 },
-        h(Button, { key: 'submit', label: 'Submit', hotkey: '1', variant: 'primary', autoFocus: true, onPress: () => answerAsk($, true) }),
-        h(Button, { key: 'cancel', label: 'Do not submit', hotkey: '2', role: 'dismiss', onPress: () => answerAsk($, false) })))
+        h(Button, { key: 'submit', label: 'Submit', hotkey: '1', variant: 'primary', autoFocus: true, onPress: () => answerAsk($, 'submit') }),
+        h(Button, { key: 'cancel', label: 'Do not submit', hotkey: '2', role: 'dismiss', onPress: () => answerAsk($, 'cancel') }),
+        h(Button, { key: 'clear', label: 'Clear and submit', hotkey: '3', onPress: () => answerAsk($, 'clear') })))
   })
   // Esc, or the pane's close mark: not submitted.
   on('ui.close', async ($, e, next) => {

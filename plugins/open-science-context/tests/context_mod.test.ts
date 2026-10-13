@@ -9,7 +9,7 @@ type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent:
 
 // Stubs shared by every test. `stop` is what cm_stop.sh --mod answers; `scripts` maps a
 // script name to its answer. A /clear makes the session id change, as in Claude Code.
-function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean; noStartAtClear?: boolean } = {}) {
+function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean; noStartAtClear?: boolean; clearFails?: boolean } = {}) {
   const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [], filled: [] }
   let sid = 'sid-old'
   const clock = mock.clock(on)
@@ -41,6 +41,7 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
   on('command.run', { command: 'clear' }, async ($, e) => {
     calls.commands.push('clear')
     calls.order.push('command clear')
+    if (opts.clearFails) return { text: '' }
     sid = 'sid-new'
     if (!opts.noStartAtClear) await engine.classic.SessionStart({ source: 'clear' })
     return { text: '' }
@@ -52,7 +53,7 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
   })
   on('classic.SessionStart', () => ({}))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('prompt.submit', ($, e) => { calls.prompts.push(e.text); return { text: e.text } })
+  on('prompt.submit', ($, e) => { calls.prompts.push(e.text); calls.order.push('prompt ' + e.text); return { text: e.text } })
   on('session.send', ($, e) => { calls.sent.push(e.text); return { isDelivered: true } })
   on('session.start', () => ({ cwd: '/work' }))
   on('classic.Stop', () => ({}))
@@ -379,11 +380,12 @@ test('a resumed session keeps the time of its last request', async ($, on) => {
   expect(await barOn($)).toEqual({ text: 'context 1.2k tokens · cache warm, 9 min left', color: 'green' })
 })
 
-function askAnswers(on, answer: string | null, asked: string[]) {
+function askAnswers(on, answer: string | null, asked: string[], options: string[][] = []) {
   on('tool.call', { tool: 'AskUserQuestion' }, ($, e) => {
     asked.push(e.questions[0].question)
+    options.push(e.questions[0].options.map(o => o.label))
     if (answer === null) throw new Error('dismissed')
-    return { text: answer, isError: false, value: { answers: { [e.questions[0].question]: answer } } }
+    return { result: { questions: e.questions, answers: { [e.questions[0].question]: answer } } }
   })
 }
 
@@ -399,7 +401,7 @@ async function coldSession($, on, opts = {}) {
   return ctx
 }
 
-test('a typed prompt to a cold cache is held, and the two-button dialog sends it on Submit', async ($, on) => {
+test('a typed prompt to a cold cache is held, and the three-button dialog sends it on Submit', async ($, on) => {
   const asked: string[] = []
   askAnswers(on, 'Submit', asked)
   const { calls } = await coldSession($, on)
@@ -409,8 +411,8 @@ test('a typed prompt to a cold cache is held, and the two-button dialog sends it
   expect(calls.order).toContain('open opsci-cold-ask')
   const ui = await askPane($)
   expect((await ui.find({ type: 'Text' })).text).toContain('The cache is cold (60 min since the last request)')
-  const buttons = ['submit', 'cancel'].map(async k => (await ui.find({ key: k }))?.props?.label)
-  expect(await Promise.all(buttons)).toEqual(['Submit', 'Do not submit'])
+  const buttons = ['submit', 'cancel', 'clear'].map(async k => (await ui.find({ key: k }))?.props?.label)
+  expect(await Promise.all(buttons)).toEqual(['Submit', 'Do not submit', 'Clear and submit'])
   await ui.press({ key: 'submit' })
   expect(calls.prompts).toEqual(['go on'])
   expect(asked).toEqual([])              // Claude Code's question (with its Other answers) is not used
@@ -423,6 +425,53 @@ test('Do not submit in the dialog sends nothing and puts the prompt back in the 
   await ui.press({ key: 'cancel' })
   expect(calls.prompts).toEqual([])
   expect(calls.filled).toEqual(['go on'])
+})
+
+test('Clear and submit in the dialog clears the session, hands it over, then sends the prompt', async ($, on) => {
+  const { calls, clock } = await coldSession($, on)
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  const ui = await askPane($)
+  await ui.press({ key: 'clear' })
+  await clock.settle()
+  expect(calls.commands).toEqual(['clear'])
+  expect(calls.prompts).toEqual(['go on'])
+  expect(calls.order.indexOf('command clear')).toBeLessThan(calls.order.indexOf('prompt go on'))
+  expect(calls.scripts).toContainEqual(['cm_mod.sh', 'handover', 'sid-old', 'sid-new'])
+  expect(calls.filled).toEqual([])
+})
+
+test('Clear and submit sends nothing when the clear starts no new session', async ($, on) => {
+  const { calls, clock } = await coldSession($, on, { clearFails: true })
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  const ui = await askPane($)
+  await ui.press({ key: 'clear' })
+  await clock.settle()
+  expect(calls.commands).toEqual(['clear'])
+  expect(calls.prompts).toEqual([])
+  expect(calls.filled).toEqual(['go on'])
+  expect(calls.scripts.some(s => s[1] === 'handover')).toBe(false)
+})
+
+test('a Remote Control prompt answered Clear and submit is sent to the cleared session', async ($, on) => {
+  const asked: string[] = []
+  const options: string[][] = []
+  askAnswers(on, 'Clear and submit', asked, options)
+  const { calls, clock } = await coldSession($, on)
+  const r = await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'bridge' } })
+  expect(options).toEqual([['Submit', 'Do not submit', 'Clear and submit']])
+  expect(r.drop).toContain('Clearing the session')
+  await clock.settle()
+  expect(calls.commands).toEqual(['clear'])
+  expect(calls.prompts).toEqual(['go on'])
+})
+
+test('a prompt with attachments is not offered Clear and submit', async ($, on) => {
+  const asked: string[] = []
+  const options: string[][] = []
+  askAnswers(on, 'Do not submit', asked, options)
+  await coldSession($, on)
+  await $.prompt.submit({ text: 'see this', attachments: [{ type: 'image' }], wait: false, origin: { kind: 'composer' } })
+  expect(options).toEqual([['Submit', 'Do not submit']])
 })
 
 test('a typed prompt waits for no question while the cache is warm', async ($, on) => {
