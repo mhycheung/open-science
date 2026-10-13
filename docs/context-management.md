@@ -221,14 +221,18 @@ not woken until you answer:
 
 - **Typed in the terminal:** the prompt is not sent, and a dialog opens with the question (`⚠
   The cache is cold (75 min since the last request). The whole context (180.2k tokens) will be
-  read again at the full price. Are you sure you want to submit this prompt?`) and two buttons.
+  read again at the full price. Are you sure you want to submit this prompt?`) and three buttons.
   **Submit** (or `1`) sends it as you typed it, shown in the conversation as a message from the
   plugin (Claude Code labels every prompt a plugin sends that way, and no plugin can change
-  it); **Do not submit** (or `2`, or Esc) puts it back in the prompt box.
+  it); **Do not submit** (or `2`, or Esc) puts it back in the prompt box; **Clear and submit**
+  (or `3`) clears the session, as `/clear` would, and sends the prompt to the new session, so
+  the old context is not read again. If the clear fails, nothing is sent and the prompt goes
+  back in the prompt box.
 - **From Remote Control:** the app shows Claude Code's question with the same text and the
-  answers **Submit** and **Do not submit**. The app adds its own free-text answers; anything but
-  **Submit** leaves the prompt unsent. A typed prompt with an image attached gets the same
-  question in the terminal.
+  answers **Submit**, **Do not submit** and **Clear and submit**. The app adds its own
+  free-text answers; anything but **Submit** or **Clear and submit** leaves the prompt unsent.
+  A typed prompt with an image attached gets the same question in the terminal, without
+  **Clear and submit**: a plugin cannot send an attachment again.
 
 Slash commands (`/clear` is the usual answer to a cold cache), task notifications and the
 plugin's own prompts are not asked about.
