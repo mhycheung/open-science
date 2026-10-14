@@ -44,7 +44,9 @@ This project is mirrored to Notion, where the user reads it (skill
   hook also runs it when a turn ends. `opsci notion diff` then prints `in sync` and names
   no plot without a caption.
 - **Plots.** Only plots under `tasks/<id>/` appear in the task's page, each with its caption
-  file (section 2). A remade plot gets a new dated name; it replaces the old one in place.
+  file (section 2). A remade plot gets a new dated name (the same day: `_v2` after the date);
+  it replaces the old one in place. Deliverables (section 5) appear once, on the Deliverables
+  page, updated in place.
 - **Feed.** Post with `opsci notion post --kind KIND [--task ID] [--mention] [--file PLOT]
   "text"`: a finished subtask as `result` with its key plot and `--mention`; a question or
   blocker for the user as `question` or `blocker` with `--mention`; a long job submitted

@@ -58,8 +58,8 @@ A task's `context.md` and `plan.md` also show the header as a table under the ti
 writes it and `opsci map build` rewrites it from the front matter; never edit the table.
 
 Required: `id`, `title`, `type`, `status`, `summary`. A task may carry `short_name`; a plan
-header may also carry `autonomy` and `hold_at`; a result may carry `kind` and `milestone`
-(see "Results"); a verification task carries `verifies`; any node may carry `artifacts`, `code`, `uses` and `tags`. Any other key is
+header may also carry `autonomy` and `hold_at`; a result may carry `kind`, `milestone` and
+`deliverable` (see "Results"); a verification task carries `verifies`; any node may carry `artifacts`, `code`, `uses` and `tags`. Any other key is
 an error, so a typo is caught. `verified` means a stated check was run against a provenance
 record, and `evidence` points to both. Only the user sets `human-verified`.
 
@@ -82,6 +82,16 @@ Set `milestone: true` when the result obviously answers part of the project's qu
 (`PROJECT.md`), so that a paper on the project would report it. When unsure, ask the user,
 and leave it unset until they answer.
 
+Set `deliverable: true` on a result that is something the project delivers (a talk deck, a
+paper draft, a living list of sources), when the user names it so or `PROJECT.md` says so:
+all its `artifacts` are then shown once, at their current version, in the Deliverables
+section of `results/README.md` and on the Deliverables page in Notion. `deliverable:
+[paths]` shows only those of its artifacts (the PDF and the PPTX of a deck, not its
+figures). A deliverable keeps one stable name (`S4/slides.pdf`, not
+`S4/slides_2026-10-14.pdf`) and is updated in place; git keeps its history. Every other
+output keeps the dated, never-overwritten names of `AGENTS.md` §5. A deliverable's
+markdown file may be its own result file (`artifacts` naming itself).
+
 When a result relies on work from outside the project (a published result or value, a
 model or approximation, a dataset, software whose correctness it depends on), record that
 in the same step: add the work to `citations/used.bib` and its key to the result's `uses:`.
@@ -103,6 +113,7 @@ type: result
 kind: value                  # figure | table | value | statement | concept | assumption
 status: done
 milestone: true              # a main result of the project: listed in results/README.md
+deliverable: false           # true (or a list of artifacts): something the project delivers
 depends_on: [r-noise-stationary, d-strain-gw150914]   # results, tasks or datasets it rests on
 uses: [Isi2019]              # keys in citations/used.bib: the external works it relies on
 artifacts: [tasks/t07-mode-fit-v2/S3/corner.png, data/t07-mode-fit-v2/chain.h5]
@@ -121,8 +132,8 @@ It writes, never to be edited by hand:
 
 - `tasks/<id>/results/README.md`: the task's results, each with its figure, where it is
   stored, the code, what it rests on and what uses it; withdrawn results in a table below;
-- `results/README.md`: the milestone results (`milestone: true`, and every result in
-  `results/`);
+- `results/README.md`: the deliverables (`deliverable:`), then the milestone results
+  (`milestone: true`, and every result in `results/`);
 - `map/claims.md`: the claims graph. Every result, grouped by the task it came from, with
   arrows from what it rests on (results, tasks, datasets) and to what uses it, and the
   external works it uses on its card, and a table with each result's verification and the weakest verification in its chain.

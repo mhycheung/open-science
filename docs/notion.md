@@ -25,6 +25,7 @@ Under your projects page (for example "Research projects") each project has a pa
 | Context | `context.md` |
 | Map | `map/README.md`, the project graph (`map/graph.md`) and the claims graph (`map/claims.md`) as images (their PNG files), each node table in a closed toggle, `map/dead_ends.md` |
 | Milestone results | `results/README.md`, with its figures |
+| Deliverables | each deliverable once (a result with `deliverable:` in its header): its title and summary, then its files at their current version: a PDF or image with its caption box, a markdown file rendered, any other file (a PPTX) attached |
 | Log | `log/*.md`, newest month first |
 | Rules | `rules/README.md` |
 | Brainstorm context | `brainstorm/context.md` |
@@ -59,9 +60,32 @@ colour, the data, the background needed to read it, and what to see in it (templ
 Files that differ only by an ISO date in their name are versions of one plot. A remade plot
 gets a new dated name (`bands_2026-09-28.png` after `bands_2026-09-25.png`): the sync shows
 the newest version in the place of the older one. The image block and the caption box are
-updated in place, and nothing else on the page moves. A PDF with a PNG of the same stem is
+updated in place, and nothing else on the page moves. A plot remade on the same day gets a
+revision right after the date (`bands_2026-09-28_v2.png`, then `_v3`); it is a version too.
+Any other suffix after the date (`bands_2026-09-28_l2.png`) names a different plot, and both
+are shown, since a suffix may name a parameter. `opsci notion diff` reports such a file
+beside the same name without the suffix (`version? ...`): if it replaces it, rename it, or
+move the old one to `archive/`. A file kept at one name and overwritten (a deliverable) is
+updated in place too. A PDF with a PNG of the same stem is
 the same figure and is not shown twice. Files over 5 MiB are listed but not uploaded (the
 upload limit of a free Notion workspace).
+
+## Deliverables
+
+A deliverable is what the project delivers: a talk deck, a paper draft, a living list of
+sources. It is a result whose header has `deliverable: true` (all its `artifacts`) or
+`deliverable: [paths]` (some of them); see the template's `tasks/README.md`, "Results".
+Its files keep one stable name (`tasks/t03-talk/S4/slides.pdf`) and are updated in place;
+git keeps their history.
+
+The Deliverables page, under the project page, shows each deliverable once: a heading with
+its id and title, its summary, then each file. A PDF or image is shown with its caption box
+(the `.caption.md` beside it), a markdown file is rendered (without its header), and any
+other file, such as a PPTX, is attached for download. When a file changes, the sync gives
+its block the new file; the block stays where it is. When a markdown file changes, only its
+changed blocks are replaced. A deliverable that is removed, or whose result is superseded,
+disappears from the page. The same files also appear at the top of `results/README.md` and,
+under `tasks/`, as plots on their task's page.
 
 The sync reads only files inside the project: a symlinked directory is not entered, and a
 symlinked plot, caption or markdown file whose target is outside the project is skipped.

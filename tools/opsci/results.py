@@ -63,6 +63,21 @@ def is_milestone(n: Node) -> bool:
     return n.get("type") == "result" and (bool(n.get("milestone")) or results_dir(n.path) == "results")
 
 
+def deliverable_files(n: Node) -> list[str]:
+    """The files a deliverable result shows: its ``deliverable`` list, or every artifact for
+    ``deliverable: true``. Empty for a node that is not a deliverable."""
+    d = n.get("deliverable")
+    if n.get("type") != "result" or not d:
+        return []
+    return [str(f) for f in d] if isinstance(d, list) else [str(f) for f in n.get("artifacts", []) or []]
+
+
+def deliverables(nodes: list[Node]) -> list[Node]:
+    """The live deliverables of the project (not brainstorm), by id."""
+    return [n for n in results(nodes) if deliverable_files(n) and n.get("status") not in DEAD_STATUSES
+            and not n.path.startswith(tuple(s + "/" for s in SUBROOTS))]
+
+
 def results(nodes: list[Node]) -> list[Node]:
     return sorted((n for n in nodes if n.get("type") == "result"), key=lambda n: n.id)
 
@@ -118,10 +133,16 @@ def check(root: Path, res: ScanResult) -> None:
             if k not in bib:
                 res.errors.append(Problem(n.path, f"uses: '{k}' is not a key in {BIB}"))
         if n.get("type") != "result":
-            for key in ("kind", "milestone"):
+            for key in ("kind", "milestone", "deliverable"):
                 if key in n.header:
                     res.errors.append(Problem(n.path, f"{key}: only a result (type: result) has it"))
     for n in results(res.nodes):
+        d = n.get("deliverable")
+        if d is True and not n.get("artifacts"):
+            res.errors.append(Problem(n.path, "deliverable: true needs artifacts (the files to show)"))
+        for f in d if isinstance(d, list) else []:
+            if f not in (n.get("artifacts") or []):
+                res.errors.append(Problem(n.path, f"deliverable: '{f}' is not one of its artifacts"))
         for line in at_risk(n, ids):
             res.warnings.append(Problem(n.path, line + ": check the result, then update it or mark it superseded"))
     for n, f in changed_after(root, results(res.nodes)):
@@ -313,10 +334,11 @@ def _withdrawn(dead: list[Node], ids: dict[str, Node], page_dir: str, linked) ->
     return out + [""]
 
 
-def _page(title: str, intro: list[str], rs: list[Node], ids, page_dir, linked, empty: str, zenodo=None) -> str:
+def _page(title: str, intro: list[str], rs: list[Node], ids, page_dir, linked, empty: str, zenodo=None,
+          before: list[str] = ()) -> str:
     live = [n for n in rs if n.get("status") not in DEAD_STATUSES]
     dead = [n for n in rs if n.get("status") in DEAD_STATUSES]
-    out = [BANNER, "", f"# {title}", ""] + intro + [""]
+    out = [BANNER, "", f"# {title}", ""] + intro + [""] + list(before)
     if not rs:
         return "\n".join(out + [empty, ""])
     for n in live:
@@ -356,7 +378,26 @@ def render_project_results(nodes: list[Node], linked=None, zenodo=None) -> str:
              "is listed here if its header says `milestone: true`, or if its file is in this directory",
              "(a result that draws on several tasks). Every task lists all of its results in",
              "`tasks/<id>/results/README.md`. What each result rests on: [the claims graph](../map/claims.md)."]
-    return _page("Results", intro, rs, ids, "results", linked, "No milestone results yet.", zenodo)
+    return _page("Results", intro, rs, ids, "results", linked, "No milestone results yet.", zenodo,
+                 before=_deliverables_table(nodes, ids, linked))
+
+
+def _deliverables_table(nodes: list[Node], ids, linked) -> list[str]:
+    """The ``## Deliverables`` section of the project results page: each deliverable once,
+    with its files (header field ``deliverable``)."""
+    ds = deliverables(nodes)
+    if not ds:
+        return []
+    out = ["## Deliverables", "",
+           "What the project delivers, each file at a stable path and updated in place (its history is",
+           "in git). A result is listed here if its header has `deliverable: true` (all its",
+           "`artifacts`) or `deliverable: [paths]` (those of its artifacts).", "",
+           "| deliverable | files | summary |", "|---|---|---|"]
+    for n in ds:
+        files = ", ".join(_file(f, "results", linked) for f in deliverable_files(n))
+        out.append(f"| {_node(n.id, ids, 'results', linked)}: {_cell(n.get('title'))} | {files} | "
+                   f"{_cell(n.get('summary'))} |")
+    return out + [""]
 
 
 def _claims_path(tdir: str) -> str:

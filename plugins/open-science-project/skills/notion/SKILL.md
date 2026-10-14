@@ -13,7 +13,8 @@ repo.
 What is in Notion, under the project's page:
 - Project, Context, Map (the project graph and the claims graph as images and interactive
   HTML views, drawn left to right by `opsci map build`; never draw them top to bottom),
-  Milestone results, Log, Rules, Brainstorm context and Private docs pages.
+  Milestone results, Deliverables (each deliverable once, at its current version), Log,
+  Rules, Brainstorm context and Private docs pages.
 - The **Tasks** database: one row per task, holding the task's context, then its results
   page, plan, task map, task log and subcontext files, then its plots.
 - The **Results** database: one row per result, holding the result's file and figures.
@@ -37,8 +38,17 @@ What is in Notion, under the project's page:
    of their own. This covers context files, plans, logs, node summaries, captions and Feed
    messages. Notion renders it.
 5. **A remade plot gets a new dated name** (`bands_2026-09-28.png` after
-   `bands_2026-09-25.png`) and its own caption file. The sync treats the two as versions of
-   one plot and replaces the old one in the same place in the page. Nothing else moves.
+   `bands_2026-09-25.png`; remade the same day, `bands_2026-09-28_v2.png`) and its own caption
+   file. The sync treats these as versions of one plot and replaces the old one in the same
+   place in the page. Nothing else moves. Any other suffix after the date
+   (`slides_2026-10-14_audit.pdf`) makes a separate plot: never name a revision that way.
+   `opsci notion diff` reports such files (`version? ...`); rename them or move the old file
+   to `archive/`.
+   **A deliverable keeps one name.** A result the project delivers (a talk deck, a paper
+   draft, a living list) has `deliverable: true` in its header (or `deliverable: [paths]`),
+   and its files keep one stable name (`S4/slides.pdf`), overwritten when remade, with the
+   caption file updated with it. The Deliverables page shows each deliverable once at its
+   current version and updates its blocks in place.
    When the user asks to update or remake plots: make the new files and captions, run
    `opsci notion sync --plots-only`, then check `opsci notion diff`.
 6. **Post to the Feed** at the points the user cares about:

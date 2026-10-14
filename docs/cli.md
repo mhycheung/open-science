@@ -82,7 +82,7 @@ opsci map build [--check] [ROOT]
 
 Reads every node header and writes `map/graph.md`, `map/dead_ends.md` and `map/claims.md` (the
 claims graph), and the same three files in `brainstorm/map/` for the brainstorm nodes alone.
-It writes the results pages: `results/README.md` (the milestone results) and
+It writes the results pages: `results/README.md` (the deliverables and the milestone results) and
 `tasks/<id>/results/README.md` for every task. It warns about every live result that rests
 on failed or superseded work, and about a committed artifact that changed after its result
 file. Brainstorm nodes are part of the

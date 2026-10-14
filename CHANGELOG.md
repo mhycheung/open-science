@@ -9,6 +9,35 @@ new layout. The `open-science-project:update-from-template` skill runs every mig
 section between the project's `layout_version` (in `config/framework.yaml`; no key means
 layout 1) and the framework's, in order, before it applies the other template changes.
 
+## Unreleased
+
+- Deliverables: a result whose header has `deliverable: true` (all its `artifacts`) or
+  `deliverable: [paths]` (some of them) is something the project delivers, such as a talk
+  deck or a living list of sources. `opsci map build` lists each deliverable once, with its
+  files, in a new Deliverables section at the top of `results/README.md`, and refuses
+  `deliverable: true` without artifacts, a listed path that is not an artifact, and the
+  field on a node that is not a result. The Notion mirror has a new Deliverables page under
+  the project page: each deliverable once, with its summary and its files at their current
+  version (a PDF or image with its caption box, a markdown file rendered, other files such as
+  a PPTX attached). When a file changes, its block gets the new file in place; a removed or
+  superseded deliverable disappears from the page.
+- Naming rule (template `AGENTS.md` §5, `contracts/subagent.md`, `tasks/README.md`, the
+  notion and context-files skills): deliverables keep one stable name and are updated in
+  place, with their history in git; run outputs and analysis plots keep dated names that are
+  never overwritten.
+- Notion mirror, plot versions: a revision right after the date (`bands_2026-09-28_v2.png`)
+  is a version of `bands_2026-09-28.png`, and the newest revision is shown. Any other suffix
+  after the date (`slides_2026-10-14_audit.pdf`) stays a separate plot, since it may name a
+  parameter (`bands_2026-09-28_l2.png`); `opsci notion diff` reports such a file beside the
+  same name without the suffix (`version? ...`). An image, PDF or file block of a project
+  file in any mirrored page now keeps its block when only its file changes.
+
+To adopt deliverables in an existing project: run `open-science-project:update-from-template`
+(no layout change); then, for each deliverable, rename its files to a stable name (with
+`git mv`, and its `.caption.md` with it), move superseded dated copies to `archive/`, add
+`deliverable: true` (or `deliverable: [paths]`) to its result header with the new paths in
+`artifacts`, and run `opsci map build` and `opsci notion sync`.
+
 ## 0.3.5 - 2026-10-10
 
 - Dispatch: a prompt that is a slash command (`/quota-cleanup`) is run as that command. Before,

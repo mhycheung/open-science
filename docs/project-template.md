@@ -73,7 +73,9 @@ keeping `data/MANIFEST.yaml`, `messages/README.md` and `config/site.example.yaml
 
 Small outputs go in `tasks/<id>/`; large data in `data/<task-id>/`. Names carry an ISO date
 and the parameters that distinguish them. A new run gets a new name; nothing committed or
-published is overwritten.
+published is overwritten. Deliverables are the exception (a result with `deliverable:` in its
+header, such as a talk deck or a living list): one stable name, updated in place; git keeps
+the history.
 
 ## brainstorm/, docs/ and private-docs/
 
@@ -155,8 +157,8 @@ A task's `context.md` and `plan.md` also show the header as a table under the ti
 writes it and `opsci map build` rewrites it from the front matter; never edit the table.
 
 - Required: `id`, `title`, `type`, `status`, `summary`. A task may carry `short_name`; a
-  plan header may also carry `autonomy` and `hold_at`; a result may carry `kind` and
-  `milestone`; any node may carry `artifacts`, `code`, `uses` and `tags`. Any other key is an
+  plan header may also carry `autonomy` and `hold_at`; a result may carry `kind`,
+  `milestone` and `deliverable`; any node may carry `artifacts`, `code`, `uses` and `tags`. Any other key is an
   error, so a typo is caught.
 - `verified` means a stated check was run against a provenance record, and `evidence`
   points to both. **Only the user sets `human-verified`.** The `open-science-project`
@@ -182,7 +184,12 @@ will rely on it (another task, another result or the paper takes it as input or 
 when it answers part of the task's goal. Debugging findings (a bug fixed, a check passed, a
 tuning run) go only in the task's `map.md`, unless they matter conceptually: they change what
 the project believes or how its results must be read. The agent sets `milestone: true` when
-a result obviously answers part of the project's question, and asks you when unsure. When a
+a result obviously answers part of the project's question, and asks you when unsure. A
+result that is something the project delivers (a talk deck, a paper draft, a living list of
+sources) gets `deliverable: true`, or `deliverable: [paths]` to show only some of its
+artifacts. Its files keep one stable name and are updated in place, with the history in
+git; they appear once, at their current version, at the top of `results/README.md` and on
+the Deliverables page in Notion. When a
 result relies on outside work, the agent adds the work to `citations/used.bib` and its key to
 the result's `uses:`; an assumption taken from outside is a result of its own, `kind:
 assumption`, so the claims graph shows it as a premise.
@@ -195,6 +202,7 @@ describes the result; the header links it to everything else:
 |---|---|
 | `kind` | `figure`, `table`, `value`, `statement`, `concept` or `assumption` |
 | `milestone` | `true` for a main result, one a paper would report |
+| `deliverable` | `true` for something the project delivers (a talk deck, a paper draft, a living list), or a list of the artifacts to show; kept at one stable name and updated in place |
 | `artifacts` | where the result is stored: figures, tables, data files (paths from the project root) |
 | `code` | the code that produced it |
 | `depends_on` | the results, tasks and datasets it rests on |
@@ -208,8 +216,9 @@ git ignores, a missing file is only a warning) and that every `uses` key is in
 - `tasks/<id>/results/README.md`: the task's results, each with its figure, where it is
   stored, the code, what it rests on and what uses it; withdrawn results in a table below.
   `opsci task new` creates it.
-- `results/README.md`: the milestone results of the project (`milestone: true`, and every
-  result in `results/`).
+- `results/README.md`: the deliverables (results with `deliverable:`), each once with its
+  files, then the milestone results of the project (`milestone: true`, and every result in
+  `results/`).
 - `map/claims.md`: the claims graph. An image of every result, in a box per task, with
   arrows from what it rests on (results, tasks, datasets) to what uses it (other results,
   papers), and the external works it uses in brackets on its card; then a table of every result with its statement, where it is

@@ -71,7 +71,9 @@ before ending a turn with work unfinished.
    something that answers part of the task's goal; a debugging finding goes only in the
    task's `map.md`, unless it matters conceptually. Set `milestone: true` when the result
    obviously answers part of the project's question; if unsure, ask the user
-   (`tasks/README.md`, "Results"). Run `opsci map build`, which also rewrites the header
+   (`tasks/README.md`, "Results"). Set `deliverable: true` when it is something the
+   project delivers (a talk deck, a living list); its files keep one stable name and are
+   updated in place. Run `opsci map build`, which also rewrites the header
    table under the title and the results pages, and settle every result it reports as
    resting on failed or superseded work.
 2. Does the next agent need it? Update the project `context.md`.
