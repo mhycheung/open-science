@@ -90,7 +90,8 @@ generated `map/graph.md`; the results and what each rests on: `results/README.md
   plot's stem and `.caption.md` (`bands_2026-09-25.caption.md`). The caption stands on its
   own: what is plotted; each axis with units; every line, band, marker and colour; the data
   and their size; and the background a reader needs (the question the plot answers, and what
-  to see in it). A remade plot gets a new caption file with its new name.
+  to see in it). A remade plot gets a new caption file with its new name; a deliverable's
+  caption is updated with it.
 
 ## 3. Scientific rigour
 
@@ -151,7 +152,9 @@ a dispatch names their id, not before.
 
 Small outputs go in `tasks/<id>/`; large data in `data/<task-id>/`. Names carry an ISO date
 and the parameters that distinguish them. A new run gets a new name; nothing committed or
-published is overwritten.
+published is overwritten. Deliverables are the exception (a result with `deliverable:` in its
+header, such as a talk deck or a living list): one stable name, updated in place; git keeps
+the history.
 
 **`brainstorm/` and `private-docs/` are soft-private (§6).** No file outside them links to a
 file in them, so the public project has no broken links; a mention in passing, in backticks,
@@ -219,7 +222,9 @@ This project is mirrored to Notion, where the user reads it (skill
   hook also runs it when a turn ends. `opsci notion diff` then prints `in sync` and names
   no plot without a caption.
 - **Plots.** Only plots under `tasks/<id>/` appear in the task's page, each with its caption
-  file (section 2). A remade plot gets a new dated name; it replaces the old one in place.
+  file (section 2). A remade plot gets a new dated name (the same day: `_v2` after the date);
+  it replaces the old one in place. Deliverables (section 5) appear once, on the Deliverables
+  page, updated in place.
 - **Feed.** Post with `opsci notion post --kind KIND [--task ID] [--mention] [--file PLOT]
   "text"`: a finished subtask as `result` with its key plot and `--mention`; a question or
   blocker for the user as `question` or `blocker` with `--mention`; a long job submitted

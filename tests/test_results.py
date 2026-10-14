@@ -181,6 +181,51 @@ def test_bad_result_fields_are_refused(project, change, message):
     assert r.returncode == 1 and message in r.stderr, r.stderr
 
 
+@pytest.mark.parametrize("change, message", [
+    (dict(deliverable=["tasks/t01-noise/S1/psd.py"]), "deliverable: 'tasks/t01-noise/S1/psd.py' is not one of its artifacts"),
+    (dict(deliverable="yes"), "'yes' is not valid"),
+])
+def test_bad_deliverable_is_refused(project, change, message):
+    psd(project)
+    mass(project, **change)
+    r = build(project)
+    assert r.returncode == 1 and message in r.stderr, r.stderr
+
+
+def test_deliverable_without_artifacts_is_refused(project):
+    put(project, "tasks/t01-noise/results/r-talk.md", id="r-talk", title="Talk", type="result",
+        kind="figure", status="done", summary="The talk.", deliverable=True)
+    r = build(project)
+    assert r.returncode == 1 and "deliverable: true needs artifacts" in r.stderr, r.stderr
+    ctx = project / "tasks/t01-noise/context.md"            # only a result can be a deliverable
+    ctx.write_text(ctx.read_text().replace("type: task", "type: task\ndeliverable: true", 1))
+    assert "deliverable: only a result (type: result) has it" in build(project).stderr
+
+
+def test_deliverables_listed_once_on_the_project_results_page(project):
+    (project / "tasks/t02-fit/S2/talk.pdf").write_text("%PDF\n")
+    psd(project)                                         # control: not a deliverable, not milestone
+    mass(project, artifacts=["tasks/t02-fit/S2/corner.png", "tasks/t02-fit/S2/talk.pdf"],
+         deliverable=["tasks/t02-fit/S2/talk.pdf"])
+    put(project, "tasks/t01-noise/results/r-list.md", id="r-list", title="Living list", type="result",
+        kind="table", status="active", summary="Every source.", deliverable=True,
+        artifacts=["tasks/t01-noise/results/r-list.md"])
+    put(project, "tasks/t01-noise/results/r-old.md", id="r-old", title="Old talk", type="result",
+        kind="figure", status="superseded", summary="Replaced.", deliverable=True,
+        artifacts=["tasks/t01-noise/S1/psd.png"])
+    r = build(project)
+    assert r.returncode == 0, r.stderr
+    page = read(project, "results/README.md")
+    sec = page.split("## Deliverables", 1)[1].split("\n## ", 1)[0]
+    assert "[r-mass](../tasks/t02-fit/results/r-mass.md): Mass ratio 1.8" in sec
+    assert "[`tasks/t02-fit/S2/talk.pdf`](../tasks/t02-fit/S2/talk.pdf)" in sec
+    assert "corner.png" not in sec                       # a deliverable list shows only its paths
+    assert "[r-list](../tasks/t01-noise/results/r-list.md): Living list" in sec
+    assert "r-psd" not in sec and "r-old" not in sec     # controls: not a deliverable; superseded
+    assert page.index("## Deliverables") < page.index("## r-mass")
+    assert [n.id for n in results.deliverables(nodes.scan(project).nodes)] == ["r-list", "r-mass"]
+
+
 def test_result_fields_on_a_task_are_refused(project):
     ctx = project / "tasks/t01-noise/context.md"
     ctx.write_text(ctx.read_text().replace("type: task", "type: task\nmilestone: true", 1))

@@ -27,7 +27,8 @@ quote the request in your report.
 Write only where your dispatch says: small outputs, scripts, plots and logs in
 `tasks/<id>/`; large data in `data/<task-id>/`. Never write to the repo root, `src/` (unless
 the spec says so, on your own worktree branch), or another task's directory. Never move,
-rename or delete existing files; report the problem instead. A new run gets a new name.
+rename or delete existing files; report the problem instead. A new run gets a new name; a
+deliverable your spec names (`AGENTS.md` §5) is updated in place.
 
 ## 4. Waiting on long jobs
 

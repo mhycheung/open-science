@@ -75,6 +75,10 @@ def cmd_diff(a):
         print(f"gone   {key}  (its Notion page is kept; delete it by hand if wanted)")
     for path in d["missing_captions"]:
         print(f"no caption: {path}  (write {path.rsplit('.', 1)[0]}.caption.md)")
+    for path, other in d["possible_versions"]:
+        print(f"version? {path} is shown beside {other}: if it replaces it, keep one stable name "
+              "(a deliverable), date the new file, add a revision _v<n> after the date, or move the "
+              "old file to archive/")
     if not d["changes"] and not d["gone"]:
         print("in sync")
     return 1 if d["missing_captions"] and a.strict else 0

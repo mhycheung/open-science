@@ -55,6 +55,10 @@
       "description": "A result the project reports as a main result (one a paper would report); listed in results/README.md.",
       "type": "boolean"
     },
+    "deliverable": {
+      "description": "A result that is one of the project's deliverables (a talk, a paper draft, a living list): true shows all its artifacts on the project's Deliverables page and in results/README.md; a list shows those of its artifacts. Deliverables keep a stable name and are updated in place.",
+      "oneOf": [{"type": "boolean"}, {"$ref": "#/$defs/pathlist"}]
+    },
     "artifacts": {
       "description": "Paths, relative to the project root, where the result is stored: figures, tables, data files.",
       "$ref": "#/$defs/pathlist"

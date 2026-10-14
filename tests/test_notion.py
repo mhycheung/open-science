@@ -316,6 +316,25 @@ def test_append_batches_by_request_size():
 
 # ---------------------------------------------------------------- end to end: init, diff, sync
 
+def test_plots_in_revision_suffix_is_a_version_other_suffixes_are_not(tmp_path):
+    root = tmp_path
+    td = root / "tasks" / TASK
+    plot(td / "f" / "x_2026-10-14.png", b"x1")
+    plot(td / "f" / "x_2026-10-14_v2.png", b"x2")         # a revision of the same day: replaces it
+    plot(td / "f" / "x_2026-10-14_v10.png", b"x10")       # numeric order, not string order
+    plot(td / "f" / "x_2026-10-13_v3.png", b"x0")         # an older date loses whatever its revision
+    plot(td / "f" / "bands_2026-09-25_l2.png", b"l2")     # control: suffixes naming parameters stay
+    plot(td / "f" / "bands_2026-09-25_l3.png", b"l3")     # separate plots
+    plot(td / "f" / "slides_2026-10-14.pdf", b"%PDF s")
+    plot(td / "f" / "slides_2026-10-14_memory.pdf", b"%PDF m")   # shown, and reported as a possible version
+    ps = mirror.plots_in(root, td)
+    got = sorted(p["path"].rsplit("/", 1)[1] for p in ps)
+    assert got == ["bands_2026-09-25_l2.png", "bands_2026-09-25_l3.png", "slides_2026-10-14.pdf",
+                   "slides_2026-10-14_memory.pdf", "x_2026-10-14_v10.png"]
+    pv = mirror.possible_versions([{"plots": ps}])
+    assert pv == [(f"tasks/{TASK}/f/slides_2026-10-14_memory.pdf", f"tasks/{TASK}/f/slides_2026-10-14.pdf")]
+
+
 @pytest.fixture
 def mirrored(S):
     """A project made with --notion, with one task holding one captioned plot, mirrored."""
@@ -1042,3 +1061,104 @@ def test_upload_filename_cannot_inject_multipart_headers(S):
     up = S.mock.uploads[fid.replace("-", "")]
     assert up["status"] == "uploaded" and up["data"] == b"data"
     assert up["filename"] == "a; name=xX-Evil: 1.png"   # quotes, CR/LF and backslash dropped, nothing cut
+
+
+# ---------------------------------------------------------------- deliverables
+
+def _deliverable(td: Path, rid: str, files: list[str], flag="true", status="done") -> Path:
+    (td / "results").mkdir(exist_ok=True)
+    f = td / "results" / f"{rid}.md"
+    arts = ", ".join(files)
+    f.write_text(f"---\nid: {rid}\ntitle: Talk deck {rid}\ntype: result\nkind: figure\nstatus: {status}\n"
+                 f"deliverable: {flag}\nartifacts: [{arts}]\nverification: unverified\n"
+                 f"summary: The deck with $x^2$.\n---\n# {rid}\n\nLiving list: first row.\n\nSecond row.\n")
+    return f
+
+
+def _dpage(S) -> str:
+    return state(S.proj)["pages"]["deliverables"]["page_id"]
+
+
+def test_deliverables_page_shows_each_once_and_updates_in_place(mirrored):
+    S, m = mirrored, mirrored.mock
+    t = f"tasks/{TASK}"
+    plot(S.td / "S4" / "slides.pdf", b"%PDF deck v1", caption="The deck, 20 slides, $\\chi$.\n")
+    (S.td / "S4" / "slides.pptx").write_bytes(b"pptx v1")
+    res = _deliverable(S.td, "r-deck", [f"{t}/S4/slides.pdf", f"{t}/S4/slides.pptx", f"{t}/results/r-deck.md"])
+    add_result(S.td, "r-t01-plain", "../fig/x_2026-09-25.png")        # control: not a deliverable
+    run(S, "notion", "sync", cwd=S.proj)
+    assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+    st = state(S.proj)
+    page = _dpage(S)
+    assert m.child_pages(st["root_page"])["Deliverables"] == page
+    kids = m.kids(page)
+    texts = [text_of(n) for n in kids]
+    assert "r-deck: Talk deck r-deck" in texts and not any("r-t01-plain" in x for x in texts)
+    assert texts.count("r-deck: Talk deck r-deck") == 1
+    (pdf,) = [n for n in kids if n["type"] == "pdf"]
+    (ppt,) = [n for n in kids if n["type"] == "file"]
+    assert m.file_of(pdf["id"]) == ("slides.pdf", b"%PDF deck v1")
+    assert m.file_of(ppt["id"]) == ("slides.pptx", b"pptx v1")
+    cap = kids[kids.index(pdf) + 1]
+    assert cap["type"] == "callout" and "The deck, 20 slides" in text_of(cap)
+    assert "Living list: first row." in texts and "Second row." in texts   # the markdown, rendered
+    assert not any(x.startswith("---") or "kind: figure" in x for x in texts)  # without its header
+    # the task page still shows the deck as one plot (a stable name: no versions)
+    assert [m.file_of(e["image"]["id"])[0] for e in plot_entries(m, task_page(S.proj))] == \
+        ["slides.pdf", "x_2026-09-25.png"]
+
+    # the deck is rebuilt under the same name: same blocks, new file, nothing else rewritten
+    before = live_ids(m, page)
+    (S.td / "S4" / "slides.pdf").write_bytes(b"%PDF deck v2")
+    (S.td / "S4" / "slides.pptx").write_bytes(b"pptx v2")
+    assert "text   deliverables" in run(S, "notion", "diff", cwd=S.proj).stdout
+    m.requests.clear()
+    out = run(S, "notion", "sync", cwd=S.proj).stdout
+    assert f"updated {t}/S4/slides.pdf" in out and f"updated {t}/S4/slides.pptx" in out
+    assert live_ids(m, page) == before
+    assert not [x for x in m.requests if x[0] == "DELETE"]
+    assert m.file_of(pdf["id"]) == ("slides.pdf", b"%PDF deck v2")
+    assert m.file_of(ppt["id"]) == ("slides.pptx", b"pptx v2")
+    assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+
+    # the living list changes: only its changed block is replaced; the deck's blocks are kept
+    res.write_text(res.read_text().replace("Second row.", "Second row, revised."))
+    run(S, "notion", "sync", cwd=S.proj)
+    after = live_ids(m, page)
+    assert pdf["id"] in after and ppt["id"] in after
+    assert "Second row, revised." in [text_of(n) for n in m.kids(page)]
+    assert len(after) == len(before)
+
+    # a caption edit and a new file together: the PDF keeps its block, the caption box is redone
+    (S.td / "S4" / "slides.caption.md").write_text("Edited deck caption.\n")
+    (S.td / "S4" / "slides.pdf").write_bytes(b"%PDF deck v3")
+    run(S, "notion", "sync", cwd=S.proj)
+    kids = m.kids(page)
+    assert pdf["id"] in [n["id"] for n in kids] and m.file_of(pdf["id"])[1] == b"%PDF deck v3"
+    assert "Edited deck caption." in [text_of(n) for n in kids]
+
+    # a PDF block deleted by hand in Notion: the next change inserts a new one in its place
+    m.node(pdf["id"])["archived"] = True
+    (S.td / "S4" / "slides.pdf").write_bytes(b"%PDF deck v4")
+    run(S, "notion", "sync", cwd=S.proj)
+    (pdf2,) = [n for n in m.kids(page) if n["type"] == "pdf"]
+    assert pdf2["id"] != pdf["id"] and m.file_of(pdf2["id"])[1] == b"%PDF deck v4"
+
+    # no longer a deliverable: its blocks are removed, the page says there is none
+    res.write_text(res.read_text().replace("deliverable: true\n", ""))
+    run(S, "notion", "sync", cwd=S.proj)
+    texts = [text_of(n) for n in m.kids(page)]
+    assert not any(n["type"] in ("pdf", "file") for n in m.kids(page))
+    assert "No deliverables yet." in texts and not any("r-deck" in x for x in texts)
+    assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+
+
+def test_diff_reports_a_suffixed_version_beside_its_base(mirrored):
+    S = mirrored
+    plot(S.td / "S4" / "slides_2026-10-14.pdf", b"%PDF a", caption="Deck.\n")
+    plot(S.td / "S4" / "slides_2026-10-14_audit.pdf", b"%PDF b", caption="Deck, audited.\n")
+    plot(S.td / "S4" / "bands_2026-10-14_l2.png", b"l2", caption="l = 2.\n")      # control: no base
+    out = run(S, "notion", "diff", cwd=S.proj).stdout
+    assert (f"version? tasks/{TASK}/S4/slides_2026-10-14_audit.pdf is shown beside "
+            f"tasks/{TASK}/S4/slides_2026-10-14.pdf") in out
+    assert "bands" not in out

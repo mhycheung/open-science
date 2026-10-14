@@ -3,7 +3,7 @@
 Pages under the project's root page: Project (PROJECT.md), Context, Map (the project graph and
 the claims graph, each as an image (its PNG file) and as a PDF that Notion's viewer zooms), the node table closed under a toggle, and
 the dead ends), Milestone results (results/README.md), Log,
-Rules, Brainstorm context, Private docs, the Feed (feed.py), and two databases:
+Rules, Brainstorm context, Private docs, Deliverables, the Feed (feed.py), and two databases:
 - Tasks: one row per task in tasks/, brainstorm/tasks/ and the verifications/ directories,
   its properties from the node header, its body the task's context.md, then Results (the
   task's results/README.md), Plan, Task map, Task log and subcontext files as toggles, then
@@ -13,9 +13,17 @@ Rules, Brainstorm context, Private docs, the Feed (feed.py), and two databases:
 Figures in these files (a line `![alt](path)`) are uploaded and shown as images. Every mention
 of a task or result id links to its page.
 
+Deliverables: one page with each deliverable of the project once (a result whose header has
+`deliverable: true`, or `deliverable: [paths]`): its title and summary, then each file: a PDF
+or image shown with its caption box, a markdown file rendered, any other file (a PPTX)
+attached. Deliverables keep a stable name, so a changed file replaces the file of the same
+block; a removed deliverable's blocks are deleted.
+
 Plots: every image or PDF under tasks/<id>/ (not data/). Files that differ only by an ISO date
-in the name (bands_2026-09-25.png, bands_2026-09-28.png) are versions of one plot: only the
-newest is shown, in the slot of the older one. Each plot's caption is the file beside it with
+in the name (bands_2026-09-25.png, bands_2026-09-28.png), or by a revision `_v<n>` right after
+the date (bands_2026-09-28_v2.png), are versions of one plot: only the newest is shown, in the
+slot of the older one. Any other suffix after the date (bands_2026-09-28_l2.png) names another
+plot, shown on its own. Each plot's caption is the file beside it with
 the same stem and `.caption.md` (bands_2026-09-25.caption.md): a self-contained description,
 markdown with $LaTeX$. It is shown in a box under the image (a Notion caption field holds
 too little for a caption with many equations).
@@ -37,6 +45,7 @@ from pathlib import Path
 
 from .. import graphview
 from ..nodes import TASK_ROOT_GLOBS, scan
+from ..results import deliverable_files, deliverables
 from . import blocks as nb
 from .client import MAX_UPLOAD, NotionError
 from .project import Project
@@ -44,7 +53,12 @@ from .project import Project
 PLOT_EXT = (".png", ".jpg", ".jpeg", ".gif", ".svg", ".pdf")
 SKIP_PARTS = {"data", "lit_cache", ".git", ".pixi", "__pycache__", ".ipynb_checkpoints",
               "verifications"}  # a verification task inside a task has its own page
-DATE_IN_NAME = re.compile(r"[_-](\d{4}-\d{2}-\d{2})(?=\.[^.]+$)")
+# A version mark: an ISO date right before the extension, optionally followed by a revision
+# `_v<n>` (or `-v<n>`). Files whose names differ only in it are versions of one plot.
+DATE_IN_NAME = re.compile(r"[_-](\d{4}-\d{2}-\d{2})(?:[_-]v(\d+))?(?=\.[^.]+$)")
+# A date followed by another suffix (x_2026-10-14_memory.pdf): shown as its own plot, and
+# reported by `opsci notion diff` when the same name without the suffix exists.
+DATE_SUFFIX = re.compile(r"[_-](\d{4}-\d{2}-\d{2})[_-][^/]+(?=\.[^./]+$)")
 KEEP_TYPES = ("child_page", "child_database")
 CAPTION_SUFFIX = ".caption.md"
 
@@ -200,7 +214,7 @@ def plots_in(root: Path, task_dir: Path, cache: _HashCache | None = None) -> lis
         key = DATE_IN_NAME.sub("", rel)
         m = DATE_IN_NAME.search(rel)
         st = p.stat()
-        rank = (m.group(1) if m else "", st.st_mtime)
+        rank = (m.group(1) if m else "", int(m.group(2) or 1) if m else 0, st.st_mtime)
         if key not in best or rank > best[key][0]:
             best[key] = (rank, p, st)
     out = []
@@ -306,6 +320,43 @@ def image_resolver(root: Path, base: Path, links: dict | None = None):
     return resolve
 
 
+MEDIA_KINDS = ("image", "pdf", "file")
+DELIVERABLES_INTRO = (
+    "The project's deliverables, each shown once at its current version. A deliverable is a result "
+    "whose header has `deliverable: true` (all its `artifacts`) or `deliverable: [paths]` (those of "
+    "its artifacts). Its files keep a stable name and are updated in place; their history is in git.")
+
+
+def _deliverable_blocks(root: Path, n, md, hashes: "_HashCache") -> list:
+    """One deliverable: a heading with its id and title, its summary, then each of its files:
+    a PDF or image as a media placeholder (``_local``, filled at upload) with its caption box,
+    a markdown file rendered, any other file as a file placeholder."""
+    out = [nb.blk("heading_2", nb.rich(f"{n.id}: {n.get('title', '')}".rstrip(": ")))]
+    if n.get("summary"):
+        out += nb.md_to_blocks(str(n.get("summary")))
+    for f in deliverable_files(n):
+        p = root / f
+        label = nb.blk("paragraph", nb._t(f, {"code": True, "color": "gray"}))
+        if not _readable(root, p):
+            out += [label, nb.blk("paragraph", nb._t("not in this checkout", {"italic": True}))]
+            continue
+        ext = p.suffix.lower()
+        if ext == ".md":
+            text = nb.strip_generated(nb.split_front_matter(_read(p))[1])
+            out += [label] + nb.demote(md(p, re.sub(r"\A\s*# .*\n", "", text)), 2)
+            continue
+        st = p.stat()
+        if st.st_size > MAX_UPLOAD:
+            out += [label, nb.blk("paragraph", nb._t(f"over {MAX_UPLOAD // 2**20} MiB, not uploaded", {"italic": True}))]
+            continue
+        kind = "pdf" if ext == ".pdf" else "image" if ext in PLOT_EXT else "file"
+        out.append({"object": "block", "type": kind, kind: {},
+                    "_local": {"path": f, "sha": hashes.sha(p, st), "alt": n.id}})
+        if kind != "file":
+            out.append(caption_blocks(caption_paragraphs(p), f))
+    return out
+
+
 def _md(root: Path, path: Path, text: str | None = None, links: dict | None = None) -> list:
     """md_to_blocks for a project file, with its figures resolved relative to the file."""
     return nb.md_to_blocks(text if text is not None else _read(path), images=image_resolver(root, path.parent, links))
@@ -335,6 +386,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
     banner = [nb.callout(nb.rich(
         f"Mirror of the open-science project `{root.name}`, written by `opsci notion sync`. "
         "Pages here are overwritten on each sync: edit the project files, not these pages. "
+        "**Deliverables** shows what the project delivers, at its current version. "
         "**Feed** holds the agents' messages (newest first, removed after a few days)."))]
     page("home", root.name, banner, kind="home")
     if ok(root / "PROJECT.md"):
@@ -351,6 +403,15 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
 
     if ok(root / "results" / "README.md"):
         page("results", "Milestone results", md(root / "results" / "README.md"), icon="🏆")
+
+    nodes = scan(root).nodes
+    blocks = [nb.blk("paragraph", nb.rich(DELIVERABLES_INTRO))]
+    for n in deliverables(nodes):
+        if ok(root / n.path):
+            blocks += _deliverable_blocks(root, n, md, hashes)
+    if len(blocks) == 1:
+        blocks.append(nb.blk("paragraph", nb._t("No deliverables yet.", {"italic": True})))
+    page("deliverables", "Deliverables", blocks, icon="📦")
 
     logs = sorted((p for p in (root / "log").glob("[0-9]*.md") if ok(p)), reverse=True)
     blocks = [b for p in logs for b in nb.demote(nb.md_to_blocks(_read(p)))]
@@ -395,7 +456,7 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
                      "Summary": str(fm.get("summary", ""))}
             page(f"task:{tid}", props["Name"], blocks, kind="task", props=props, plots=plots_in(root, td, hashes))
 
-    for n in sorted(scan(root).nodes, key=lambda n: n.path):
+    for n in sorted(nodes, key=lambda n: n.path):
         if n.get("type") != "result" or Path(n.path).name == "README.md":
             continue
         f = root / n.path
@@ -474,6 +535,19 @@ def _block_shas(blocks: list) -> list[str]:
     return [_sha_json(b) for b in blocks]
 
 
+def _is_file_block(b: dict) -> bool:
+    """A media block showing a project file (an image, PDF or file placeholder): when only
+    its file changes, the block is kept and gets the new file."""
+    return "_local" in b and "data" not in b["_local"] and b.get("type") in MEDIA_KINDS
+
+
+def _records(blocks: list, ids: list) -> list[list]:
+    """The record of a page's text blocks: [sha, block id], and the block type for a media
+    block of a project file (``_is_file_block``)."""
+    return [[sha, i] + ([b["type"]] if _is_file_block(b) else [])
+            for b, sha, i in zip(blocks, _block_shas(blocks), ids)]
+
+
 def changes(pages: list[dict], st: dict) -> list[tuple[str, dict]]:
     out = []
     known = st.get("pages", {})
@@ -491,6 +565,26 @@ def changes(pages: list[dict], st: dict) -> list[tuple[str, dict]]:
 
 def missing_captions(pages: list[dict]) -> list[str]:
     return [x["path"] for p in pages for x in p["plots"] if not x["has_caption"]]
+
+
+def possible_versions(pages: list[dict]) -> list[tuple[str, str]]:
+    """Plots shown side by side whose names suggest that one is a version of the other: a
+    date followed by a suffix other than a revision ``_v<n>`` (x_2026-10-14_memory.pdf) beside
+    the same name without the suffix (x_2026-10-14.pdf, or a version of it). They stay separate
+    plots, since a suffix may name a parameter (x_2026-10-14_l2.png); this only reports them.
+    Returns [(suffixed path, the other path)]."""
+    out = []
+    for p in pages:
+        shown = {x["key"]: x["path"] for x in p["plots"]}
+        for x in p["plots"]:
+            path = x["path"]
+            m = DATE_SUFFIX.search(path)
+            if not m or DATE_IN_NAME.search(path):
+                continue
+            base = DATE_IN_NAME.sub("", path[:m.start()] + f"_{m.group(1)}" + path[m.end():])
+            if base in shown and shown[base] != path:
+                out.append((path, shown[base]))
+    return out
 
 
 # ---------------------------------------------------------------- writing
@@ -563,7 +657,7 @@ class Mirror:
                 out[x["key"]] = {"block": i, "file": _plot_id(x)}
             elif "_cap" in b:
                 out[b["_cap"]]["caption_block"] = i
-        return out, [list(x) for x in zip(_block_shas(page["blocks"]), ids[:len(text)])]
+        return out, _records(page["blocks"], ids[:len(text)])
 
     def _patch_body(self, page: dict, ent: dict, log) -> list | None:
         """Write only the text blocks that changed since the last sync: keep the blocks
@@ -575,7 +669,7 @@ class Mirror:
         if not old:
             return None
         new = _block_shas(page["blocks"])
-        olds = [sha for sha, _ in old]
+        olds = [rec[0] for rec in old]
         head = 0
         while head < min(len(olds), len(new)) and olds[head] == new[head]:
             head += 1
@@ -586,12 +680,46 @@ class Mirror:
             return old
         if head == 0:
             return None
-        for _, bid in old[head:len(old) - tail]:
+        old_mid, new_mid = old[head:len(old) - tail], page["blocks"][head:len(new) - tail]
+        if len(old_mid) == len(new_mid) and any(len(o) > 2 for o in old_mid):
+            return old[:head] + self._patch_pairs(ent["page_id"], old_mid, new_mid, old[head - 1][1], log) \
+                + old[len(old) - tail:]
+        for _, bid, *_ in old[head:len(old) - tail]:
             self.c.delete(bid)
         mid = page["blocks"][head:len(new) - tail]
         ids = self.c.append(ent["page_id"], self._resolve_images(mid), after=old[head - 1][1]) if mid else []
         log(f"  {len(old) - head - tail} block(s) replaced by {len(mid)}")
-        return old[:head] + [list(x) for x in zip(new[head:len(new) - tail], ids)] + old[len(old) - tail:]
+        return old[:head] + _records(mid, ids) + old[len(old) - tail:]
+
+    def _patch_pairs(self, page_id: str, old: list, new: list, prev: str, log) -> list:
+        """Replace text blocks one for one: a media block of a project file whose file changed
+        keeps its block and gets the new file (same block, same position); any other changed
+        block is deleted and its new version inserted in its place."""
+        out, n = [], 0
+        for o, b in zip(old, new):
+            (rec,) = _records([b], [o[1]])
+            if o[0] == rec[0]:
+                out.append(o)
+            elif len(o) > 2 and len(rec) > 2 and o[2] == rec[2] and self._alive(o[1], rec[2]):
+                media = self._resolve_images([b])[0][rec[2]]
+                self.c.call("PATCH", f"/blocks/{o[1]}", {rec[2]: {k: v for k, v in media.items() if k != "type"}})
+                out.append(rec)
+                log(f"  updated {b['_local']['path']}")
+            else:
+                self.c.delete(o[1])
+                (i,) = self.c.append(page_id, self._resolve_images([b]), after=prev)
+                (rec,) = _records([b], [i])
+                out.append(rec)
+                n += 1
+            prev = out[-1][1]
+        if n:
+            log(f"  {n} block(s) replaced by {n}")
+        return out
+
+    def _alive(self, block_id: str, kind: str) -> bool:
+        """Whether the block still exists in Notion, not deleted by hand, and is of this kind."""
+        cur = self.c.call("GET", f"/blocks/{block_id}", ok404=True)
+        return bool(cur) and not cur.get("archived") and cur.get("type") == kind
 
     def _replace_caption(self, block_id: str, x: dict) -> None:
         cap = caption_blocks(x["caption"], x["path"])["callout"]
@@ -739,4 +867,5 @@ def diff(proj: Project) -> dict:
     pages = render(proj.root, task_links(st))
     gone = {k for k in st.get("pages", {})} - {p["key"] for p in pages}
     return {"changes": [(h, p["key"]) for h, p in changes(pages, st)],
-            "gone": sorted(gone), "missing_captions": missing_captions(pages)}
+            "gone": sorted(gone), "missing_captions": missing_captions(pages),
+            "possible_versions": possible_versions(pages)}

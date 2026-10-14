@@ -119,7 +119,8 @@ After every finished subtask the agent answers four questions (`contracts/main.m
    on, or something that answers part of the task's goal; a debugging finding goes only
    in the task's `map.md`, unless it matters conceptually. The agent sets `milestone: true`
    when the result obviously answers part of the project's question, and asks you when
-   unsure. Run `opsci map build`, and settle every result it reports as resting on failed
+   unsure, and `deliverable: true` when it is something the project delivers (a talk deck,
+   a living list), kept at one stable name and updated in place. Run `opsci map build`, and settle every result it reports as resting on failed
    or superseded work.
 2. Does the next agent need to know? Update `context.md`.
 3. Was a source or package used or consulted? Update `citations/`. If a result relies on

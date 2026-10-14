@@ -55,7 +55,8 @@ skills, so they update for every project at once. This file holds the project's 
    will rely on, or something that answers part of the task's goal; a debugging finding
    goes only in the task's `map.md`, unless it matters conceptually. Set `milestone: true`
    when the result obviously answers part of the project's question; if unsure, ask the
-   user. Run `opsci map build`, and settle every result it reports as resting on failed or
+   user. Set `deliverable: true` when it is something the project delivers (a talk deck, a
+   living list); it keeps one stable name and is updated in place. Run `opsci map build`, and settle every result it reports as resting on failed or
    superseded work. (`tasks/README.md`, "Results".)
 2. Does the next agent need to know? → update `context.md`.
 3. Was a source or package used or consulted? → `citations/used.bib` or `consulted.md`. If a
