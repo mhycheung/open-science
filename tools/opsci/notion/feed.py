@@ -29,6 +29,7 @@ KINDS = {"status": ("🔵", "blue_background"), "result": ("🟢", "green_backgr
          "question": ("🟠", "orange_background"), "blocker": ("🔴", "red_background"),
          "note": ("⚪", "gray_background")}
 DEFAULT_DAYS = 3
+SOURCE_EXT = (".md", ".markdown", ".tex")   # unreadable as attachments: render them to PDF first
 
 
 def _now(proj: Project) -> dt.datetime:
@@ -104,6 +105,10 @@ def post(proj: Project, text: str, author: str = "agent", kind: str = "note", ta
                      for rt in nb.chunks100(nb.link_rich(nb.rich(" ".join(para.split())), find))]
     attached = []
     for f in files or ():
+        if Path(f).suffix.lower() in SOURCE_EXT:
+            raise NotionError(f"refusing to attach {f}: Notion shows a markdown or LaTeX file as a "
+                              "download, its equations as source. Attach the PDF instead "
+                              f"(`opsci pdf {f}` renders a markdown file; compile a LaTeX file)")
         try:
             f = check_attachment(f, (proj.root, proj.main))
         except NotifyError as exc:

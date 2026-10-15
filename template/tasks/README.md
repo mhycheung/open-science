@@ -83,7 +83,10 @@ Set `milestone: true` when the result obviously answers part of the project's qu
 and leave it unset until they answer.
 
 Set `deliverable: true` on a result that is something the project delivers (a talk deck, a
-paper draft, a living list of sources), when the user names it so or `PROJECT.md` says so:
+paper draft, a living list of sources), when the user names it so or `PROJECT.md` says so,
+and on anything the user asked for (a set of notes, a document, a plot, a table; a document
+with mathematics as a PDF made with `opsci pdf`, listed in `deliverable:`, its source among
+the `artifacts`):
 all its `artifacts` are then shown once, at their current version, in the Deliverables
 section of `results/README.md` and on the Deliverables page in Notion. `deliverable:
 [paths]` shows only those of its artifacts (the PDF and the PPTX of a deck, not its

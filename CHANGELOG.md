@@ -32,6 +32,23 @@ layout 1) and the framework's, in order, before it applies the other template ch
   same name without the suffix (`version? ...`). An image, PDF or file block of a project
   file in any mirrored page now keeps its block when only its file changes.
 
+- What the user asked for is handed over, not only announced (notion and context-files
+  skills, template `AGENTS.md` §5 and §10, `contracts/main.md` §5, `tasks/README.md`). When
+  a set of notes, a document, a plot or a table the user asked for is ready, the message
+  holds the thing: a plot attached, a document with mathematics or tables as an attached PDF,
+  a short plain answer in the text. The thing is also a deliverable (`deliverable:` in its
+  result header), so it stays easy to find. Before, agents posted "summary.md is done" with
+  only a task link, and the user could not open the document.
+- New `opsci pdf FILE.md`: renders a markdown document with `$LaTeX$` to PDF with pandoc and
+  the first of lualatex, xelatex and pdflatex found; pandoc is taken from `PATH`, else run
+  with `pixi exec -s pandoc`.
+- `opsci notion post --file` refuses a markdown or LaTeX file, with the `opsci pdf` command
+  to run: Notion shows such a file as a download with its equations as source.
+- Notion mirror: a task's page starts with the task's own deliverables (the results under
+  `tasks/<id>/results/` with `deliverable:`), each with its files: a PDF or image with its
+  caption box, a markdown file in a closed toggle. These files are no longer repeated among
+  the task's plots.
+
 To adopt deliverables in an existing project: run `open-science-project:update-from-template`
 (no layout change); then, for each deliverable, rename its files to a stable name (with
 `git mv`, and its `.caption.md` with it), move superseded dated copies to `archive/`, add

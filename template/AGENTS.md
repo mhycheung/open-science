@@ -153,7 +153,7 @@ a dispatch names their id, not before.
 Small outputs go in `tasks/<id>/`; large data in `data/<task-id>/`. Names carry an ISO date
 and the parameters that distinguish them. A new run gets a new name; nothing committed or
 published is overwritten. Deliverables are the exception (a result with `deliverable:` in its
-header, such as a talk deck or a living list): one stable name, updated in place; git keeps
+header, such as a talk deck, a living list, or notes or a plot the user asked for): one stable name, updated in place; git keeps
 the history.
 
 **`brainstorm/` and `private-docs/` are soft-private (§6).** No file outside them links to a
@@ -232,6 +232,12 @@ This project is mirrored to Notion, where the user reads it (skill
   not post routine steps. The first paragraph is the title, and a notification shows only
   its first ~10 words: make it a plain headline with the main point first (the finding, or
   what the user must do), not the task id, kind or context.
+- **A thing the user asked for goes in the message.** When notes, a document, a plot or a
+  table the user asked for is ready, attach the thing to the `result` post: a plot as it is,
+  a document with mathematics or tables as a PDF (`opsci pdf <file.md>`), never its
+  markdown or LaTeX source. Only a short plain answer goes in the text. The thing is also a
+  deliverable (section 5), so its task's page shows it at the top. Never post only "done"
+  with a task link.
 - **Anything that waits on the user goes to the Feed**, unasked: a new plan to approve, a
   hold point, a decision, a question. Sync first, so the task page shows what the message
   is about, then post it as `question` with `--task` and `--mention` before ending the turn.

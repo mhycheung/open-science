@@ -73,7 +73,7 @@ upload limit of a free Notion workspace).
 ## Deliverables
 
 A deliverable is what the project delivers: a talk deck, a paper draft, a living list of
-sources. It is a result whose header has `deliverable: true` (all its `artifacts`) or
+sources, or anything you asked an agent for (a set of notes, a document, a plot, a table). It is a result whose header has `deliverable: true` (all its `artifacts`) or
 `deliverable: [paths]` (some of them); see the template's `tasks/README.md`, "Results".
 Its files keep one stable name (`tasks/t03-talk/S4/slides.pdf`) and are updated in place;
 git keeps their history.
@@ -84,8 +84,9 @@ its id and title, its summary, then each file. A PDF or image is shown with its 
 other file, such as a PPTX, is attached for download. When a file changes, the sync gives
 its block the new file; the block stays where it is. When a markdown file changes, only its
 changed blocks are replaced. A deliverable that is removed, or whose result is superseded,
-disappears from the page. The same files also appear at the top of `results/README.md` and,
-under `tasks/`, as plots on their task's page.
+disappears from the page. The same files also appear at the top of `results/README.md` and
+at the top of their task's page, under a Deliverables heading (a markdown file there in a
+closed toggle); a file shown there is not repeated among the task's plots.
 
 The sync reads only files inside the project: a symlinked directory is not entered, and a
 symlinked plot, caption or markdown file whose target is outside the project is skipped.
@@ -98,7 +99,11 @@ only about the first ten words, so the title is written as a short headline with
 point first; the agent skill asks for this. A line under the title names
 the kind, the author, the task and the time. The time is in the time zone of the machine
 that posts the message, or in `notify.notion.timezone` if you set it (step 4). Attached plots appear inline with their
-captions. An attached file (`--file`) must be inside the project once symlinks are
+captions, and an attached PDF in Notion's viewer. When an agent reports something you asked
+for, the message holds the thing itself: a plot attached, a document with mathematics as an
+attached PDF (`opsci pdf` renders a markdown file), short text in the message. A markdown or
+LaTeX file is refused as an attachment, since Notion shows its equations as source. An
+attached file (`--file`) must be inside the project once symlinks are
 resolved, and never under a hidden directory of your home directory (`~/.config`, `~/.ssh`,
 ...); other paths are refused. `--mention` @mentions you, so Notion notifies you, also on your phone if you have
 the app. The messages are written by your integration, not by your account; Notion does not

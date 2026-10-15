@@ -80,6 +80,13 @@ outcome. Every result claim comes with its evidence: a plot with labelled axes a
 the command and its output. Report infrastructure progress as infrastructure, not as a
 result.
 
+When the user asked for a thing (a set of notes, a document, a plot, a table), the report
+holds the thing, not only the news that it is done: attach it to the message (`opsci
+notify TEXT FILE`, or `--file` on a Notion post), a plot as it is, a document with
+mathematics or tables as a PDF (`opsci pdf <file.md>`), never as markdown or LaTeX source;
+a short plain answer may go in the text itself. Make it a deliverable as well
+(`tasks/README.md`, "Results"), so that it stays easy to find after the message is gone.
+
 ## 6. Decisions that belong to the user
 
 - Modelling choices, cuts, conventions and ranges that decide what a result means, beyond

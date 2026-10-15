@@ -15,8 +15,8 @@ What is in Notion, under the project's page:
   HTML views, drawn left to right by `opsci map build`; never draw them top to bottom),
   Milestone results, Deliverables (each deliverable once, at its current version), Log,
   Rules, Brainstorm context and Private docs pages.
-- The **Tasks** database: one row per task, holding the task's context, then its results
-  page, plan, task map, task log and subcontext files, then its plots.
+- The **Tasks** database: one row per task, holding the task's deliverables, its context,
+  then its results page, plan, task map, task log and subcontext files, then its plots.
 - The **Results** database: one row per result, holding the result's file and figures.
 - The **Feed**: messages to the user, newest first, removed after 3 days.
 
@@ -56,6 +56,7 @@ What is in Notion, under the project's page:
    | when | command |
    |---|---|
    | a subtask finished, with its result | `opsci notion post --kind result --task <id> --mention --file <key plot> "<headline>\n\n<result with numbers>"` |
+   | something the user asked for is ready (rule 7) | `--kind result --task <id> --mention --file <the thing: plot or PDF> "<headline>\n\n<what it is, what is in it>"`, after a sync |
    | a plan to approve, a hold point, a question or decision for the user: anything the turn ends waiting on | `--kind question --task <id> --mention "<headline: what is needed>\n\n<the choice or the plan in a few lines>"`, after a sync |
    | a blocker | `--kind blocker --mention` |
    | a long job submitted or finished | `--kind status` (no `--mention`) |
@@ -75,9 +76,29 @@ What is in Notion, under the project's page:
    modes?` (question); `Blocked: GWOSC strain download fails` (blocker); `PE run 3 submitted,
    done in ~6 h` (status). Details go in the body.
    `opsci notify` posts to the Feed too (kind `note`, with a mention).
-7. **Messages expire.** Feed messages are removed after 3 days. A result, decision or plot
+7. **Hand over what the user asked for.** When the user asked for a thing (a set of notes,
+   a document, a plot, a table), the message that reports it holds the thing itself. A
+   message that says "X is done" with only a task link is wrong: the user cannot open the
+   file from it.
+   - **In the message**, in a form Notion shows:
+     - a plot: attached with `--file`; it shows inline with its caption;
+     - a document with mathematics, tables or more than a few paragraphs: rendered to PDF
+       with `opsci pdf <file.md>` and attached with `--file <file.pdf>`. Never attach the
+       markdown or LaTeX source (the post refuses it), and never paste a long markdown
+       document into the message: its displayed equations and tables do not render there;
+     - a short answer in plain sentences (a few paragraphs, inline `$...$` at most): in the
+       body of the message.
+   - **In the project, where it is easy to find**: the thing is a deliverable
+     (`tasks/README.md`, "Results"): a result file in `tasks/<id>/results/` with
+     `deliverable: [<the PDF or plot>]`, its source among the `artifacts`, a stable name
+     (`tasks/<id>/notes.pdf`) and, for a PDF or plot, a caption file. Run `opsci map build`
+     and `opsci notion sync`: the thing then appears at the top of its task's page, under
+     Deliverables, and on the project's Deliverables page. Post after the sync, with
+     `--task`, so the message links to that page.
+   - A remade version replaces the file under the same name; post it again the same way.
+8. **Messages expire.** Feed messages are removed after 3 days. A result, decision or plot
    that must last goes in the project files first, and so in the task page.
-8. **Never edit the Notion pages by hand or through another tool.** The next sync overwrites
+9. **Never edit the Notion pages by hand or through another tool.** The next sync overwrites
    them. Edit the project files.
 
 ## Setting up a project

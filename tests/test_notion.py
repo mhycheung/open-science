@@ -1103,9 +1103,10 @@ def test_deliverables_page_shows_each_once_and_updates_in_place(mirrored):
     assert cap["type"] == "callout" and "The deck, 20 slides" in text_of(cap)
     assert "Living list: first row." in texts and "Second row." in texts   # the markdown, rendered
     assert not any(x.startswith("---") or "kind: figure" in x for x in texts)  # without its header
-    # the task page still shows the deck as one plot (a stable name: no versions)
+    # the task page shows the deck at its top, not again among its plots
     assert [m.file_of(e["image"]["id"])[0] for e in plot_entries(m, task_page(S.proj))] == \
-        ["slides.pdf", "x_2026-09-25.png"]
+        ["x_2026-09-25.png"]
+    assert [m.file_of(n["id"])[0] for n in m.kids(task_page(S.proj)) if n["type"] == "pdf"] == ["slides.pdf"]
 
     # the deck is rebuilt under the same name: same blocks, new file, nothing else rewritten
     before = live_ids(m, page)
@@ -1151,6 +1152,52 @@ def test_deliverables_page_shows_each_once_and_updates_in_place(mirrored):
     assert not any(n["type"] in ("pdf", "file") for n in m.kids(page))
     assert "No deliverables yet." in texts and not any("r-deck" in x for x in texts)
     assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+
+
+def test_task_page_shows_its_deliverables_first(mirrored):
+    """What the user asked for is at the top of its task's page: the PDF with its caption, a
+    markdown file under a toggle; the PDF is not repeated among the task's plots."""
+    S, m = mirrored, mirrored.mock
+    t = f"tasks/{TASK}"
+    plot(S.td / "notes.pdf", b"%PDF notes v1", caption="The notes, 13 pages.\n")
+    _deliverable(S.td, "r-notes", [f"{t}/notes.pdf", f"{t}/results/r-notes.md"])
+    other = add_task(S.proj, "t02-other")                  # control: a task with no deliverable
+    plot(other / "y_2026-09-25.png", b"png-y", caption="Y.\n")
+    run(S, "notion", "sync", cwd=S.proj)
+    assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+    kids = m.kids(task_page(S.proj))
+    assert kids[0]["type"] == "heading_2" and text_of(kids[0]) == "Deliverables"
+    assert kids[1]["type"] == "heading_3" and text_of(kids[1]) == "r-notes: Talk deck r-notes"
+    (pdf,) = [n for n in kids if n["type"] == "pdf"]
+    assert m.file_of(pdf["id"]) == ("notes.pdf", b"%PDF notes v1")
+    assert "The notes, 13 pages." in text_of(kids[kids.index(pdf) + 1])
+    (tog,) = [n for n in kids if n["type"] == "heading_3" and n["body"].get("is_toggleable")]
+    assert text_of(tog) == f"{t}/results/r-notes.md"
+    assert "Living list: first row." in [text_of(n) for n in m.kids(tog["id"])]
+    div = [n["type"] for n in kids].index("divider")
+    body = next(i for i, n in enumerate(kids) if text_of(n).startswith("The fit gives"))
+    assert kids.index(pdf) < div < body
+    assert [m.file_of(e["image"]["id"])[0] for e in plot_entries(m, task_page(S.proj))] == ["x_2026-09-25.png"]
+    okids = m.kids(state(S.proj)["pages"]["task:t02-other"]["page_id"])
+    assert not any(text_of(n) == "Deliverables" for n in okids)
+    assert [m.file_of(e["image"]["id"])[0] for e in plot_entries(m, state(S.proj)["pages"]["task:t02-other"]["page_id"])] \
+        == ["y_2026-09-25.png"]
+    # remade under the same name: the task page's PDF block gets the new file in place
+    (S.td / "notes.pdf").write_bytes(b"%PDF notes v2")
+    run(S, "notion", "sync", cwd=S.proj)
+    assert m.file_of(pdf["id"]) == ("notes.pdf", b"%PDF notes v2")
+    assert run(S, "notion", "diff", cwd=S.proj).stdout == "in sync\n"
+
+
+def test_feed_refuses_markdown_and_latex_attachments(mirrored):
+    S, m = mirrored, mirrored.mock
+    feed = state(S.proj)["feed_page"]
+    before = live_ids(m, feed)
+    for name in ("notes.md", "notes.tex"):
+        (S.td / name).write_text("$$x^2$$\n")
+        r = run(S, "notion", "post", "--file", S.td / name, "Notes ready", cwd=S.proj, rc=None)
+        assert r.returncode != 0 and "refusing to attach" in r.stderr and "opsci pdf" in r.stderr, r.stderr
+    assert live_ids(m, feed) == before
 
 
 def test_diff_reports_a_suffixed_version_beside_its_base(mirrored):

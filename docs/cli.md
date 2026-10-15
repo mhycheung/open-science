@@ -25,6 +25,7 @@ current directory.
 | [`opsci site`](#opsci-site) | build the project website |
 | [`opsci zenodo`](#opsci-zenodo) | release data to Zenodo |
 | [`opsci notify`](#opsci-notify) | send a message, and optionally a file, to the user |
+| [`opsci pdf`](#opsci-pdf) | render a markdown document with LaTeX to PDF |
 | [`opsci projects-page`](#opsci-projects-page) | check the personal projects page |
 | [`opsci migrate`](#opsci-migrate) | check that a migration lost no file |
 | [`opsci guide`](#opsci-guide) | check the framework's user guide |
@@ -193,6 +194,20 @@ Sends `TEXT`, and optionally one `FILE`, to the user. `--backend` is `file` or `
 (default: `notify.backend` in the config, else `file`). `--project-root` defaults to the git
 top level of the current directory. Exit status: 0 sent; 2 misconfiguration or bad input;
 3 the Slack send failed. See [Notifications](notify.md).
+
+## `opsci pdf`
+
+```
+opsci pdf [-o OUTPUT] [--engine ENGINE] FILE
+```
+
+Renders the markdown `FILE`, with its `$LaTeX$`, tables and figures, to PDF: `OUTPUT`, by
+default the same name with `.pdf` beside it. It prints the path written. A document the user
+asked for is attached to its message as this PDF, since Notion shows a markdown file's
+equations as source. pandoc is taken from `PATH`, else run with `pixi exec -s pandoc` (on a
+machine with a small home directory, set `PIXI_CACHE_DIR` and `RATTLER_CACHE_DIR` to a larger
+file system first). `--engine` is the LaTeX engine (default: the first found of `lualatex`,
+`xelatex`, `pdflatex`).
 
 ## `opsci projects-page`
 
