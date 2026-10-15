@@ -99,6 +99,9 @@ def main(argv=None) -> int:
 
     notify.add_parser(sub)
 
+    from . import render  # `opsci pdf`
+    render.add_parser(sub)
+
     from . import notion  # `opsci notion ...`
     notion.add_parser(sub)
 

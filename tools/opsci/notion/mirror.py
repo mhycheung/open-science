@@ -17,7 +17,9 @@ Deliverables: one page with each deliverable of the project once (a result whose
 `deliverable: true`, or `deliverable: [paths]`): its title and summary, then each file: a PDF
 or image shown with its caption box, a markdown file rendered, any other file (a PPTX)
 attached. Deliverables keep a stable name, so a changed file replaces the file of the same
-block; a removed deliverable's blocks are deleted.
+block; a removed deliverable's blocks are deleted. A task's own deliverables (result files
+under tasks/<id>/results/) are also shown at the top of its task page, a markdown file there
+under a toggle; their files are then not repeated among the task's plots.
 
 Plots: every image or PDF under tasks/<id>/ (not data/). Files that differ only by an ISO date
 in the name (bands_2026-09-25.png, bands_2026-09-28.png), or by a revision `_v<n>` right after
@@ -327,11 +329,13 @@ DELIVERABLES_INTRO = (
     "its artifacts). Its files keep a stable name and are updated in place; their history is in git.")
 
 
-def _deliverable_blocks(root: Path, n, md, hashes: "_HashCache") -> list:
+def _deliverable_blocks(root: Path, n, md, hashes: "_HashCache", level: int = 2,
+                        md_toggle: bool = False) -> list:
     """One deliverable: a heading with its id and title, its summary, then each of its files:
     a PDF or image as a media placeholder (``_local``, filled at upload) with its caption box,
-    a markdown file rendered, any other file as a file placeholder."""
-    out = [nb.blk("heading_2", nb.rich(f"{n.id}: {n.get('title', '')}".rstrip(": ")))]
+    a markdown file rendered (under a toggle with ``md_toggle``), any other file as a file
+    placeholder."""
+    out = [nb.blk(f"heading_{level}", nb.rich(f"{n.id}: {n.get('title', '')}".rstrip(": ")))]
     if n.get("summary"):
         out += nb.md_to_blocks(str(n.get("summary")))
     for f in deliverable_files(n):
@@ -343,7 +347,8 @@ def _deliverable_blocks(root: Path, n, md, hashes: "_HashCache") -> list:
         ext = p.suffix.lower()
         if ext == ".md":
             text = nb.strip_generated(nb.split_front_matter(_read(p))[1])
-            out += [label] + nb.demote(md(p, re.sub(r"\A\s*# .*\n", "", text)), 2)
+            inner = nb.demote(md(p, re.sub(r"\A\s*# .*\n", "", text)), 2)
+            out += [nb.toggle(f"`{f}`", inner, level=3)] if md_toggle else [label] + inner
             continue
         st = p.stat()
         if st.st_size > MAX_UPLOAD:
@@ -437,6 +442,14 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
             tid = fm.get("id", td.name)
             body = re.sub(r"\A\s*# .*\n", "", nb.strip_generated(body))   # the row title has it
             blocks = md(ctx, body)
+            rel_td = str(td.relative_to(root)) + "/results/"   # not a nested verification task
+            own = [n for n in deliverables(nodes) if n.path.startswith(rel_td) and ok(root / n.path)]
+            if own:          # what the task delivers, first, where the user looks for it
+                top = [nb.blk("heading_2", nb.rich("Deliverables"))]
+                for n in own:
+                    top += _deliverable_blocks(root, n, md, hashes, level=3, md_toggle=True)
+                blocks = top + [nb.blk("divider")] + blocks
+            shown = {f for n in own for f in deliverable_files(n)}
             res = td / "results" / "README.md"
             if ok(res):
                 inner = md(res, re.sub(r"\A\s*# .*\n", "", nb.strip_generated(_read(res))))
@@ -454,7 +467,8 @@ def render(root: Path, links: dict | None = None) -> list[dict]:
                      "Area": "brainstorm" if tr.startswith("brainstorm") else "project",
                      "Privacy": fm.get("privacy"), "Verification": fm.get("verification"),
                      "Summary": str(fm.get("summary", ""))}
-            page(f"task:{tid}", props["Name"], blocks, kind="task", props=props, plots=plots_in(root, td, hashes))
+            page(f"task:{tid}", props["Name"], blocks, kind="task", props=props,
+                 plots=[x for x in plots_in(root, td, hashes) if x["path"] not in shown])
 
     for n in sorted(nodes, key=lambda n: n.path):
         if n.get("type") != "result" or Path(n.path).name == "README.md":
