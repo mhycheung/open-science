@@ -243,6 +243,18 @@ turns cold, it tells the agent to do a wait jump while the cache is still warm. 
 ended its turn waiting only for you gets no notice and is never woken by the plugin: whether to
 clear or to continue is up to you, and the question above is asked when you do.
 
+### Pausing a session
+
+`/pause` stops anything but you from waking the agent: a background task or SLURM job that
+finished, a scheduled task, another session's message, a jump's resume. Each such message is
+held and shown in the conversation; the agent does not read it yet. Your next prompt ends the
+pause, and the agent reads it together with everything held, in the order it arrived.
+`/pause off` ends the pause at once and sends what was held. `/clear` keeps the pause on.
+While paused, the line above the prompt starts with `⏸ paused, N held`, and the cache-cold
+notice is not sent. The pause outlasts a reload of the mod and a SLURM resurrection.
+
+Codex: there is no pause; it needs the Claude Code mod.
+
 ## Settings
 
 Environment variables read by the scripts:

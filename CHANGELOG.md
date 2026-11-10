@@ -11,6 +11,10 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Context mod: `/pause` holds everything that would wake the agent (background tasks, SLURM
+  jobs, schedules, other sessions, a jump's resume) and shows it in the conversation; the
+  user's next prompt ends the pause and carries what was held. `/pause off` ends it at once.
+  Claude Code only.
 - Deliverables: a result whose header has `deliverable: true` (all its `artifacts`) or
   `deliverable: [paths]` (some of them) is something the project delivers, such as a talk
   deck or a living list of sources. `opsci map build` lists each deliverable once, with its

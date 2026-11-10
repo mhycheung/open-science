@@ -5,12 +5,12 @@
 // and prompts it starts. The scripts themselves are tested by tests/test_cm_mod.py.
 import { expect, mock, test } from 'claude-code/testing'
 
-type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent: string[]; appended: { type: string; text: string }[]; order: string[]; status: string[]; logged: string[]; filled: string[] }
+type Calls = { commands: string[]; prompts: string[]; contexts: (readonly string[] | undefined)[]; scripts: string[][]; sent: string[]; appended: { type: string; text: string }[]; order: string[]; status: string[]; logged: string[]; filled: string[] }
 
 // Stubs shared by every test. `stop` is what cm_stop.sh --mod answers; `scripts` maps a
 // script name to its answer. A /clear makes the session id change, as in Claude Code.
 function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean; noStartAtClear?: boolean; clearFails?: boolean } = {}) {
-  const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [], filled: [] }
+  const calls: Calls = { commands: [], prompts: [], contexts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [], filled: [] }
   let sid = 'sid-old'
   const clock = mock.clock(on)
   mock.env(on, { OPSCI_STATE_DIR: '/state', HOME: '/home/u' })
@@ -53,7 +53,7 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
   })
   on('classic.SessionStart', () => ({}))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('prompt.submit', ($, e) => { calls.prompts.push(e.text); calls.order.push('prompt ' + e.text); return { text: e.text } })
+  on('prompt.submit', ($, e) => { calls.prompts.push(e.text); calls.contexts.push(e.context); calls.order.push('prompt ' + e.text); return { text: e.text } })
   on('session.send', ($, e) => { calls.sent.push(e.text); return { isDelivered: true } })
   on('session.start', () => ({ cwd: '/work' }))
   on('classic.Stop', () => ({}))
@@ -524,4 +524,129 @@ test('a warm cache, a slash command and a task notification pass without a quest
   await $.prompt.submit({ text: 'task done', wait: false, origin: { kind: 'task-notification' } })
   expect(asked).toEqual([])
   expect(calls.prompts).toEqual(['warm', '/clear', 'task done'])
+})
+
+// ---- pause ----
+const pause = ($, args = '') => $.command.run({ command: 'pause', args })
+
+test('while paused, a task notification and a peer message are held and shown, not sent', async ($, on) => {
+  const { calls, clock } = setup(on)
+  await start($, clock)
+  expect((await pause($)).text).toContain('Paused.')
+  const r = await $.prompt.submit({ text: 'task 7 done', wait: false, origin: { kind: 'task-notification' } })
+  expect(r.drop).toContain('Paused')
+  expect(await lastNote($)).toBe('⏸ Paused: held for your next prompt, not sent to the model (from a background task):\n\ntask 7 done')
+  await $.prompt.submit({ text: 'hi from b', wait: false, origin: { kind: 'peer' } })
+  await $.prompt.submit({ text: 'cron', wait: false, origin: { kind: 'scheduled-trigger' } })
+  expect(calls.prompts).toEqual([])
+  expect((await barOn($)).text).toMatch(/^⏸ paused, 3 held · /)
+})
+
+test('the user\'s next prompt ends the pause and carries what was held, in order', async ($, on) => {
+  const { calls, clock } = setup(on)
+  await start($, clock)
+  await pause($)
+  await $.prompt.submit({ text: 'task 7 done', wait: false, origin: { kind: 'task-notification' } })
+  await $.prompt.submit({ text: 'hi from b', wait: false, origin: { kind: 'peer' } })
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  expect(calls.prompts).toEqual(['go on'])
+  const ctx = (calls.contexts[0] || []).join('\n')
+  expect(ctx).toContain('1. From a background task:\ntask 7 done')
+  expect(ctx).toContain('2. From another Claude session:\nhi from b')
+  // Not paused any more: the next notification passes.
+  await $.prompt.submit({ text: 'task 8 done', wait: false, origin: { kind: 'task-notification' } })
+  expect(calls.prompts).toEqual(['go on', 'task 8 done'])
+  expect(calls.contexts[1]).toBeUndefined()
+})
+
+test('a Remote Control prompt ends the pause too; /clear and /opsci-note do not', async ($, on) => {
+  const { calls, clock } = setup(on)
+  await start($, clock)
+  await pause($)
+  await $.prompt.submit({ text: '/clear', wait: false, origin: { kind: 'composer' } })
+  await $.prompt.submit({ text: 'task 7 done', wait: false, origin: { kind: 'task-notification' } })
+  expect(calls.prompts).toEqual(['/clear'])
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'bridge' } })
+  expect(calls.prompts).toEqual(['/clear', 'go on'])
+  expect((calls.contexts[1] || []).join('\n')).toContain('task 7 done')
+})
+
+test('/pause off ends the pause and sends what was held as one prompt', async ($, on) => {
+  const { calls, clock } = setup(on)
+  await start($, clock)
+  expect((await pause($, 'off')).text).toBe('Not paused.')
+  await pause($)
+  expect((await pause($)).text).toContain('Already paused')
+  await $.prompt.submit({ text: 'task 7 done', wait: false, origin: { kind: 'task-notification' } })
+  expect((await pause($, 'off')).text).toContain('sent to the model now')
+  await clock.settle()
+  expect(calls.prompts.length).toBe(1)
+  expect(calls.prompts[0]).toContain('task 7 done')
+})
+
+test('while paused, a SLURM waker\'s report is held and shown at the next draw', async ($, on) => {
+  const { calls, clock } = setup(on, { scripts: {
+    'cm_mod.sh wakers': { exitCode: 0, stdout: '/state/wakers/k/1.json\n', stderr: '' },
+    'wait_slurm.sh --check': { exitCode: 0, stdout: 'jobs 7 have left the queue.\n', stderr: '' },
+  } })
+  await start($, clock)
+  await pause($)
+  await clock.advance(60000)
+  expect(calls.prompts).toEqual([])
+  await barOn($)
+  await clock.settle()
+  expect(await lastNote($)).toContain('(from a SLURM waker):\n\n[open-science] jobs 7 have left the queue.')
+})
+
+test('while paused, a jump clears but does not run the resume command; the cache-cold notice is not sent', async ($, on) => {
+  const { calls, clock } = setup(on, { stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md' } } } })
+  await start($, clock)
+  await pause($)
+  await endTurn($, clock)
+  expect(calls.commands.filter(c => !c.startsWith('rename') && !c.startsWith('opsci-note') && !c.startsWith('pause'))).toEqual(['clear'])
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  expect((calls.contexts[0] || []).join('\n')).toContain('continue-context skill with /p/c.md')
+})
+
+test('the cache-cold notice is not sent while paused', async ($, on) => {
+  const { calls, clock } = setup(on, { stop: { opsci: { cold: 40, notice: '[open-science] cache-cold' } } })
+  await start($, clock)
+  await endTurn($, clock)
+  await pause($)
+  await clock.advance(60000)
+  expect(calls.prompts).toEqual([])
+})
+
+test('the pause and what it holds survive a reload of the mod', async ($, on) => {
+  const { calls, clock } = setup(on, { store: { paused: { 'sid-old': [{ from: 'a background task', text: 'task 7 done' }] } } })
+  await start($, clock)
+  await $.prompt.submit({ text: 'task 8 done', wait: false, origin: { kind: 'task-notification' } })
+  expect(calls.prompts).toEqual([])
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  const ctx = (calls.contexts[0] || []).join('\n')
+  expect(ctx).toContain('1. From a background task:\ntask 7 done')
+  expect(ctx).toContain('2. From a background task:\ntask 8 done')
+})
+
+test('a paused prompt to a cold cache: Submit in the dialog ends the pause and carries what was held', async ($, on) => {
+  const { calls, clock } = await coldSession($, on)
+  await pause($)
+  await $.prompt.submit({ text: 'task 7 done', wait: false, origin: { kind: 'task-notification' } })
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  expect(calls.prompts).toEqual([])
+  const ui = await askPane($)
+  await ui.press({ key: 'submit' })
+  expect(calls.prompts.length).toBe(1)
+  expect(calls.prompts[0]).toMatch(/^go on\n\n\[open-science\] This session was paused/)
+  expect(calls.prompts[0]).toContain('task 7 done')
+})
+
+test('a paused prompt to a cold cache: Do not submit keeps the pause', async ($, on) => {
+  const { calls } = await coldSession($, on)
+  await pause($)
+  await $.prompt.submit({ text: 'go on', wait: false, origin: { kind: 'composer' } })
+  const ui = await askPane($)
+  await ui.press({ key: 'cancel' })
+  await $.prompt.submit({ text: 'task 7 done', wait: false, origin: { kind: 'task-notification' } })
+  expect(calls.prompts).toEqual([])
 })
