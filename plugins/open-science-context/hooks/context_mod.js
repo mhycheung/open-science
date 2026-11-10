@@ -7,7 +7,8 @@
 // prompt cache stays warm (a line above the prompt, on the terminal and in the Desktop app;
 // Remote Control shows no mod's drawing), asks the user before a prompt they send to a cold
 // cache, and shows the jump report and a cache-cold note as rows of the conversation, which
-// Remote Control shows too (/opsci-note). The policy and the records stay in the plugin's
+// Remote Control shows too (/opsci-note). /pause holds every prompt that is not the user's
+// until the user's next one (see "pause" below). The policy and the records stay in the plugin's
 // shell scripts, shared with the tmux path and Codex: `cm_stop.sh --mod` decides at each
 // stop, `cm_mod.sh` keeps the records, `wait_slurm.sh --check` polls a waker,
 // `session_name.sh want` names the session.
@@ -76,6 +77,12 @@ const ctxOk = c => typeof c === 'string' && /^\/[^\s\x00-\x1f\x7f-\x9f]+$/.test(
 async function resume($, ctx) {
   const ok = ctxOk(ctx) && (await $.fs.exists(ctx))
   if (ctx && !ok) await log($, 'resume: context path refused; continuing from the registration')
+  if (paused) {
+    const cmd = '/' + RESUME_CMD + (ok ? ' ' + ctx : '')
+    return hold($, 'open-science', 'The session was to resume from its context file with `' + cmd +
+      '`, which was not run because the session was paused. Run the open-science-context:continue-context skill' +
+      (ok ? ' with ' + ctx : '') + ' before anything else.', false)
+  }
   return $.command.run({ command: RESUME_CMD, args: ok ? ctx : '' })
 }
 
@@ -103,13 +110,14 @@ async function rename($, always) {
 // showNote is called from inside a hook only: a command the mod runs from a timer skips the
 // mod's own command.run hook (Claude Code 2.1.287), and Claude Code answers it instead.
 const NOTE_CMD = 'opsci-note'
-let noteText = null         // what the next /opsci-note shows
+const noteQueue = []        // what the next runs of /opsci-note show, in order
 let lastNote = ''           // the last note shown, for /opsci-note typed by the user
+const pendingNotes = []     // notes from a timer, shown at the next draw of the bar
 let pendingJump = null      // the jump's note, shown when the clear starts the new session
 let pendingCold = null      // the cache-cold note, shown at the next draw of the bar
 
 function showNote($, text) {
-  noteText = text
+  noteQueue.push(text)
   lastNote = text
   $.command.run({ command: NOTE_CMD, args: '' }).catch(err => log($, 'note FAILED: ' + err))
 }
@@ -177,9 +185,10 @@ function armCold($, secs, notice) {
   coldTimer?.cancel(); coldTimer = null
   if (!secs || !notice) return
   const armedFor = sid
+  if (paused) return
   coldTimer = $.clock.after(secs * 1000, async () => {
     coldTimer = null
-    if (busy || jumping || (await $.session.id()) !== armedFor) return
+    if (busy || jumping || paused || (await $.session.id()) !== armedFor) return
     await log($, 'cache-cold notice sent to ' + armedFor.slice(0, 8))
     void $.prompt.submit({ text: notice })
   })
@@ -206,7 +215,11 @@ async function pollWakers($) {
         await log($, 'waker ' + f + ': check failed (' + r.exitCode + '): ' + r.stderr.trim())
       }
     }
-    if (reports.size) void $.prompt.submit({ text: '[open-science] ' + [...reports].join(' ') })
+    if (reports.size) {
+      const text = '[open-science] ' + [...reports].join(' ')
+      if (paused) await hold($, 'a SLURM waker', text, false)
+      else void $.prompt.submit({ text })
+    }
   } finally {
     polling = false
   }
@@ -273,13 +286,13 @@ const BAR_COLOR = { warm: 'green', cold: 'yellow' }
 
 function bar($, e) {
   const { Text } = $.ui.resolve(e)
-  const color = BAR_COLOR[barPhase]
+  const color = paused ? 'cyan' : BAR_COLOR[barPhase]
   return h(Text, color ? { color } : { dimColor: true }, barText)
 }
 
 async function refreshBar($) {
   const st = await cacheState($)
-  const text = describe(st)
+  const text = (paused ? '⏸ paused' + (held.length ? ', ' + held.length + ' held' : '') + ' · ' : '') + describe(st)
   if (text === barText && st.phase === barPhase) return
   // The redraw is a hook, where the note can be shown (showNote).
   if (barPhase === 'warm' && st.phase === 'cold') pendingCold = coldNote(st)
@@ -357,9 +370,9 @@ async function answerAsk($, answer) {
   await $.ui.close({ id: ASK_PANE })
   if (!held) return
   if (answer === 'submit') {
-    await $.prompt.submit({ text: held.text })
+    await $.prompt.submit({ text: await withHeld($, held.text) })
   } else if (answer === 'clear') {
-    clearAndSubmit($, held.text)
+    clearAndSubmit($, await withHeld($, held.text))
   } else {
     await $.prompt.fill({ text: held.text })
     await log($, 'cold-cache prompt held back')
@@ -391,6 +404,124 @@ async function coldGate($, e, next) {
     (e.origin.kind === 'composer' ? ' Your prompt is back in the prompt box.' : '') + ' /clear starts a fresh session.' }
 }
 
+// ---- pause ------------------------------------------------------------------------------
+// /pause stops anything but the user from starting the model: a background task's or SLURM
+// waker's report, a scheduled trigger, another session's message, a jump's resume, another
+// plugin's prompt. Each is held, not sent, and shown as a note in the conversation. The
+// user's next prompt (typed, from Remote Control, an SDK host, or their Slack ping) ends the
+// pause and carries everything held, as context the model reads with it. `/pause off` ends
+// the pause at once and sends what was held as one prompt. The cache-cold notice is not
+// sent while paused, nor held: it is stale by the time the user comes back.
+//
+// The pause belongs to the process, through /clear and jumps, and is kept in the store by
+// session id, so a reload of the mod or a resumed session (a SLURM resurrection) keeps it.
+const PAUSE_CMD = 'pause'
+const PAUSE_KEY = 'paused'  // { <session id>: [{ from, text }]: what is held }
+const USER_KINDS = new Set(['composer', 'bridge', 'sdk', 'slack-ping'])
+let paused = false
+let held = []               // [{ from, text }], in arrival order
+let pauseSid = null         // the session id the store keeps the pause under
+
+async function savePause($) {
+  const cur = await $.session.id()
+  const all = { ...((await $.store.get(PAUSE_KEY)) || {}) }
+  if (pauseSid && pauseSid !== cur) delete all[pauseSid]
+  if (paused) all[cur] = held
+  else delete all[cur]
+  pauseSid = paused ? cur : null
+  await $.store.set(PAUSE_KEY, all)
+}
+
+async function loadPause($) {
+  const cur = await $.session.id()
+  const h = ((await $.store.get(PAUSE_KEY)) || {})[cur]
+  paused = Array.isArray(h)
+  held = paused ? h : []
+  pauseSid = paused ? cur : null
+}
+
+async function setPaused($, on) {
+  paused = on
+  if (!on) held = []
+  await savePause($)
+  coldTimer?.cancel(); coldTimer = null
+  barText = ''
+  await refreshBar($)
+}
+
+const FROM = {
+  'task-notification': 'a background task', 'scheduled-trigger': 'a scheduled task',
+  peer: 'another Claude session', 'peer-send-message': 'another Claude session',
+  'projects-relay': 'a coordinating session', coordinator: 'a coordinating session',
+  channel: 'a channel', plugin: 'a plugin', observer: 'an observer agent',
+  'auto-continuation': 'an automatic follow-up',
+}
+const fromOf = o => o.kind === 'plugin' ? 'the ' + o.name + ' plugin' : o.kind === 'channel' ? 'the ' + o.server + ' channel' : FROM[o.kind] || 'an unnamed source'
+
+// Hold a message and show it. inHook: called from a hook, where the note can be shown now;
+// from a timer it is shown at the next draw of the bar (showNote).
+async function hold($, from, text, inHook) {
+  held.push({ from, text })
+  await savePause($)
+  await log($, 'paused: held a message from ' + from)
+  const note = '⏸ Paused: held for your next prompt, not sent to the model (from ' + from + '):\n\n' + text
+  if (inHook) showNote($, note)
+  else { pendingNotes.push(note); $.ui.invalidate('ui.render') }
+  barText = ''
+  await refreshBar($)
+}
+
+function heldBlock() {
+  return '[open-science] This session was paused. These messages arrived during the pause and were held; ' +
+    'none was acted on. They are shown above as notes, in this order:\n\n' +
+    held.map((m, i) => (i + 1) + '. From ' + m.from + ':\n' + m.text).join('\n\n')
+}
+
+// End the pause; the held messages, as one block, or null if none.
+async function takeHeld($) {
+  if (!paused) return null
+  const block = held.length ? heldBlock() : null
+  await log($, 'pause ended by the user; ' + held.length + ' held message(s) passed on')
+  await setPaused($, false)
+  return block
+}
+
+async function withHeld($, text) {
+  const block = await takeHeld($)
+  return block ? text + '\n\n' + block : text
+}
+
+// The cold-cache question comes first: a prompt the user takes back leaves the pause on.
+async function pauseGate($, e, next) {
+  if (!paused) return coldGate($, e, next)
+  const cmd = (e.command && e.command.name) || (/^\s*\/(\S+)/.exec(e.text) || [])[1]
+  if (cmd === NOTE_CMD || cmd === PAUSE_CMD || cmd === 'clear') return next(e)
+  if (USER_KINDS.has(e.origin.kind)) {
+    return coldGate($, e, async e2 => {
+      const block = await takeHeld($)
+      return next(block ? { ...e2, context: [...(e2.context || []), block] } : e2)
+    })
+  }
+  await hold($, fromOf(e.origin), e.text, true)
+  return { drop: 'Paused: held for your next prompt, not sent to the model.' }
+}
+
+async function pauseCommand($, args) {
+  const a = String(args || '').trim().toLowerCase()
+  if (a === 'off' || a === 'resume') {
+    if (!paused) return { text: 'Not paused.' }
+    const block = await takeHeld($)
+    // Not from inside this hook: the turn would wait on it.
+    if (block) $.clock.after(0, () => { void $.prompt.submit({ text: block }) })
+    return { text: 'Pause ended.' + (block ? ' The held messages are sent to the model now.' : ' Nothing was held.') }
+  }
+  if (a && a !== 'on') return { text: 'Usage: /pause (hold everything that is not your prompt), /pause off (end the pause and send what was held).' }
+  if (paused) return { text: 'Already paused; ' + held.length + ' message(s) held. Your next prompt ends the pause; /pause off ends it now.' }
+  await setPaused($, true)
+  await log($, 'paused by the user')
+  return { text: 'Paused. Nothing but your own prompt starts the model now: background tasks, SLURM wakers, schedules, other sessions and jumps are held and shown here. Your next prompt ends the pause and carries what was held; /pause off ends it now.' }
+}
+
 export function register(on) {
   on('session.start', async ($, e, next) => {
     await $.env.set('OPSCI_MOD', '1')
@@ -402,6 +533,8 @@ export function register(on) {
     barText = ''; barPhase = 'none'; barSid = null; lastTokens = null
     barTimer = $.clock.every(BAR_TICK_MS, () => { void refreshBar($) })
     try { await $.command.register({ name: NOTE_CMD, description: 'Show the last open-science note again (a jump report, cache cold)' }) } catch (err) { await log($, 'note command not registered: ' + err) }
+    try { await $.command.register({ name: PAUSE_CMD, description: 'Hold everything that would wake the model until your next prompt; /pause off ends it', argumentHint: '[off]', immediate: true }) } catch (err) { await log($, 'pause command not registered: ' + err) }
+    await loadPause($)
     $.clock.after(0, async () => {
       // A session left waiting by another process (resumed after a SLURM resurrection or
       // by hand) lost the background tasks that were to wake it: wake it now.
@@ -465,21 +598,22 @@ export function register(on) {
   // The new session a jump's clear started: its report, at the top.
   on('classic.SessionStart', async ($, e, next) => {
     if (e.source === 'clear' && pendingJump) { const text = pendingJump; pendingJump = null; showNote($, text) }
+    if (e.source === 'clear' && paused) await savePause($)
     return next(e)
   })
 
   on('command.run', { command: NOTE_CMD }, async () => {
-    const text = noteText || lastNote || 'No open-science note in this session yet.'
-    noteText = null
-    return { text }
+    return { text: noteQueue.shift() || lastNote || 'No open-science note in this session yet.' }
   })
+
+  on('command.run', { command: PAUSE_CMD }, async ($, e) => pauseCommand($, e.args))
 
   on('session.end', async ($, e, next) => {
     if (e.reason === 'clear' && !jumping) clearedFrom = e.sessionId
     return next(e)
   })
 
-  on('prompt.submit', coldGate)
+  on('prompt.submit', pauseGate)
   on('ui.render', { component: 'Pane', requestId: ASK_PANE }, async ($, e) => {
     const { Box, Text, Button } = $.ui.resolve(e)
     return h(Box, { flexDirection: 'column' },
@@ -504,7 +638,8 @@ export function register(on) {
   // The bar: a line above the prompt on the terminal and in the Desktop app. Green while the
   // cache is warm, yellow with a warning sign once it is cold.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    if (pendingCold) { const text = pendingCold; pendingCold = null; if (!busy) showNote($, text) }
+    if (pendingCold) { const text = pendingCold; pendingCold = null; if (!busy && !paused) showNote($, text) }
+    while (pendingNotes.length) showNote($, pendingNotes.shift())
     if (!barText || e.props.hasSurvey) return next(e)
     return bar($, e)
   })
