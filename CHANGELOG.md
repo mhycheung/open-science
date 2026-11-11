@@ -11,6 +11,14 @@ layout 1) and the framework's, in order, before it applies the other template ch
 
 ## Unreleased
 
+- Context mod, session jumps: a jump requested while the clear of an earlier one still waits
+  (input queued during the turn ran first) replaces that request instead of queueing a second
+  /clear. Two clears had run back to back and both resumed, leaving a resume command queued in
+  the new session that later ran in place of the next jump's clear. A turn that starts before
+  the clear tells the agent the jump is pending and to start no new work. A clear Claude Code
+  refuses (after an interrupt the user has not answered, or taken off the queue) is no longer
+  only logged: the user gets a toast with the reason and the commands to clear by hand, and
+  the agent a note to request the jump again.
 - Deliverables: a result whose header has `deliverable: true` (all its `artifacts`) or
   `deliverable: [paths]` (some of them) is something the project delivers, such as a talk
   deck or a living list of sources. `opsci map build` lists each deliverable once, with its

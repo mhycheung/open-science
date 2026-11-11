@@ -31,6 +31,8 @@ const STORE_KEY = 'lastRequest' // { <session id>: ms of the main agent's last m
 let sid = null              // the session id this process runs now
 let busy = false            // a main-agent turn is running
 let jumping = false         // a clear and resume is in progress
+let jumpReq = null          // the jump whose clear is waiting to run (the newest request)
+let jumpFrom = null         // the session id that clear leaves
 let waiting = false         // a wait jump left this session waiting for a waker
 let clearedFrom = null      // the id a /clear the user typed left behind
 let atStop = null           // what cm_stop.sh --mod decided, acted on at turn.complete
@@ -134,17 +136,67 @@ async function jumpNoteFallback($, text) {
   } catch (err) { await log($, 'jump note FAILED: ' + err) }
 }
 
+// Why a jump's /clear was refused, in the user's words, from Claude Code's error.
+function clearRefusal(err) {
+  const m = String(err)
+  if (/stopped and nobody has sent input/.test(m))
+    return 'the session was interrupted (Esc), and Claude Code runs no command from a plugin until you send a message'
+  if (/removed from the queue/.test(m))
+    return 'the /clear was taken off the input queue before it ran (an interrupt, or an edit of the queued messages)'
+  return m
+}
+
+// The clear did not happen and the conversation is as it was: the user gets a toast with the
+// way to clear by hand, the agent a note to request the jump again. A prompt cannot be sent
+// instead: Claude Code refuses one from a plugin after an interrupt, as it refuses the clear.
+async function jumpFailed($, j, reason) {
+  const by = j.kind === 'active' && ctxOk(j.context)
+    ? '/clear, then /' + RESUME_CMD + ' ' + j.context : '/clear'
+  try {
+    $.ui.toast('Session jump did not happen: ' + reason + '. Send any message and the agent requests it again, or run ' + by + '.', { timeoutMs: 60000 })
+  } catch (err) { await log($, 'jump toast FAILED: ' + err) }
+  try {
+    await $.session.append({ message: { type: 'user', content: [{ type: 'text', text:
+      '[open-science] The session jump you requested did not happen: ' + reason + '. The conversation was not cleared. Request the jump again at the end of this turn.' }] } })
+  } catch (err) { await log($, 'jump failure note FAILED: ' + err) }
+}
+
 // Clear the session with Claude Code's own /clear, hand the registration and wakers to
 // the new session, show the jump's report at its top (from the SessionStart the clear
 // fires), then run the resume prompt (active) or leave it waiting (wait).
+//
+// Claude Code runs a plugin's command once the session is idle, after the input queued
+// before it: a message queued during the turn starts a turn of its own first, and the clear
+// waits for that turn to end. A jump requested in that turn (the stop policy asks again) must
+// not queue a second clear: two clears would run back to back and both resume, leaving one
+// resume command queued in the new session, where it ran an hour later in place of the next
+// jump's clear. The newer request replaces the waiting one instead: its report and its
+// context file are the ones used.
 function jump($, j) {
+  if (jumpReq) {
+    jumpReq = j
+    pendingJump = jumpNote(j) || null
+    void log($, j.kind + ' jump requested while the clear of the last one waits; it replaces that request')
+    return
+  }
   jumping = true
+  jumpReq = j
+  jumpFrom = sid
   coldTimer?.cancel(); coldTimer = null
   $.clock.after(0, async () => {
     try {
       const old = await $.session.id()
+      jumpFrom = old
       pendingJump = jumpNote(j) || null
-      await $.command.run({ command: 'clear', args: '' })
+      try {
+        await $.command.run({ command: 'clear', args: '' })
+      } catch (err) {
+        pendingJump = null
+        const reason = clearRefusal(err)
+        await log($, 'jump FAILED: ' + err)
+        await jumpFailed($, jumpReq, reason)
+        return
+      }
       const now = await $.session.id()
       if (now === old) {
         pendingJump = null
@@ -152,23 +204,39 @@ function jump($, j) {
         void $.prompt.submit({ text: '[open-science] session jump FAILED before anything was changed; this session keeps running: the clear did not happen.' })
         return
       }
+      const cur = jumpReq
+      jumpReq = null
       sid = now
       await sh($, 'cm_mod.sh', ['handover', old, now])
-      await log($, j.kind + ' jump: cleared ' + old.slice(0, 8) + ' -> ' + now.slice(0, 8))
+      await log($, cur.kind + ' jump: cleared ' + old.slice(0, 8) + ' -> ' + now.slice(0, 8))
       if (pendingJump) { const text = pendingJump; pendingJump = null; await jumpNoteFallback($, text) }
-      if (j.kind === 'active') {
-        await resume($, j.context)
+      if (cur.kind === 'active') {
+        await resume($, cur.context)
       } else {
         waiting = true
-        await sh($, 'cm_mod.sh', ['waiting', now, j.context || ''])
+        await sh($, 'cm_mod.sh', ['waiting', now, cur.context || ''])
       }
       await rename($)
     } catch (err) {
       await log($, 'jump FAILED: ' + err)
     } finally {
       jumping = false
+      jumpReq = null
+      jumpFrom = null
     }
   })
+}
+
+// A turn started in the session a waiting clear is to leave: input queued before the clear
+// came first. The agent is told the jump still stands, so that it starts no new work.
+async function jumpPreempted($) {
+  await log($, 'jump: queued input started a turn before the clear; the clear runs when that turn ends')
+  const ctx = jumpReq.kind === 'active' && ctxOk(jumpReq.context) ? ' and resumes from ' + jumpReq.context : ''
+  try {
+    await $.session.append({ message: { type: 'user', content: [{ type: 'text', text:
+      '[open-science] Your session jump is still pending: this message was queued before it, so it runs first. The session is cleared' + ctx +
+      ' when this turn ends. Save what this message needs to the context file and start no new work; the jump need not be requested again.' }] } })
+  } catch (err) { await log($, 'jump pending note FAILED: ' + err) }
 }
 
 // One cache-cold timer per process. It fires only into the session it was armed for,
@@ -445,6 +513,7 @@ export function register(on) {
     }
     sid = now
     if (waiting) { waiting = false; await sh($, 'cm_mod.sh', ['woken', now]) }
+    if (jumpReq && now === jumpFrom) await jumpPreempted($)
     return next(e)
   })
 
