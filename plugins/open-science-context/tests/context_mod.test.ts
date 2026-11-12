@@ -5,12 +5,12 @@
 // and prompts it starts. The scripts themselves are tested by tests/test_cm_mod.py.
 import { expect, mock, test } from 'claude-code/testing'
 
-type Calls = { commands: string[]; prompts: string[]; scripts: string[][]; sent: string[]; appended: { type: string; text: string }[]; order: string[]; status: string[]; logged: string[]; filled: string[] }
+type Calls = { toasts: string[]; commands: string[]; prompts: string[]; scripts: string[][]; sent: string[]; appended: { type: string; text: string }[]; order: string[]; status: string[]; logged: string[]; filled: string[] }
 
 // Stubs shared by every test. `stop` is what cm_stop.sh --mod answers; `scripts` maps a
 // script name to its answer. A /clear makes the session id change, as in Claude Code.
-function setup(on, opts: { stop?: object; scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean; noStartAtClear?: boolean; clearFails?: boolean } = {}) {
-  const calls: Calls = { commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [], filled: [] }
+function setup(on, opts: { stop?: object | (() => object); scripts?: Record<string, object>; registered?: boolean; store?: Record<string, unknown>; placed?: boolean; noStartAtClear?: boolean; clearFails?: boolean; clearWaits?: Promise<void>; clearThrows?: string } = {}) {
+  const calls: Calls = { toasts: [], commands: [], prompts: [], scripts: [], sent: [], appended: [], order: [], status: [], logged: [], filled: [] }
   let sid = 'sid-old'
   const clock = mock.clock(on)
   mock.env(on, { OPSCI_STATE_DIR: '/state', HOME: '/home/u' })
@@ -27,20 +27,23 @@ function setup(on, opts: { stop?: object; scripts?: Record<string, object>; regi
   on('process.run', ($, e) => {
     const script = String(e.argv[1]).split('/').pop()
     calls.scripts.push([script, ...e.argv.slice(2)])
-    if (script === 'cm_stop.sh') return { value: { exitCode: 0, stdout: JSON.stringify(opts.stop ?? { opsci: { cold: 0 } }), stderr: '' } }
+    if (script === 'cm_stop.sh') return { value: { exitCode: 0, stdout: JSON.stringify((typeof opts.stop === 'function' ? opts.stop() : opts.stop) ?? { opsci: { cold: 0 } }), stderr: '' } }
     const a = opts.scripts?.[[script, e.argv[2]].join(' ')]
     return { value: a ?? { exitCode: 0, stdout: '', stderr: '' } }
   })
-  on('session.append', ($, e) => {
+  on('session.append', ($, e, next) => {
     calls.appended.push({ type: e.message.type, text: e.message.content[0].text })
     calls.order.push('append ' + e.message.type)
-    return { value: { message: e.message, uuid: 'u' + calls.appended.length } }
+    return next(e)
   })
+  on('ui.toast', ($, e) => { calls.toasts.push(e.text); return { value: undefined } })
   // A /clear starts the new session through SessionStart (source clear), as in Claude Code.
   // Its own hook, so that the commands the SessionStart hooks run reach the one below.
   on('command.run', { command: 'clear' }, async ($, e) => {
     calls.commands.push('clear')
     calls.order.push('command clear')
+    if (opts.clearWaits) await opts.clearWaits
+    if (opts.clearThrows) throw new Error(opts.clearThrows)
     if (opts.clearFails) return { text: '' }
     sid = 'sid-new'
     if (!opts.noStartAtClear) await engine.classic.SessionStart({ source: 'clear' })
@@ -108,6 +111,63 @@ test('a wait jump says the session is waiting, and starts no turn', async ($, on
   expect(note).toContain('Wait jump: this session was cleared and is waiting for 2 running background tasks')
   expect(note).toContain('Runs queued.')
   expect(calls.prompts).toEqual([])
+})
+
+// Regression (2026-11-11): a message queued during the turn ran before the jump's clear, and
+// in that turn the agent requested the jump again. Both clears ran back to back and both
+// resumed, which left a resume command queued in the new session.
+test('a jump requested while the last one\'s clear waits replaces it: one clear, one resume', async ($, on) => {
+  let release
+  const clearWaits = new Promise<void>(r => { release = r })
+  const first = { kind: 'active', context: '/p/a.md', report: 'first' }
+  const second = { kind: 'active', context: '/p/b.md', report: 'second' }
+  let stop: object = { opsci: { cold: 0, jump: first } }
+  const { calls, clock } = setup(on, { clearWaits, stop: () => stop })
+  await start($, clock)
+  await endTurn($, clock)
+  // the queued message's turn, in the old session, ends with a second request
+  await $.turn.start({ turnId: 't2' })
+  stop = { opsci: { cold: 0, jump: second } }
+  await endTurn($, clock)
+  release()
+  await clock.settle()
+  expect(calls.commands.filter(c => !c.startsWith('rename') && !c.startsWith('opsci-note'))).toEqual(['clear', 'open-science-context:continue-context /p/b.md'])
+  expect(await lastNote($)).toBe('second')
+})
+
+test('a turn that starts before the jump\'s clear tells the agent the jump is pending', async ($, on) => {
+  let release
+  const clearWaits = new Promise<void>(r => { release = r })
+  const { calls, clock } = setup(on, { clearWaits, stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md' } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  await $.turn.start({ turnId: 't2' })
+  expect(calls.appended.map(a => a.text)).toEqual([expect.stringContaining('Your session jump is still pending')])
+  expect(calls.appended[0].text).toContain('resumes from /p/c.md')
+  release()
+  await clock.settle()
+  // the new session's own turn gets no such note
+  await $.turn.start({ turnId: 't3' })
+  expect(calls.appended.length).toBe(1)
+})
+
+// A clear Claude Code refuses (after an interrupt the user has not answered, or taken off the
+// queue) rejects $.command.run. The test kit cannot reject it with Claude Code's own text: a
+// throwing hook is skipped, and the call then rejects as having no implementation.
+test('a refused clear is reported to the user and the agent, and the next jump still runs', async ($, on) => {
+  const { calls, clock } = setup(on, { clearThrows: 'refused', stop: { opsci: { cold: 0, jump: { kind: 'active', context: '/p/c.md', report: 'r' } } } })
+  await start($, clock)
+  await endTurn($, clock)
+  expect(calls.commands.filter(c => !c.startsWith('rename'))).toEqual(['clear'])
+  expect(calls.toasts.length).toBe(1)
+  expect(calls.toasts[0]).toStartWith('Session jump did not happen: ')
+  expect(calls.toasts[0]).toContain('/clear, then /open-science-context:continue-context /p/c.md')
+  expect(calls.appended.map(a => a.text)).toEqual([expect.stringContaining('The session jump you requested did not happen: ')])
+  expect(calls.appended[0].text).toContain('Request the jump again')
+  expect(calls.scripts.some(s => s[1] === 'handover')).toBe(false)
+  expect(await lastNote($)).toBe(NO_NOTE)
+  await endTurn($, clock)
+  expect(calls.commands.filter(c => c === 'clear').length).toBe(2)
 })
 
 test('a jump with no report shows nothing for an active jump', async ($, on) => {
